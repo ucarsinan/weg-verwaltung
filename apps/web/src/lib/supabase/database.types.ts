@@ -8,6 +8,7 @@
  * with the migrations under infra/supabase/migrations/:
  *   - weg, unit, person, ownership → 0003_weg_domain.sql
  *   - meeting, agenda_item, resolution, vote → 0004_versammlung.sql
+ *   - beschluss_sammlung_entry, beschluss_anfechtung_event → 0005_beschluss_sammlung.sql
  */
 
 // CHECK-constraint string unions — supabase gen types emits them in this shape.
