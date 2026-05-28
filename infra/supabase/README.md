@@ -26,10 +26,12 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 | 0010 | `embedding_layer.sql` | `pgvector` extension + partitioned `embedding(tenant_id, id)` table (vector(1024) for bge-m3) with HNSW + GIN(`german` FTS) indexes, composite FK to `weg`, RLS + FORCE RLS (§ 4.5). |
 | 0011 | `actor_type_guards.sql` | BEFORE-trigger `audit_writer.assert_not_agent_write()` on `vote`, `resolution`, `beschluss_sammlung_entry`, `protocol` (signing-columns only) — RAISE EXCEPTION when `current_setting('app.actor_type')='agent'` (Invariante 3, § 4.6). |
 | 0012 | `audit_partition_rotation.sql` | `audit_writer.rotate_audit_partitions(months_ahead)` + `pg_cron` job `audit-partition-rotation-monthly` (02:00 UTC on the 1st). Bootstrap call creates the next 12 monthly partitions of `audit_event`. |
+| 0013 | `set_actor_type_hook.sql` | PostgREST `db_pre_request` hook that reads `X-Actor-Type` header and sets the `app.actor_type` GUC — activates the 0011 trigger from the application layer. |
 
 **Deferred (not in baseline):**
 
-- `0013_audit_cold_storage.sql` (planned) — detach `audit_event` partitions older than 24 months and export them to Supabase Storage (S3-Glacier-equivalent), per § 3.5 cold-storage rule. Blocked on the storage-bucket + IAM design.
+- `0014_audit_cold_storage.sql` (planned) — detach `audit_event` partitions older than 24 months and export them to Supabase Storage (S3-Glacier-equivalent), per § 3.5 cold-storage rule. Blocked on the storage-bucket + IAM design.
+- **Agent-side header attachment** — the 0013 hook only fires when callers send `X-Actor-Type: agent`. The remaining piece lives in `apps/agent/app/tools/runtime.py`: the `@side_effect` decorator (docs/04 § 4.3) must attach the header to every per-request supabase-py client. Until that lands, the 0011 trigger is wired end-to-end but never triggered in practice.
 
 ## Workflows
 
