@@ -30,6 +30,13 @@ dev = [
     "ruff>=0.7",
     "httpx>=0.27",
 ]
+# RAG extras (§ 4.5 primary embedding + reranker). Opt-in because the bge-m3
+# self-host cost on Fly.io Frankfurt is not yet profiled (§ 4.11). Install
+# with `uv sync --extra rag` once that profiling is done.
+rag = [
+    "FlagEmbedding>=1.3.0",
+    "sentence-transformers>=3.0.0",
+]
 
 [tool.ruff]
 line-length = 100

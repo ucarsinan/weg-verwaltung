@@ -23,6 +23,7 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 | 0007 | `agent_suggestions.sql` | `agent_suggestion` — KI-Vorschläge, getrennt von echten Beschlüssen. |
 | 0008 | `rls_policies.sql` | RLS + FORCE RLS + 4 policies per table (see § 3.4 Hardening-Checkliste). |
 | 0009 | `audit_hmac.sql` | HMAC hash-chain on `audit_event`: `audit_writer.hash_audit_row()`, BEFORE INSERT trigger, `verify_chain(tenant_id)` tamper detector. Vault secret `audit_hmac_key` required in prod. |
+| 0010 | `embedding_layer.sql` | `pgvector` extension + partitioned `embedding(tenant_id, id)` table (vector(1024) for bge-m3) with HNSW + GIN(`german` FTS) indexes, composite FK to `weg`, RLS + FORCE RLS (§ 4.5). |
 | 0011 | `actor_type_guards.sql` | BEFORE-trigger `audit_writer.assert_not_agent_write()` on `vote`, `resolution`, `beschluss_sammlung_entry`, `protocol` (signing-columns only) — RAISE EXCEPTION when `current_setting('app.actor_type')='agent'` (Invariante 3, § 4.6). |
 | 0012 | `audit_partition_rotation.sql` | `audit_writer.rotate_audit_partitions(months_ahead)` + `pg_cron` job `audit-partition-rotation-monthly` (02:00 UTC on the 1st). Bootstrap call creates the next 12 monthly partitions of `audit_event`. |
 
