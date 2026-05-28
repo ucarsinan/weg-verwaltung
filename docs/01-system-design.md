@@ -1,6 +1,6 @@
 # WEG-Verwaltungssoftware — System-Design
 
-> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–2 von 6 fertig).
+> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–3 von 6 fertig).
 > Dieser Spec ist die Vorstufe zum Implementierungsplan. Hier wird das System modelliert, nicht implementiert.
 > Sections 2–6 werden als sichtbare Commits weiterentwickelt — die Iterations-Historie ist Teil des Portfolio-Werts.
 
@@ -169,7 +169,7 @@ BeschlussSammlungEntry
 
 ## 6. Section 3 — Sicherheitsmodell
 
-> Folgt.
+> Ausgelagert nach [`03-security-model.md`](./03-security-model.md) — Bedrohungsraum, DSGVO + WEG-Recht, Authn/Authz, RLS-Discipline, Audit-Tamper-Evidence, KI-Threat-Model, Sub-Processor-Kette, Encryption, Honest Unknowns.
 
 ## 7. Section 4 — KI-Architektur (Agent, Tools, Guardrails, LLMOps)
 
