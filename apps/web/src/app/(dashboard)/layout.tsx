@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import AppShell from "@/components/shell/app-shell";
 
 // Defence-in-depth: middleware already gates this route group, but a missing
 // session here still redirects. Cheap, removes a class of "what if matcher
@@ -16,5 +17,5 @@ export default async function DashboardLayout({
 
   if (!user) redirect("/login");
 
-  return <div className="min-h-screen">{children}</div>;
+  return <AppShell userEmail={user.email ?? ""}>{children}</AppShell>;
 }
