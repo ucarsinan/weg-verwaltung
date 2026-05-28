@@ -23,11 +23,12 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 | 0007 | `agent_suggestions.sql` | `agent_suggestion` — KI-Vorschläge, getrennt von echten Beschlüssen. |
 | 0008 | `rls_policies.sql` | RLS + FORCE RLS + 4 policies per table (see § 3.4 Hardening-Checkliste). |
 | 0009 | `audit_hmac.sql` | HMAC hash-chain on `audit_event`: `audit_writer.hash_audit_row()`, BEFORE INSERT trigger, `verify_chain(tenant_id)` tamper detector. Vault secret `audit_hmac_key` required in prod. |
+| 0011 | `actor_type_guards.sql` | BEFORE-trigger `audit_writer.assert_not_agent_write()` on `vote`, `resolution`, `beschluss_sammlung_entry`, `protocol` (signing-columns only) — RAISE EXCEPTION when `current_setting('app.actor_type')='agent'` (Invariante 3, § 4.6). |
+| 0012 | `audit_partition_rotation.sql` | `audit_writer.rotate_audit_partitions(months_ahead)` + `pg_cron` job `audit-partition-rotation-monthly` (02:00 UTC on the 1st). Bootstrap call creates the next 12 monthly partitions of `audit_event`. |
 
 **Deferred (not in baseline):**
 
-- `0010_actor_type_guards.sql` — DB triggers that block `actor_type=agent` on `vote`, `resolution`, `protocol.unterzeichnet`, `beschluss_sammlung_entry` (Invariante 3, § 4.6). Renumbered from the original 0009 plan: HMAC chain landed first (0009) because the actor_type-claim propagation (set by FastAPI before each call) is still being designed in `tools/runtime.py`.
-- `0011_audit_partition_rotation.sql` — `pg_cron`-job creating monthly partitions 12 months ahead.
+- `0013_audit_cold_storage.sql` (planned) — detach `audit_event` partitions older than 24 months and export them to Supabase Storage (S3-Glacier-equivalent), per § 3.5 cold-storage rule. Blocked on the storage-bucket + IAM design.
 
 ## Workflows
 
