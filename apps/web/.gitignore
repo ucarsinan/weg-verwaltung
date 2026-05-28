@@ -1,0 +1,16 @@
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build caches
+.turbo/
+*.tsbuildinfo
+
+# Vercel
+.vercel/
+
+# Local env overrides (root .env.example is the canonical schema)
+.env
+.env.local
+.env.*.local

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — CSS-first Tailwind v4 (@theme directive).
+ * Names are stable contracts; values will harden in the design-system pass.
+ */
+@theme {
+  --color-bg: oklch(99% 0 0);
+  --color-fg: oklch(20% 0.01 250);
+  --color-muted: oklch(55% 0.01 250);
+  --color-border: oklch(90% 0.005 250);
+  --color-accent: oklch(55% 0.18 270);
+
+  /* Provenance markers — see docs/05 §5.2 */
+  --color-ai-violet: oklch(60% 0.18 290);
+  --color-user-slate: oklch(55% 0.03 250);
+
+  /* Focus ring — shadcn default fails WCAG 2.2 SC 2.4.13 (§5.10 gap #1).
+     Use a high-contrast colour at full opacity, ≥ 2 px outline. */
+  --color-ring: oklch(45% 0.18 270);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: oklch(15% 0.01 250);
+    --color-fg: oklch(95% 0.005 250);
+    --color-muted: oklch(65% 0.01 250);
+    --color-border: oklch(28% 0.005 250);
+  }
+}
+
+html {
+  /* `hyphens: auto` only fires when lang is set on the element it scopes —
+     <html lang="de"> in layout.tsx makes this work in editors later. */
+  hyphens: auto;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus-ring override — applies everywhere, no opacity reduction. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: 2px;
+}
+
+/* Skip-link — visually hidden until focused, then anchored top-left. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border-radius: 4px;
+  transform: translateY(-150%);
+  transition: transform 120ms ease-out;
+  z-index: 100;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
