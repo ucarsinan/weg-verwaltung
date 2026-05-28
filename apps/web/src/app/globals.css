@@ -20,6 +20,29 @@
   --color-ring: oklch(45% 0.18 270);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+
+  /* shadcn-conventional aliases — added in iter 3 for the ui/ primitives.
+     These point at the project tokens above so shadcn components inherit
+     our design system without duplicating values. Names follow the
+     shadcn/ui new-york preset. Note: shadcn's "accent" semantic = a quiet
+     hover-bg, NOT the brand accent (which is --color-accent above). We
+     keep both: --color-accent stays as the brand violet, --color-accent-*
+     below carries the shadcn semantic. */
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-fg);
+  --color-card: var(--color-bg);
+  --color-card-foreground: var(--color-fg);
+  --color-popover: var(--color-bg);
+  --color-popover-foreground: var(--color-fg);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: oklch(99% 0 0);
+  --color-secondary: oklch(96% 0.005 250);
+  --color-secondary-foreground: var(--color-fg);
+  --color-muted-foreground: var(--color-muted);
+  --color-destructive: oklch(55% 0.22 27);
+  --color-destructive-foreground: oklch(99% 0 0);
+  --color-input: var(--color-border);
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
