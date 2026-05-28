@@ -1,0 +1,6 @@
+{
+  "name": "@weg-verwaltung/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WEG-Verwaltung web application (Next.js 16) — placeholder, implementation not started"
+}

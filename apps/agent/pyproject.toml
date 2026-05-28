@@ -1,0 +1,9 @@
+[project]
+name = "weg-verwaltung-agent"
+version = "0.0.0"
+description = "WEG-Verwaltung KI-Agent-Service (FastAPI + LangGraph). Placeholder, implementation not started."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
