@@ -1,0 +1,134 @@
+-- WEG-Verwaltung pgTAP negative-path RLS tests.
+-- To be run via `supabase test db` after pgTAP setup. Not wired up yet — the
+-- shapes below document the contract per docs/03-security-model.md § 3.4.
+--
+-- Key pattern (§ 3.4 "Negative-Test-Pattern"):
+--   - SELECT/UPDATE/DELETE that affect 0 rows DO NOT throw — they return 0 rows.
+--     => assert ROW COUNTS, not errors.
+--   - INSERT that violates RLS DOES throw (SQLSTATE 42501) — assert with throws_ok.
+--   - Append-only / agent-write triggers RAISE EXCEPTION — assert with throws_ok.
+--
+-- All examples below are commented out. They are the SHAPE, not a runnable suite.
+
+-- ============================================================================
+-- Cross-tenant isolation (the core promise of § 3.4)
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(4);
+--
+--   -- Pretend we are a verwalter from tenant_a.
+--   SET LOCAL request.jwt.claims = '{
+--     "sub": "11111111-1111-1111-1111-111111111111",
+--     "role": "authenticated",
+--     "app_metadata": {
+--       "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+--       "role": "verwalter_mitarbeiter"
+--     }
+--   }';
+--
+--   -- Positive: tenant_a sees its own WEGs.
+--   SELECT cmp_ok(
+--     (SELECT count(*) FROM public.weg WHERE tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+--     '>',
+--     0::bigint,
+--     'tenant_a sees own WEG rows'
+--   );
+--
+--   -- Negative SELECT: tenant_a cannot see tenant_b WEGs — assert row count = 0.
+--   SELECT is(
+--     (SELECT count(*) FROM public.weg WHERE tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+--     0::bigint,
+--     'no cross-tenant WEG visible'
+--   );
+--
+--   -- Negative INSERT: tenant_a cannot insert WEGs for tenant_b — assert SQLSTATE 42501.
+--   SELECT throws_ok(
+--     $$INSERT INTO public.weg (tenant_id, name) VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'evil')$$,
+--     '42501',
+--     'cross-tenant INSERT rejected by RLS'
+--   );
+--
+--   -- Negative UPDATE: 0 rows affected (no throw), assert row count = 0.
+--   SELECT is(
+--     (WITH u AS (
+--        UPDATE public.weg SET name = 'pwned'
+--         WHERE tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+--        RETURNING 1
+--      ) SELECT count(*) FROM u),
+--     0::bigint,
+--     'cross-tenant UPDATE affects zero rows'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
+
+-- ============================================================================
+-- Append-only invariants — Beschluss-Sammlung (§ 3.5 layer 2)
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(2);
+--
+--   SET LOCAL request.jwt.claims = '{"role":"authenticated", "app_metadata":{"tenant_id":"aaaa..."}}';
+--
+--   SELECT throws_ok(
+--     $$UPDATE public.beschluss_sammlung_entry SET beschluss_text = 'tampered' WHERE true$$,
+--     '42501',
+--     'beschluss_sammlung_entry UPDATE rejected by trigger'
+--   );
+--
+--   SELECT throws_ok(
+--     $$DELETE FROM public.beschluss_sammlung_entry WHERE true$$,
+--     '42501',
+--     'beschluss_sammlung_entry DELETE rejected by trigger'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
+
+-- ============================================================================
+-- Audit-log immutability (§ 3.5 layer 2 — fires even for service_role)
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(2);
+--   SET LOCAL ROLE service_role;
+--
+--   SELECT throws_ok(
+--     $$UPDATE public.audit_event SET action = 'tampered' WHERE true$$,
+--     '42501',
+--     'audit_event UPDATE rejected for service_role'
+--   );
+--
+--   SELECT throws_ok(
+--     $$DELETE FROM public.audit_event WHERE true$$,
+--     '42501',
+--     'audit_event DELETE rejected for service_role'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
+
+-- ============================================================================
+-- Agent-write guard (Invariante 3) — to be implemented as a trigger in
+-- 0009_actor_type_guards.sql. Test shape included here for forward-reference.
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(1);
+--
+--   SET LOCAL request.jwt.claims = '{
+--     "role":"authenticated",
+--     "app_metadata":{"tenant_id":"aaaa...", "role":"agent"}
+--   }';
+--
+--   SELECT throws_ok(
+--     $$INSERT INTO public.vote (tenant_id, resolution_id, ownership_id, wert, quelle)
+--       VALUES ('aaaa...', '<resolution>', '<ownership>', 'ja', 'digital')$$,
+--     '42501',
+--     'agent INSERT into vote rejected by actor_type guard'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
