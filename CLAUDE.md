@@ -28,6 +28,19 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 4. `AuditEvent` ist unlöschbar — auch für Tenant-Admin.
 5. Stimmen referenzieren `ownership_id`, niemals `person_id` oder `user_id` (historische Korrektheit bei Eigentumswechsel).
 
+## Commands
+
+```bash
+just dev-web       # Next.js dev (Port 3000)
+just dev-agent     # FastAPI dev (Port 8000, uv-managed venv)
+just test          # alle Tests (web + agent)
+just test-web      # Vitest unit + jest-axe
+just typecheck     # tsc + mypy --strict
+just lint          # eslint + ruff
+just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
+just db-reset      # lokales Supabase zurücksetzen + seed
+```
+
 ## Konventionen
 
 - Commits: Conventional Commits, Englisch

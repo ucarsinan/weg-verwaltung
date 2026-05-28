@@ -4,19 +4,13 @@
  * In production this file will be regenerated via:
  *   pnpm dlx supabase gen types typescript --linked > src/lib/supabase/database.types.ts
  *
- * For now we hand-type the tables we read from app code, to unblock the
- * /wegs/* surfaces. Keep this in sync with the migrations under
- * infra/supabase/migrations/:
- *   - weg      → 0003_weg_domain.sql
- *   - meeting  → 0004_versammlung.sql
- *   - unit     → 0003_weg_domain.sql
- *   - person   → 0003_weg_domain.sql
- *   - ownership → 0003_weg_domain.sql
+ * For now we hand-type the tables we read from app code. Keep this in sync
+ * with the migrations under infra/supabase/migrations/:
+ *   - weg, unit, person, ownership → 0003_weg_domain.sql
+ *   - meeting, agenda_item, resolution, vote → 0004_versammlung.sql
  */
 
-// Domain enums for the meeting table are modeled in SQL as CHECK constraints
-// (see 0004_versammlung.sql) rather than Postgres ENUM types — supabase
-// gen types will emit them as string unions in the same shape we declare here.
+// CHECK-constraint string unions — supabase gen types emits them in this shape.
 export type MeetingModus = "praesenz" | "hybrid" | "virtuell" | "umlauf";
 export type MeetingStatus =
   | "entwurf"
@@ -24,6 +18,17 @@ export type MeetingStatus =
   | "laufend"
   | "beendet"
   | "abgesagt";
+
+export type MehrheitsTyp =
+  | "einfach"
+  | "qualifiziert"
+  | "doppelt_qualifiziert"
+  | "allstimmig"
+  | "vereinbarungs_aenderung";
+export type Stimmprinzip = "kopf" | "wert" | "objekt";
+export type ResolutionLegalState = "pending" | "contested" | "final" | "voided";
+export type VoteWert = "ja" | "nein" | "enthaltung";
+export type VoteQuelle = "praesenz" | "digital" | "umlauf";
 
 export type Database = {
   public: {
@@ -65,10 +70,9 @@ export type Database = {
           id: string;
           tenant_id: string;
           weg_id: string;
+          titel: string;
           modus: MeetingModus;
           status: MeetingStatus;
-          // Migration 0004 declares termin_von / termin_bis nullable
-          // (no NOT NULL constraint). Reflected here as `string | null`.
           termin_von: string | null;
           termin_bis: string | null;
           einladung_versand_am: string | null;
@@ -81,12 +85,12 @@ export type Database = {
           id?: string;
           tenant_id?: string;
           weg_id: string;
+          titel: string;
           modus: MeetingModus;
           status?: MeetingStatus;
           termin_von?: string | null;
           termin_bis?: string | null;
           einladung_versand_am?: string | null;
-          // Generated column — never inserted by app code.
           created_at?: string;
           updated_at?: string;
         };
@@ -94,14 +98,99 @@ export type Database = {
           id?: string;
           tenant_id?: string;
           weg_id?: string;
+          titel?: string;
           modus?: MeetingModus;
           status?: MeetingStatus;
           termin_von?: string | null;
           termin_bis?: string | null;
           einladung_versand_am?: string | null;
-          // Generated column — never updated by app code.
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      agenda_item: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          meeting_id: string;
+          position: number;
+          titel: string;
+          beschreibung: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          meeting_id: string;
+          position: number;
+          titel: string;
+          beschreibung?: string | null;
+        };
+        Update: {
+          position?: number;
+          titel?: string;
+          beschreibung?: string | null;
+        };
+      };
+      resolution: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          meeting_id: string;
+          agenda_item_id: string | null;
+          text: string;
+          mehrheits_typ: MehrheitsTyp;
+          stimmprinzip: Stimmprinzip;
+          legal_state: ResolutionLegalState;
+          festgestellt_am: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          meeting_id: string;
+          agenda_item_id?: string | null;
+          text: string;
+          mehrheits_typ: MehrheitsTyp;
+          stimmprinzip: Stimmprinzip;
+          legal_state?: ResolutionLegalState;
+          festgestellt_am?: string | null;
+        };
+        Update: {
+          text?: string;
+          mehrheits_typ?: MehrheitsTyp;
+          stimmprinzip?: Stimmprinzip;
+          legal_state?: ResolutionLegalState;
+          festgestellt_am?: string | null;
+        };
+      };
+      vote: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          resolution_id: string;
+          ownership_id: string;
+          wert: VoteWert;
+          quelle: VoteQuelle;
+          proxy_id: string | null;
+          abgegeben_am: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          resolution_id: string;
+          ownership_id: string;
+          wert: VoteWert;
+          quelle: VoteQuelle;
+          proxy_id?: string | null;
+          abgegeben_am?: string;
+        };
+        Update: {
+          wert?: VoteWert;
+          quelle?: VoteQuelle;
         };
       };
       unit: {
