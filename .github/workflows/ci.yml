@@ -1,0 +1,211 @@
+# WEG-Verwaltung — CI pipeline.
+# Runs lint, typecheck, test on every push to main and every PR targeting main.
+# See docs/02-architecture-deployment.md § 2.8 (CI/CD).
+#
+# Scope (this iteration):
+#   - apps/web   : pnpm lint + typecheck + test (placeholder) + build
+#   - apps/agent : uv + ruff + mypy + pytest
+#   - infra/supabase/migrations : header + sequential-numbering shell check
+#
+# Intentionally NOT here yet (deferred — see docs):
+#   - Vercel/Fly deploy            (§ 2.8 — handled by provider GitHub-Apps)
+#   - Supabase Advisor lints       (§ 3.4 #9 — gated server-side post-migration)
+#   - Lighthouse-CI / axe-core E2E (§ 5.10 — comes with Playwright pass)
+#   - RAGAS / Langfuse eval gates  (§ 4.8 — runs nightly, not per-PR)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --------------------------------------------------------------------------
+  # apps/web — Next.js 16, Server Components, Tailwind v4.
+  # No secrets needed: the build step does not reach prod Supabase.
+  # --------------------------------------------------------------------------
+  web:
+    name: web (lint · typecheck · test · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Pinned to root package.json `packageManager` field.
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        # Scaffold phase: no `pnpm-lock.yaml` committed yet, so we cannot use
+        # --frozen-lockfile. Switch to `pnpm install --frozen-lockfile` once a
+        # lockfile lands in the repo (first real `pnpm install` post-scaffold).
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm --filter @weg-verwaltung/web lint
+
+      - name: Typecheck
+        run: pnpm --filter @weg-verwaltung/web typecheck
+
+      - name: Test
+        run: pnpm --filter @weg-verwaltung/web test
+
+      - name: Build
+        # Catches Next.js misconfig (e.g. broken next.config, missing env schema).
+        # Does not deploy and does not need prod Supabase credentials.
+        run: pnpm --filter @weg-verwaltung/web build
+
+  # --------------------------------------------------------------------------
+  # apps/agent — FastAPI + LangGraph, uv-managed Python 3.12.
+  # No secrets needed: tests are self-contained; network-dependent positive
+  # auth tests are guarded with skip markers.
+  # --------------------------------------------------------------------------
+  agent:
+    name: agent (ruff · mypy · pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies (incl. dev extras)
+        run: uv sync --extra dev
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy app
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  # --------------------------------------------------------------------------
+  # infra/supabase/migrations — lightweight shell linter.
+  # Validates:
+  #   1. Every .sql file starts with `-- WEG-Verwaltung migration NNNN:` header.
+  #   2. Migrations are numbered sequentially (0001, 0002, …, max) with no gaps.
+  # Intentionally avoids sqlfluff: Postgres-dialect config + RLS DSL would
+  # produce false positives without significant tuning. Header + sequence is
+  # the minimum bar that catches real review failures.
+  # --------------------------------------------------------------------------
+  sql-lint:
+    name: sql-lint (migration headers + sequence)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate migration headers + numbering
+        run: |
+          set -euo pipefail
+
+          MIG_DIR="infra/supabase/migrations"
+
+          if [ ! -d "$MIG_DIR" ]; then
+            echo "::error::Missing directory: $MIG_DIR"
+            exit 1
+          fi
+
+          shopt -s nullglob
+          files=("$MIG_DIR"/*.sql)
+          shopt -u nullglob
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No .sql migrations found under $MIG_DIR"
+            exit 1
+          fi
+
+          fail=0
+          numbers=()
+
+          # --- Check 1: header on every file --------------------------------
+          for f in "${files[@]}"; do
+            base="$(basename "$f")"
+
+            # Filename must match NNNN_<slug>.sql (4-digit prefix).
+            if [[ ! "$base" =~ ^([0-9]{4})_[a-z0-9_]+\.sql$ ]]; then
+              echo "::error file=$f::Filename does not match NNNN_<slug>.sql pattern"
+              fail=1
+              continue
+            fi
+            num="${BASH_REMATCH[1]}"
+            numbers+=("$num")
+
+            # First line must be: -- WEG-Verwaltung migration NNNN: <description>
+            expected="-- WEG-Verwaltung migration ${num}:"
+            first_line="$(head -n 1 "$f")"
+            if [[ "$first_line" != "$expected"* ]]; then
+              echo "::error file=$f::Header mismatch."
+              echo "  expected prefix: '$expected'"
+              echo "  got            : '$first_line'"
+              fail=1
+            fi
+          done
+
+          # --- Check 2: sequential numbering, no gaps -----------------------
+          if [ "${#numbers[@]}" -gt 0 ]; then
+            # Sort numerically + de-dup (10# forces decimal so 0008 != 0010).
+            IFS=$'\n' sorted=($(printf '%s\n' "${numbers[@]}" | sort -u))
+            unset IFS
+
+            # Duplicate detection: sorted-unique count must equal raw count.
+            if [ "${#sorted[@]}" -ne "${#numbers[@]}" ]; then
+              echo "::error::Duplicate migration numbers detected:"
+              printf '  %s\n' "${numbers[@]}" | sort | uniq -d
+              fail=1
+            fi
+
+            first="$((10#${sorted[0]}))"
+            last="$((10#${sorted[-1]}))"
+            expected_count=$((last - first + 1))
+
+            if [ "${#sorted[@]}" -ne "$expected_count" ]; then
+              echo "::error::Migration numbering has gaps."
+              echo "  first=$first  last=$last  count=${#sorted[@]}  expected=$expected_count"
+              echo "  present: ${sorted[*]}"
+
+              # List the missing numbers explicitly for the reviewer.
+              present=" ${sorted[*]} "
+              for ((i=first; i<=last; i++)); do
+                pad="$(printf '%04d' "$i")"
+                if [[ "$present" != *" $pad "* ]]; then
+                  echo "  missing: $pad"
+                fi
+              done
+              fail=1
+            fi
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "OK — ${#files[@]} migrations, headers + sequence valid."

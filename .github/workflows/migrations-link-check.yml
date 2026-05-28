@@ -1,0 +1,60 @@
+# WEG-Verwaltung — migrations <-> docs cross-reference check.
+# Runs only when migrations or the security model doc change.
+# Non-blocking: prints WARNING annotations, never fails the job.
+# Portfolio-optics: shows the doc/code link is curated without being noisy.
+#
+# Rationale: every migration in infra/supabase/migrations/ should reference
+# at least one '§' section anchor in docs/03-security-model.md so reviewers
+# can trace the policy back to the rationale.
+
+name: Migrations Link Check
+
+on:
+  pull_request:
+    paths:
+      - 'infra/supabase/migrations/**'
+      - 'docs/03-security-model.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  link-check:
+    name: link-check (migrations -> docs §)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify each migration references docs/03-security-model.md
+        run: |
+          set -euo pipefail
+
+          MIG_DIR="infra/supabase/migrations"
+          DOC="docs/03-security-model.md"
+
+          if [ ! -d "$MIG_DIR" ] || [ ! -f "$DOC" ]; then
+            echo "::warning::Skipping link-check — required paths missing."
+            exit 0
+          fi
+
+          shopt -s nullglob
+          files=("$MIG_DIR"/*.sql)
+          shopt -u nullglob
+
+          missing=0
+          for f in "${files[@]}"; do
+            # We look for a '§' (section sign) anywhere in the migration —
+            # the convention is '§ 3.4', '§3.5', etc.
+            if ! grep -q '§' "$f"; then
+              echo "::warning file=$f::Migration does not reference any '§' section anchor — consider linking back to $DOC for reviewer context."
+              missing=$((missing + 1))
+            fi
+          done
+
+          total="${#files[@]}"
+          echo "Checked $total migration(s); $missing without a § reference."
+          # Non-blocking by design — warning-only.
+          exit 0

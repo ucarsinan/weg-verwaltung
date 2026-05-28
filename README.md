@@ -1,3 +1,7 @@
+[![CI](https://github.com/<owner>/weg-verwaltung/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/weg-verwaltung/actions/workflows/ci.yml)
+[![License: Proprietary](https://img.shields.io/badge/license-proprietary-red)](./LICENSE)
+[![Spec: 6/6 Sections](https://img.shields.io/badge/spec-6%2F6%20sections-brightgreen)](./docs/)
+
 # WEG-Verwaltung
 
 > **Status:** Design-Phase · Portfolio-Piece · kein lauffähiger Code (Stand: Mai 2026)
