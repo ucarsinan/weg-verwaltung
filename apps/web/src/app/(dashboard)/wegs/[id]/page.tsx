@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { Database } from "@/lib/supabase/database.types";
 
-// Server Component — RLS scopes both SELECTs to the user's tenant automatically.
+// Server Component — RLS scopes all SELECTs to the user's tenant automatically.
 // The middleware (apps/web/src/middleware.ts) refreshes the session and passes
 // the user JWT into PostgREST via the supabase-ssr cookies adapter, so the
 // policy `tenant_id = (auth.jwt() ->> 'tenant_id')::uuid` runs server-side on
@@ -20,6 +20,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type MeetingRow = Database["public"]["Tables"]["meeting"]["Row"];
+type UnitRow = Database["public"]["Tables"]["unit"]["Row"];
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -101,12 +102,24 @@ export default async function WegDetailPage({
     .returns<MeetingRow[]>();
 
   if (meetingsError) {
-    // Non-fatal: the page still renders Stammdaten + Aktionen. The meetings
-    // card degrades to its empty-state branch via the `[]` fallback below.
+    // Non-fatal: the page still renders Stammdaten + Einheiten + Aktionen.
     console.error("[wegs/[id]] meetings select failed:", meetingsError);
   }
 
+  const { data: units, error: unitsError } = await supabase
+    .from("unit")
+    .select("*")
+    .eq("weg_id", id)
+    .order("bezeichnung", { ascending: true })
+    .returns<UnitRow[]>();
+
+  if (unitsError) {
+    // Non-fatal: page still renders, units card degrades to empty state.
+    console.error("[wegs/[id]] units select failed:", unitsError);
+  }
+
   const meetingRows: MeetingRow[] = meetings ?? [];
+  const unitRows: UnitRow[] = units ?? [];
 
   return (
     <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
@@ -155,6 +168,71 @@ export default async function WegDetailPage({
             <Label>Angelegt am</Label>
             <p className="text-sm">{formatDateLongDE(weg.created_at)}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ─────────────────────────── Wohneinheiten ────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Wohneinheiten</CardTitle>
+              <CardDescription className="mt-1.5">
+                Alle Einheiten dieser WEG mit Miteigentumsanteilen.
+              </CardDescription>
+            </div>
+            <Link
+              href={`/wegs/${id}/einheiten/new`}
+              className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+            >
+              Wohneinheit anlegen
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {unitRows.length === 0 ? (
+            <p
+              role="status"
+              className="rounded-md border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-muted)]"
+            >
+              Noch keine Wohneinheit angelegt.{" "}
+              <Link
+                href={`/wegs/${id}/einheiten/new`}
+                className="underline underline-offset-4 hover:text-[var(--color-accent)]"
+              >
+                Jetzt erste Einheit anlegen
+              </Link>
+              .
+            </p>
+          ) : (
+            <ul
+              aria-label="Wohneinheiten der WEG"
+              className="divide-y divide-[var(--color-border)]"
+            >
+              {unitRows.map((unit) => (
+                <li
+                  key={unit.id}
+                  className="flex items-center justify-between gap-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {unit.bezeichnung}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[var(--color-muted)]">
+                      MEA: {unit.mea_zaehler}/{unit.mea_nenner}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/wegs/${id}/einheiten/${unit.id}/eigentuemerschaft`}
+                    className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+                    aria-label={`Eigentümer von ${unit.bezeichnung} anzeigen`}
+                  >
+                    Eigentümer →
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

@@ -7,8 +7,11 @@
  * For now we hand-type the tables we read from app code, to unblock the
  * /wegs/* surfaces. Keep this in sync with the migrations under
  * infra/supabase/migrations/:
- *   - weg     → 0003_weg_domain.sql
- *   - meeting → 0004_versammlung.sql
+ *   - weg      → 0003_weg_domain.sql
+ *   - meeting  → 0004_versammlung.sql
+ *   - unit     → 0003_weg_domain.sql
+ *   - person   → 0003_weg_domain.sql
+ *   - ownership → 0003_weg_domain.sql
  */
 
 // Domain enums for the meeting table are modeled in SQL as CHECK constraints
@@ -99,6 +102,87 @@ export type Database = {
           // Generated column — never updated by app code.
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      unit: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          weg_id: string;
+          bezeichnung: string;
+          mea_zaehler: number;
+          mea_nenner: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          weg_id: string;
+          bezeichnung: string;
+          mea_zaehler: number;
+          mea_nenner: number;
+        };
+        Update: {
+          bezeichnung?: string;
+          mea_zaehler?: number;
+          mea_nenner?: number;
+        };
+      };
+      person: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          vorname: string;
+          nachname: string;
+          anschrift: string | null;
+          email: string | null;
+          telefon: string | null;
+          user_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          vorname: string;
+          nachname: string;
+          anschrift?: string | null;
+          email?: string | null;
+          telefon?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          vorname?: string;
+          nachname?: string;
+          anschrift?: string | null;
+          email?: string | null;
+          telefon?: string | null;
+        };
+      };
+      ownership: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          weg_id: string;
+          unit_id: string;
+          person_id: string;
+          von: string;
+          bis: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          weg_id: string;
+          unit_id: string;
+          person_id: string;
+          von: string;
+          bis?: string | null;
+        };
+        Update: {
+          bis?: string | null;
         };
       };
     };
