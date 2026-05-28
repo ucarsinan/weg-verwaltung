@@ -1,6 +1,6 @@
 # WEG-Verwaltungssoftware — System-Design
 
-> **Status:** In Arbeit (Brainstorming-Phase, Section 1 von 6 fertig).
+> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–2 von 6 fertig).
 > Dieser Spec ist die Vorstufe zum Implementierungsplan. Hier wird das System modelliert, nicht implementiert.
 > Sections 2–6 werden als sichtbare Commits weiterentwickelt — die Iterations-Historie ist Teil des Portfolio-Werts.
 
@@ -165,7 +165,7 @@ BeschlussSammlungEntry
 
 ## 5. Section 2 — Architektur & Deployment
 
-> Folgt als nächster Commit.
+> Ausgelagert nach [`02-architecture-deployment.md`](./02-architecture-deployment.md) — Service-Topologie, Repo-Layout, Deployment-Targets, JWT-Pass-Through, LangGraph-Deploy-Entscheidung, Env-Trennung, CI/CD.
 
 ## 6. Section 3 — Sicherheitsmodell
 

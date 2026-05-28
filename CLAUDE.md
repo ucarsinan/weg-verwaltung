@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Design-Phase. Section 1 (Domain-Modell) fertig. Sections 2–6 folgen als sichtbare Commits unter `docs/`.
+**Aktueller Stand:** Design-Phase. Sections 1–2 fertig. Sections 3–6 folgen als sichtbare Commits unter `docs/`.
 
 ## Stack
 
@@ -37,7 +37,7 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 
 ## Offene Aufgaben (Brainstorming)
 
-- [ ] Section 2 — Architektur & Deployment
+- [x] Section 2 — Architektur & Deployment ([docs/02-architecture-deployment.md](./docs/02-architecture-deployment.md))
 - [ ] Section 3 — Sicherheitsmodell (Authn/Authz, DSGVO, Threat-Model)
 - [ ] Section 4 — KI-Architektur (LangGraph-Graph, Tools, Guardrails, LLMOps)
 - [ ] Section 5 — UX-Leitprinzipien (sichere Defaults, Undo, A11y, Tastatur-First)
@@ -46,4 +46,5 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 ## Referenzen
 
 - System-Design: [docs/01-system-design.md](./docs/01-system-design.md)
+- Architektur & Deployment: [docs/02-architecture-deployment.md](./docs/02-architecture-deployment.md)
 - Hub: `~/Development/personal-assistant/CLAUDE.md`
