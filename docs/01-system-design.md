@@ -1,6 +1,6 @@
 # WEG-Verwaltungssoftware — System-Design
 
-> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–4 von 6 fertig).
+> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–5 von 6 fertig).
 > Dieser Spec ist die Vorstufe zum Implementierungsplan. Hier wird das System modelliert, nicht implementiert.
 > Sections 2–6 werden als sichtbare Commits weiterentwickelt — die Iterations-Historie ist Teil des Portfolio-Werts.
 
@@ -177,7 +177,7 @@ BeschlussSammlungEntry
 
 ## 8. Section 5 — UX-Leitprinzipien
 
-> Folgt.
+> Ausgelagert nach [`05-ux-principles.md`](./05-ux-principles.md) — UX-Leitprinzipien, AI-Trust-Calibration, Streaming + AgentSuggestion-Review, `interrupt()`-Approval-Cards + Resume, Protokoll-Review-Editor (Tiptap v3 + Track-Changes + deutsche Typografie), sichere Defaults (DIN 5008), Destructive-Action-Friction, Anfechtungs-Flow als Undo-Äquivalent, Optimistic-UI-Regel + Auto-Save-Hybrid, A11y-Floor (WCAG 2.2 AA + EN 301 549) + Tastatur-First, Honest Unknowns.
 
 ## 9. Section 6 — End-to-End-Workflow + Out-of-Scope + Risiken
 

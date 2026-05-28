@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Design-Phase. Sections 1–4 fertig. Sections 5–6 folgen als sichtbare Commits unter `docs/`.
+**Aktueller Stand:** Design-Phase. Sections 1–5 fertig. Section 6 folgt als finaler Commit unter `docs/`.
 
 ## Stack
 
@@ -40,7 +40,7 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 - [x] Section 2 — Architektur & Deployment ([docs/02-architecture-deployment.md](./docs/02-architecture-deployment.md))
 - [x] Section 3 — Sicherheitsmodell ([docs/03-security-model.md](./docs/03-security-model.md))
 - [x] Section 4 — KI-Architektur ([docs/04-ai-architecture.md](./docs/04-ai-architecture.md))
-- [ ] Section 5 — UX-Leitprinzipien (sichere Defaults, Undo, A11y, Tastatur-First)
+- [x] Section 5 — UX-Leitprinzipien ([docs/05-ux-principles.md](./docs/05-ux-principles.md))
 - [ ] Section 6 — End-to-End-Workflow + Out-of-Scope + Risiken
 
 ## Referenzen
@@ -49,4 +49,5 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 - Architektur & Deployment: [docs/02-architecture-deployment.md](./docs/02-architecture-deployment.md)
 - Sicherheitsmodell: [docs/03-security-model.md](./docs/03-security-model.md)
 - KI-Architektur: [docs/04-ai-architecture.md](./docs/04-ai-architecture.md)
+- UX-Leitprinzipien: [docs/05-ux-principles.md](./docs/05-ux-principles.md)
 - Hub: `~/Development/personal-assistant/CLAUDE.md`
