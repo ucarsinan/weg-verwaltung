@@ -22,11 +22,11 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 | 0006 | `audit_event.sql` | Partitioned append-only audit log, 3-layer protection (schema columns for HMAC). |
 | 0007 | `agent_suggestions.sql` | `agent_suggestion` — KI-Vorschläge, getrennt von echten Beschlüssen. |
 | 0008 | `rls_policies.sql` | RLS + FORCE RLS + 4 policies per table (see § 3.4 Hardening-Checkliste). |
+| 0009 | `audit_hmac.sql` | HMAC hash-chain on `audit_event`: `audit_writer.hash_audit_row()`, BEFORE INSERT trigger, `verify_chain(tenant_id)` tamper detector. Vault secret `audit_hmac_key` required in prod. |
 
 **Deferred (not in baseline):**
 
-- `0009_actor_type_guards.sql` — DB triggers that block `actor_type=agent` on `vote`, `resolution`, `protocol.unterzeichnet`, `beschluss_sammlung_entry` (Invariante 3, § 4.6).
-- `0010_audit_hmac.sql` — HMAC hash-chain trigger on `audit_event`. The columns `prev_hash` and `row_hash` already exist on the table; only the trigger + Vault-key wiring is pending.
+- `0010_actor_type_guards.sql` — DB triggers that block `actor_type=agent` on `vote`, `resolution`, `protocol.unterzeichnet`, `beschluss_sammlung_entry` (Invariante 3, § 4.6). Renumbered from the original 0009 plan: HMAC chain landed first (0009) because the actor_type-claim propagation (set by FastAPI before each call) is still being designed in `tools/runtime.py`.
 - `0011_audit_partition_rotation.sql` — `pg_cron`-job creating monthly partitions 12 months ahead.
 
 ## Workflows
@@ -67,7 +67,15 @@ Special cases:
 
 ## Hash-chain note
 
-Migration 0006 defines `audit_event.prev_hash` and `audit_event.row_hash` as `bytea NOT NULL`. The HMAC computation (`HMAC_SHA256(prev_hash || canonical_json(row), vault_key[tenant_id])`) is intentionally deferred to `0010_audit_hmac.sql` — splitting it keeps the baseline reviewable. The schema is ready; the trigger and Vault wiring are pending.
+Migration 0006 defines `audit_event.prev_hash` and `audit_event.row_hash` as `bytea NOT NULL`. Migration 0009 lands the HMAC computation (`HMAC_SHA256(prev_hash || canonical_json(payload), vault_key)`) as a `BEFORE INSERT` trigger that runs `SECURITY DEFINER` under the `audit_writer` role, and ships `audit_writer.verify_chain(tenant_id)` for nightly tamper detection.
+
+**Vault seed (production, one-off):**
+
+```sql
+select vault.create_secret(encode(gen_random_bytes(32), 'hex'), 'audit_hmac_key');
+```
+
+In local dev (`supabase start`) the trigger falls back to an all-zero key with a `RAISE WARNING`, so migrations and tests stay green without manual setup. Shipping to prod without seeding the Vault secret is the failure mode this warning protects against. Tamper-detection contract stubs live in `tests/0002_audit_chain.sql`.
 
 ## References
 

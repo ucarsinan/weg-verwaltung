@@ -1,0 +1,162 @@
+-- WEG-Verwaltung pgTAP tamper-detection tests for the audit-log HMAC chain.
+-- See docs/03-security-model.md § 3.5 + migrations/0009_audit_hmac.sql.
+--
+-- To be run via `supabase test db` after pgTAP setup. Not wired up yet —
+-- shapes below document the contract, in line with tests/0001_rls_negative.sql.
+--
+-- Key pattern (as in 0001):
+--   - audit_event INSERTs fire the BEFORE INSERT trigger from 0009 and
+--     populate prev_hash + row_hash automatically.
+--   - audit_writer.verify_chain(tenant_id) returns 0 rows when the chain is
+--     intact, and one row per tampered entry otherwise.
+--   - The 3-layer protection from 0006 (REVOKE + RAISE-trigger + RLS) blocks
+--     UPDATE/DELETE on audit_event for every role. To simulate a real-world
+--     forgery attempt we therefore go AROUND those layers: we clone the
+--     table into a test schema and mutate the clone. The verify_chain
+--     function is reusable on the clone because it only reads columns.
+--
+-- All examples are commented out; this file is a SHAPE document, not a
+-- runnable suite.
+
+-- ============================================================================
+-- 1. Happy-path: chain stays intact across multiple INSERTs
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(3);
+--
+--   -- Pretend we are a verwalter from tenant_a so RLS+JWT defaults work.
+--   SET LOCAL request.jwt.claims = '{
+--     "sub": "11111111-1111-1111-1111-111111111111",
+--     "role": "authenticated",
+--     "app_metadata": {
+--       "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+--       "role": "verwalter_mitarbeiter"
+--     }
+--   }';
+--
+--   -- Three semantic events. prev_hash + row_hash filled by the trigger.
+--   INSERT INTO public.audit_event
+--     (tenant_id, actor_type, actor_user_id, entity_typ, entity_id, action, payload)
+--   VALUES
+--     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'user',
+--      '11111111-1111-1111-1111-111111111111',
+--      'weg', gen_random_uuid(), 'create', '{"name":"WEG Musterstrasse 1"}'::jsonb),
+--     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'user',
+--      '11111111-1111-1111-1111-111111111111',
+--      'meeting', gen_random_uuid(), 'create', '{"datum":"2026-06-15"}'::jsonb),
+--     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'user',
+--      '11111111-1111-1111-1111-111111111111',
+--      'protocol', gen_random_uuid(), 'sign', '{"unterzeichnet":true}'::jsonb);
+--
+--   -- Genesis row has prev_hash = 32 zero bytes.
+--   SELECT is(
+--     (SELECT prev_hash FROM public.audit_event
+--        WHERE tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+--        ORDER BY seq ASC LIMIT 1),
+--     decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex'),
+--     'genesis row uses zero prev_hash'
+--   );
+--
+--   -- Each subsequent row's prev_hash equals the prior row's row_hash.
+--   SELECT is(
+--     (SELECT count(*)::int FROM (
+--        SELECT seq, prev_hash,
+--               lag(row_hash) OVER (ORDER BY seq) AS expected_prev
+--          FROM public.audit_event
+--         WHERE tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+--      ) t WHERE expected_prev IS NOT NULL AND prev_hash <> expected_prev),
+--     0,
+--     'every non-genesis row links to its predecessor'
+--   );
+--
+--   -- verify_chain returns 0 broken rows.
+--   SELECT is(
+--     (SELECT count(*)::int FROM audit_writer.verify_chain(
+--        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid)),
+--     0,
+--     'verify_chain reports intact chain'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
+
+-- ============================================================================
+-- 2. Tamper detection: a mutated payload breaks exactly one chain link
+-- ============================================================================
+--
+-- The 3-layer protection on public.audit_event makes direct UPDATE impossible
+-- for any role (REVOKE + raise-trigger + RLS-no-update-policy). We therefore
+-- simulate a forgery by cloning the table into a test schema, mutating the
+-- clone, and pointing verify_chain at the clone via a wrapper.
+
+-- BEGIN;
+--   SELECT plan(2);
+--
+--   CREATE SCHEMA test_tamper;
+--   CREATE TABLE test_tamper.audit_event (LIKE public.audit_event INCLUDING ALL);
+--
+--   -- Seed three rows directly (we are bypassing the chain trigger here on
+--   -- purpose; for a real test, copy from public.audit_event after the
+--   -- happy-path block above ran).
+--   INSERT INTO test_tamper.audit_event SELECT * FROM public.audit_event
+--     WHERE tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+--     ORDER BY seq;
+--
+--   -- Mutate the middle row's payload — DOES NOT recompute row_hash.
+--   UPDATE test_tamper.audit_event
+--      SET payload = '{"datum":"2099-12-31"}'::jsonb
+--    WHERE seq = (SELECT seq FROM test_tamper.audit_event
+--                  ORDER BY seq OFFSET 1 LIMIT 1);
+--
+--   -- A copy of verify_chain that reads from test_tamper.audit_event would
+--   -- show exactly one broken_seq. (In the real test, parameterise the
+--   -- function or use a temp view named public.audit_event.)
+--   SELECT is(
+--     (SELECT count(*)::int FROM test_tamper_verify_chain(
+--        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid)),
+--     1,
+--     'tampered payload is detected as exactly one broken_seq'
+--   );
+--
+--   -- And it is the middle row, not the unrelated rows.
+--   SELECT is(
+--     (SELECT broken_seq FROM test_tamper_verify_chain(
+--        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid) LIMIT 1),
+--     (SELECT seq FROM test_tamper.audit_event ORDER BY seq OFFSET 1 LIMIT 1),
+--     'the specific tampered seq is reported'
+--   );
+--
+--   DROP SCHEMA test_tamper CASCADE;
+--   SELECT finish();
+-- ROLLBACK;
+
+-- ============================================================================
+-- 3. service_role forgery is visible in db_role
+-- ============================================================================
+--
+-- Even if the HMAC happens to validate (e.g. attacker has the Vault key),
+-- the forensic db_role column captures the actual session_user at INSERT
+-- time. A nightly review query `db_role <> 'authenticator'` surfaces any
+-- INSERT performed as service_role.
+
+-- BEGIN;
+--   SELECT plan(1);
+--   SET LOCAL role = 'service_role';
+--   INSERT INTO public.audit_event
+--     (tenant_id, actor_type, entity_typ, entity_id, action, payload)
+--   VALUES
+--     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'system',
+--      'weg', gen_random_uuid(), 'system-event', '{}'::jsonb);
+--   RESET role;
+--
+--   SELECT is(
+--     (SELECT db_role FROM public.audit_event
+--        WHERE tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+--        ORDER BY seq DESC LIMIT 1),
+--     'service_role',
+--     'service_role insert is forensically tagged in db_role'
+--   );
+--
+--   SELECT finish();
+-- ROLLBACK;
