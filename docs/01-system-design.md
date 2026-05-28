@@ -1,6 +1,6 @@
 # WEG-Verwaltungssoftware — System-Design
 
-> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–5 von 6 fertig).
+> **Status:** Design-Phase abgeschlossen — alle 6 Sections fertig. Nächster Commit ist Code, nicht Spec.
 > Dieser Spec ist die Vorstufe zum Implementierungsplan. Hier wird das System modelliert, nicht implementiert.
 > Sections 2–6 werden als sichtbare Commits weiterentwickelt — die Iterations-Historie ist Teil des Portfolio-Werts.
 
@@ -181,4 +181,4 @@ BeschlussSammlungEntry
 
 ## 9. Section 6 — End-to-End-Workflow + Out-of-Scope + Risiken
 
-> Folgt.
+> Ausgelagert nach [`06-workflows-and-risks.md`](./06-workflows-and-risks.md) — Mode-Matrix für alle vier Versammlungs-Modi, Happy-Path-Sequenz mit § -Referenzen, Edge-Cases + 3 Stolpersteine, Threat-Walk-Through pro Workflow, qualitative 3×3-Risk-Matrix, Adapter-Slots für eIDAS / SEPA / Hybrid-Meeting, Production-Migration-Roadmap (Onboarding-Stufen, Daten-Migration, SLA, Incident-Response, Backup-Tests), Compliance-Trigger + Architecture-Tax, finale Synthese aller Honest Unknowns, Schlusswort.

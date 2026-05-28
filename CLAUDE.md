@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Design-Phase. Sections 1–5 fertig. Section 6 folgt als finaler Commit unter `docs/`.
+**Aktueller Stand:** **Design-Phase abgeschlossen — alle 6 Sections fertig.** Nächster Commit ist Code, nicht Spec.
 
 ## Stack
 
@@ -41,7 +41,7 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 - [x] Section 3 — Sicherheitsmodell ([docs/03-security-model.md](./docs/03-security-model.md))
 - [x] Section 4 — KI-Architektur ([docs/04-ai-architecture.md](./docs/04-ai-architecture.md))
 - [x] Section 5 — UX-Leitprinzipien ([docs/05-ux-principles.md](./docs/05-ux-principles.md))
-- [ ] Section 6 — End-to-End-Workflow + Out-of-Scope + Risiken
+- [x] Section 6 — End-to-End-Workflow + Risiken ([docs/06-workflows-and-risks.md](./docs/06-workflows-and-risks.md))
 
 ## Referenzen
 
@@ -50,4 +50,5 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 - Sicherheitsmodell: [docs/03-security-model.md](./docs/03-security-model.md)
 - KI-Architektur: [docs/04-ai-architecture.md](./docs/04-ai-architecture.md)
 - UX-Leitprinzipien: [docs/05-ux-principles.md](./docs/05-ux-principles.md)
+- Workflows + Risiken: [docs/06-workflows-and-risks.md](./docs/06-workflows-and-risks.md)
 - Hub: `~/Development/personal-assistant/CLAUDE.md`
