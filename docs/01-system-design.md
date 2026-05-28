@@ -1,6 +1,6 @@
 # WEG-Verwaltungssoftware — System-Design
 
-> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–3 von 6 fertig).
+> **Status:** In Arbeit (Brainstorming-Phase, Sections 1–4 von 6 fertig).
 > Dieser Spec ist die Vorstufe zum Implementierungsplan. Hier wird das System modelliert, nicht implementiert.
 > Sections 2–6 werden als sichtbare Commits weiterentwickelt — die Iterations-Historie ist Teil des Portfolio-Werts.
 
@@ -173,7 +173,7 @@ BeschlussSammlungEntry
 
 ## 7. Section 4 — KI-Architektur (Agent, Tools, Guardrails, LLMOps)
 
-> Folgt.
+> Ausgelagert nach [`04-ai-architecture.md`](./04-ai-architecture.md) — vier LangGraph-Graphen, AgentState + thread_id-Isolation, Tool-Pattern, Streaming + pg_cron-Background-Jobs, RAG mit pgvector + bge-m3 + Hybrid Retrieval, Guardrail-Pipeline (Spotlighting, Input/Output-Validation, Structured Output), Tool-Call-Safety (4-Layer + HITL), LLMOps mit Langfuse + RAGAS, Model-Routing, Prompt-Versioning, Honest Unknowns.
 
 ## 8. Section 5 — UX-Leitprinzipien
 
