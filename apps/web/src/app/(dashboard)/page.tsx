@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 // app_metadata claims are server-controlled (set by the Custom Access Token
@@ -47,6 +48,19 @@ export default async function DashboardPage() {
           <dd className="mt-1 font-mono text-sm break-all">{tenantId}</dd>
         </div>
       </dl>
+
+      <section className="mt-10 rounded-md border border-[var(--color-border)] p-6">
+        <h2 className="text-lg font-semibold tracking-tight">WEGs</h2>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
+          Verwalten Sie Ihre Wohnungseigentümergemeinschaften.
+        </p>
+        <Link
+          href="/wegs"
+          className="mt-4 inline-block text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+        >
+          Zur WEG-Liste →
+        </Link>
+      </section>
     </div>
   );
 }
