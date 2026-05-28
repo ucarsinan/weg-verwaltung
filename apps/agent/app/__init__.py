@@ -1,0 +1,1 @@
+"""WEG-Verwaltung Agent service."""
