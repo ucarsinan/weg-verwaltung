@@ -30,6 +30,22 @@ export type ResolutionLegalState = "pending" | "contested" | "final" | "voided";
 export type VoteWert = "ja" | "nein" | "enthaltung";
 export type VoteQuelle = "praesenz" | "digital" | "umlauf";
 
+export type BeschlussSammlungTyp =
+  | "positiv_beschluss"
+  | "negativ_beschluss"
+  | "umlaufbeschluss";
+
+export type AnfechtungsStatus =
+  | "keine"
+  | "angefochten"
+  | "unwirksam_erklaert";
+
+export type AnfechtungsEventTyp =
+  | "angefochten"
+  | "zurueckgenommen"
+  | "unwirksam_erklaert"
+  | "bestaetigt";
+
 export type Database = {
   public: {
     Tables: {
@@ -273,6 +289,60 @@ export type Database = {
         Update: {
           bis?: string | null;
         };
+      };
+      beschluss_sammlung_entry: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          weg_id: string;
+          lfd_nr: number;
+          beschluss_text: string;
+          meeting_id: string | null;
+          resolution_id: string | null;
+          datum: string;          // ISO date "YYYY-MM-DD"
+          typ: BeschlussSammlungTyp;
+          anfechtungsstatus: AnfechtungsStatus;
+          erstellt_durch: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          weg_id: string;
+          // lfd_nr: GENERATED ALWAYS — omit in Insert
+          beschluss_text: string;
+          meeting_id?: string | null;
+          resolution_id?: string | null;
+          datum: string;
+          typ: BeschlussSammlungTyp;
+          erstellt_durch: string;
+          // anfechtungsstatus defaults to 'keine' in DB
+        };
+        Update: Record<string, never>; // append-only — no updates
+      };
+      beschluss_anfechtung_event: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          bse_id: string;
+          event_typ: AnfechtungsEventTyp;
+          aktenzeichen: string | null;
+          datum: string;
+          bemerkung: string | null;
+          erfasst_durch: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          bse_id: string;
+          event_typ: AnfechtungsEventTyp;
+          aktenzeichen?: string | null;
+          datum: string;
+          bemerkung?: string | null;
+          erfasst_durch: string;
+        };
+        Update: Record<string, never>; // append-only
       };
     };
     Views: Record<string, never>;
