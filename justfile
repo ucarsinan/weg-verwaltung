@@ -17,7 +17,7 @@ dev-web:
 
 # FastAPI dev server (uv-managed venv)
 dev-agent:
-    uv run --project apps/agent uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    cd apps/agent && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Build all (JS only — agent has no build step in dev)
 build:
@@ -31,6 +31,12 @@ test-web:
 
 test-agent:
     uv run --project apps/agent pytest
+
+# Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
+# dev server itself (webServer config) — does not need `just dev-web` running.
+# The login spec runs `seed-admin` first (idempotent).
+e2e:
+    pnpm --filter @weg-verwaltung/web exec playwright test --project=chromium --reporter=list
 
 # Lint everything
 lint:

@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 21 Migrationen angewendet (0001–0021) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), pgaudit-RPC-Revoke-Versuch (0020+0021, Cloud-seitig No-Op — siehe Backlog). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Web + Agent: `just typecheck` + `just lint` + `just test` jetzt alle grün end-to-end (Web: ESLint auf Next-16-Flat-Config migriert; Agent: dev-Extras synct, conftest-Env-Setup auf Modul-Scope, FlagEmbedding-Import getypt). `next build` produziert 22 Routes sauber. Nächster Schritt = Login-Flow End-to-End gegen Cloud verifizieren (`just dev-web`, `just seed-admin`, anmelden, Dashboard).
+**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 21 Migrationen angewendet (0001–0021) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), pgaudit-RPC-Revoke-Versuch (0020+0021, Cloud-seitig No-Op — siehe Backlog). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Web + Agent: `just typecheck` + `just lint` + `just test` jetzt alle grün end-to-end (Web: ESLint auf Next-16-Flat-Config migriert; Agent: dev-Extras synct, conftest-Env-Setup auf Modul-Scope, FlagEmbedding-Import getypt). `next build` produziert 22 Routes sauber. `just e2e` (Playwright/Chromium) verifiziert Login-Flow gegen Cloud: 5 Tests grün — Landing + a11y + `/login`-Navigation + Invalid-Creds-Reject + Login mit `admin@admin.com` / `admin1` → `/dashboard`. Nächster Schritt = Login-Flow End-to-End gegen Cloud verifizieren (`just dev-web`, `just seed-admin`, anmelden, Dashboard).
 
 ## Stack
 
@@ -37,6 +37,8 @@ just test          # alle Tests (web + agent)
 just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
+just e2e           # Playwright/Chromium — Login-Flow gegen Cloud
+just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
 just db-migrate    # supabase db push --workdir infra (gegen Cloud!)
 ```
