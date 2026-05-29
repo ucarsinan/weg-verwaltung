@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { Route } from "next";
 import { createClient } from "@/lib/supabase/server";
 
 export interface LoginState {
@@ -27,5 +28,8 @@ export async function loginAction(
     return { error: "Anmeldung fehlgeschlagen. Bitte Eingaben prüfen." };
   }
 
-  redirect(next.startsWith("/") ? next : "/dashboard");
+  // `next` is a URL string from the form, validated to start with "/".
+  // typedRoutes wants a branded Route; a runtime-validated relative path
+  // is safe to cast.
+  redirect((next.startsWith("/") ? next : "/dashboard") as Route);
 }

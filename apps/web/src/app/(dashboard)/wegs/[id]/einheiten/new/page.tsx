@@ -34,7 +34,13 @@ export default async function NewEinheitPage({
 
   // Bind the server action to pre-fill weg_id. We pass it as a hidden input
   // so the Server Action receives it from FormData (no closure needed).
-  const createUnitWithState = createUnit.bind(null, {} as UnitFormState);
+  // Cast: the action returns UnitFormState on validation failure but the
+  // form's `action` prop expects Promise<void>; this is the documented
+  // "simple direct-bind" path — inline errors require a client island.
+  const createUnitWithState = createUnit.bind(
+    null,
+    {} as UnitFormState,
+  ) as unknown as (formData: FormData) => Promise<void>;
 
   return (
     <section className="mx-auto max-w-2xl px-6 py-12">

@@ -28,10 +28,13 @@ export default async function NewEigentuemerPage({
     notFound();
   }
 
+  // Cast: action returns EigentuemerFormState on validation failure but the
+  // form's `action` prop expects Promise<void> — direct-bind path; inline
+  // errors require a client island (see einheiten/new for the same pattern).
   const createEigentuemerWithState = createEigentuemer.bind(
     null,
     {} as EigentuemerFormState,
-  );
+  ) as unknown as (formData: FormData) => Promise<void>;
 
   return (
     <section className="mx-auto max-w-2xl px-6 py-12">

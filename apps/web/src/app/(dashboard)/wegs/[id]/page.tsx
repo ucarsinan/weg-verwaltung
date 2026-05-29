@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import type { Route } from "next";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -340,7 +341,9 @@ export default async function WegDetailPage({
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href={`/wegs/${id}/edit`}>WEG bearbeiten</Link>
+            {/* Forward-ref: /edit route lands in a later iteration; cast
+                bypasses typedRoutes until the page exists. */}
+            <Link href={`/wegs/${id}/edit` as Route}>WEG bearbeiten</Link>
           </Button>
         </CardContent>
       </Card>
