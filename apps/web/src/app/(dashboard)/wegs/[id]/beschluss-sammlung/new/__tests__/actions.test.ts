@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { redirect } from "next/navigation";
 
 // Must mock before importing the module under test.
 vi.mock("next/navigation", () => ({
@@ -79,6 +80,7 @@ describe("createBeschlussSammlungEntry", () => {
         erstellt_durch: "user-uuid-1",
       })
     );
+    expect(redirect).toHaveBeenCalledWith("/wegs/weg-uuid-1/beschluss-sammlung");
   });
 
   it("returns _form error when supabase insert fails", async () => {
@@ -91,5 +93,18 @@ describe("createBeschlussSammlungEntry", () => {
 
     const result = await createBeschlussSammlungEntry("weg-uuid-1", {}, fd);
     expect(result.errors?._form).toBeDefined();
+  });
+
+  it("returns _form error when user is not authenticated", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const fd = new FormData();
+    fd.set("beschluss_text", "Die Gemeinschaft beschließt die Dachsanierung.");
+    fd.set("datum", "2026-05-28");
+    fd.set("typ", "positiv_beschluss");
+
+    const result = await createBeschlussSammlungEntry("weg-uuid-1", {}, fd);
+    expect(result.errors?._form).toBeDefined();
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });

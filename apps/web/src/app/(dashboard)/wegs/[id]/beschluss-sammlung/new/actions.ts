@@ -48,7 +48,7 @@ export async function createBeschlussSammlungEntry(
     ];
   }
 
-  if (!datum || !DATE_RE.test(datum)) {
+  if (!datum || !DATE_RE.test(datum) || isNaN(new Date(datum).getTime())) {
     errors.datum = ["Bitte ein gültiges Datum im Format JJJJ-MM-TT angeben."];
   }
 
