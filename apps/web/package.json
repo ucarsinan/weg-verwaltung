@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.0",

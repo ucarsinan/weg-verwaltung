@@ -53,6 +53,13 @@ codegen:
 db-migrate:
     supabase db push --workdir infra
 
+# Seed a tenant + tenant_admin user via the Supabase Admin API.
+# Reads .env.local for NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+# (or SUPABASE_SECRET_KEY in the new sb_secret_… format). Idempotent.
+# Args (all optional): email password "tenant name"
+seed-admin *ARGS:
+    node apps/web/scripts/seed-admin.mjs {{ARGS}}
+
 # DANGEROUS on a remote-only project — would wipe the Frankfurt DB.
 # Left in as a guarded recipe so nobody runs it by typo.
 db-reset:
