@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 21 Migrationen angewendet (0001–0021) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), pgaudit-RPC-Revoke-Versuch (0020+0021, Cloud-seitig No-Op — siehe Backlog). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Nächster Schritt = Login-Flow End-to-End gegen Cloud verifizieren (`just dev-web`, `just seed-admin`, anmelden, Dashboard).
+**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 21 Migrationen angewendet (0001–0021) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), pgaudit-RPC-Revoke-Versuch (0020+0021, Cloud-seitig No-Op — siehe Backlog). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Web-App: `just typecheck` + `just lint` + `just test-web` jetzt alle grün (ESLint auf Next-16-Flat-Config migriert). Nächster Schritt = Login-Flow End-to-End gegen Cloud verifizieren (`just dev-web`, `just seed-admin`, anmelden, Dashboard).
 
 ## Stack
 
