@@ -31,6 +31,11 @@ export type ResolutionLegalState = "pending" | "contested" | "final" | "voided";
 export type VoteWert = "ja" | "nein" | "enthaltung";
 export type VoteQuelle = "praesenz" | "digital" | "umlauf";
 
+export type AuditActorType = "user" | "agent" | "system";
+
+export type AgentActorType = "agent" | "system";
+export type AgentSuggestionStatus = "vorschlag" | "uebernommen" | "verworfen";
+
 export type BeschlussSammlungTyp =
   | "positiv_beschluss"
   | "negativ_beschluss"
@@ -344,6 +349,63 @@ export type Database = {
           erfasst_durch: string;
         };
         Update: Record<string, never>; // append-only
+      };
+      audit_event: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          seq: number;
+          created_at: string;
+          actor_type: AuditActorType;
+          actor_user_id: string | null;
+          db_role: string;
+          entity_typ: string;
+          entity_id: string;
+          action: string;
+          payload: Record<string, unknown>;
+          prev_hash: string;
+          row_hash: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+      };
+      agent_suggestion: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          meeting_id: string | null;
+          weg_id: string | null;
+          resolution_id: string | null;
+          actor_type: AgentActorType;
+          vorschlag_typ: string;
+          payload: Record<string, unknown>;
+          langgraph_thread_id: string | null;
+          langfuse_trace_id: string | null;
+          status: AgentSuggestionStatus;
+          entschieden_von: string | null;
+          entschieden_am: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id?: string;
+          meeting_id?: string | null;
+          weg_id?: string | null;
+          resolution_id?: string | null;
+          actor_type: AgentActorType;
+          vorschlag_typ: string;
+          payload: Record<string, unknown>;
+          langgraph_thread_id?: string | null;
+          langfuse_trace_id?: string | null;
+          status?: AgentSuggestionStatus;
+        };
+        Update: {
+          status?: AgentSuggestionStatus;
+          entschieden_von?: string | null;
+          entschieden_am?: string | null;
+          updated_at?: string;
+        };
       };
     };
     Views: Record<string, never>;

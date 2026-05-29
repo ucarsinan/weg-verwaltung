@@ -22,7 +22,7 @@ export default async function WegsPage() {
 
   if (error) {
     // Server-side log only — never expose raw PostgREST/PG errors to the user.
-    console.error("[wegs] select failed:", error);
+    console.error("[wegs] select failed:", error.message, { code: error.code, details: error.details, hint: error.hint });
     return (
       <div className="mx-auto max-w-3xl px-6 py-12">
         <h1 className="text-2xl font-semibold tracking-tight">WEGs</h1>
