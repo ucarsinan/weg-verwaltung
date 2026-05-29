@@ -17,12 +17,10 @@ interface BeschlussSammlungFormProps {
     prev: BeschlussSammlungFormState,
     formData: FormData,
   ) => Promise<BeschlussSammlungFormState>;
-  wegId: string;
 }
 
 export default function BeschlussSammlungForm({
   action,
-  wegId: _wegId,
 }: BeschlussSammlungFormProps) {
   const [state, formAction, isPending] = useActionState(action, {});
 
