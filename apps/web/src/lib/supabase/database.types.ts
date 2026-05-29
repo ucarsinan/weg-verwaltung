@@ -47,6 +47,8 @@ export type AnfechtungsEventTyp =
   | "unwirksam_erklaert"
   | "bestaetigt";
 
+export type AuditActorType = "user" | "agent" | "system";
+
 export type Database = {
   public: {
     Tables: {
@@ -344,6 +346,25 @@ export type Database = {
           erfasst_durch: string;
         };
         Update: Record<string, never>; // append-only
+      };
+      audit_event: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          seq: number;
+          created_at: string;
+          actor_type: AuditActorType;
+          actor_user_id: string | null;
+          db_role: string;
+          entity_typ: string;
+          entity_id: string;
+          action: string;
+          payload: Record<string, unknown>;
+          prev_hash: string;
+          row_hash: string;
+        };
+        Insert: Record<string, never>; // written only by DB trigger
+        Update: Record<string, never>; // immutable
       };
     };
     Views: Record<string, never>;
