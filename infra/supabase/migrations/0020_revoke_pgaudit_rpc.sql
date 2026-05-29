@@ -1,0 +1,32 @@
+-- WEG-Verwaltung migration 0020: revoke pgaudit event-trigger RPC exposure.
+--
+-- The `pgaudit` extension installs two SECURITY DEFINER C functions in
+-- `public` as event-trigger handlers:
+--   - public.pgaudit_ddl_command_end()
+--   - public.pgaudit_sql_drop()
+--
+-- These are only ever meant to be invoked by Postgres' event-trigger machinery
+-- (running as the extension owner), never directly. But Supabase's default
+-- grants leave them callable as
+--   /rest/v1/rpc/pgaudit_ddl_command_end
+--   /rest/v1/rpc/pgaudit_sql_drop
+-- by `anon` and `authenticated`, flagged by advisors
+-- `anon_security_definer_function_executable` and
+-- `authenticated_security_definer_function_executable`.
+--
+-- We revoke EXECUTE from the API roles. Event triggers continue to fire
+-- (they run as the function owner, not the calling REST role), so this is
+-- a strict surface-area reduction with no functional impact.
+--
+-- NOTE: anon/authenticated inherit EXECUTE on these functions via PUBLIC
+-- (Postgres default for newly-created functions). Revoking directly from
+-- anon/authenticated is a no-op — see migration 0021 for the FROM PUBLIC
+-- backfill that actually closes the hole. This migration is retained as
+-- the historical first attempt and documents the gotcha.
+--
+-- The long-term fix is moving pgaudit out of `public` entirely (backlog:
+-- `extension_in_public`), which would relocate these functions and close
+-- the REST exposure structurally.
+
+revoke execute on function public.pgaudit_ddl_command_end() from anon, authenticated;
+revoke execute on function public.pgaudit_sql_drop() from anon, authenticated;

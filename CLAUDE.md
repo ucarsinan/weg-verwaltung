@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 18 Migrationen angewendet (0001–0018) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. Nächster Schritt = Frontend gegen Cloud verdrahten (`apps/web/src/lib/supabase/*`).
+**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 21 Migrationen angewendet (0001–0021) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), pgaudit-RPC-Revoke-Versuch (0020+0021, Cloud-seitig No-Op — siehe Backlog). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Nächster Schritt = Login-Flow End-to-End gegen Cloud verifizieren (`just dev-web`, `just seed-admin`, anmelden, Dashboard).
 
 ## Stack
 
@@ -60,8 +60,8 @@ Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Fr
 
 ## Backlog (Security-Hygiene, nicht blocking)
 
-- `function_search_path_mutable` auf `public.has_role`, `public.tenant_id`, 2 legacy Trigger — `SET search_path = ''` in jeder Funktion
-- `extension_in_public` für `pg_net`, `pgaudit`, `vector` → in `extensions` Schema verschieben (Supabase-Konvention)
+- ~~`function_search_path_mutable`~~ — erledigt in 0019
+- `extension_in_public` für `pg_net`, `pgaudit`, `vector` → in `extensions` Schema verschieben (Supabase-Konvention). **Strukturell nötig**, weil dies auch die zwei pgaudit-RPC-Advisors (`anon`/`authenticated_security_definer_function_executable` auf `pgaudit_ddl_command_end`, `pgaudit_sql_drop`) schließt: surgical `REVOKE EXECUTE` in 0020/0021 war Cloud-seitig No-Op (PG meldet `01006: no privileges could be revoked` — funktionen haben weder direkten Grant noch erbbaren PUBLIC-Grant, advisor flaggt rein API-schema-basiert). Move-Migration TBD (Risiko: `vector(384)`-Typen in `embedding`-Tabelle müssen mitziehen).
 - `embedding`-Repartitionierung (siehe 0010 Header) — beim Skalieren über 1 Tenant hinaus
 - `audit_event` Cold-Storage (0014_audit_cold_storage geplant): Partitions >24 Mo. detachen → Supabase Storage
 

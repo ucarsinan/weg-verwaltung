@@ -32,6 +32,9 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 | 0016 | `revoke_trigger_rpc.sql` | Backfill `REVOKE EXECUTE … FROM anon, authenticated` on `public.tg_document_set_current_version()` so the SECURITY DEFINER trigger function is not callable as `/rest/v1/rpc/`. Source-of-truth REVOKE is already inline in 0015. |
 | 0017 | `vault_seed_audit_hmac_key.sql` | Idempotently seed `audit_hmac_key` in `vault.secrets`. Replaces the operational SQL-Editor step from the 0009 header. |
 | 0018 | `pgrst_pre_request_backfill.sql` | Backfill the `ALTER ROLE authenticator SET pgrst.db_pre_request = …` on environments where 0013 was applied with the old `ALTER DATABASE` form; idempotent. |
+| 0019 | `function_search_path.sql` | `SET search_path = ''` on `public.has_role`, `public.tenant_id`, and the two legacy trigger helpers — closes the `function_search_path_mutable` advisor class. |
+| 0020 | `revoke_pgaudit_rpc.sql` | First attempt to close the `anon`/`authenticated_security_definer_function_executable` advisors on `public.pgaudit_ddl_command_end` and `public.pgaudit_sql_drop`: `REVOKE EXECUTE … FROM anon, authenticated`. Cloud-side **no-op** (PG: `01006: no privileges could be revoked`) because the roles inherit, not own. |
+| 0021 | `revoke_pgaudit_rpc_from_public.sql` | Follow-up `REVOKE … FROM PUBLIC` on the same pgaudit functions. Also a Cloud-side **no-op**: the migration role sees no PUBLIC grant either. The advisor flags purely on API-schema membership; structural close requires moving `pgaudit` out of `public` — tracked in the `extension_in_public` backlog. |
 
 **Deferred (not in baseline):**
 
