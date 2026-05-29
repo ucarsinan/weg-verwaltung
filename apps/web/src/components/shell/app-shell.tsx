@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "WEGs", href: "/wegs" },
+  { label: "Audit", href: "/audit" },
 ] as const;
 
 interface AppShellProps {
