@@ -5,10 +5,10 @@
 default:
     @just --list
 
-# Start the full local dev stack: supabase + web + agent in parallel.
+# Start the dev stack against the Frankfurt cloud project.
+# This project is remote-only; .env.local carries the cloud credentials.
 dev:
-    @echo "Starting local dev stack..."
-    supabase start
+    @echo "Cloud-DB: Supabase Frankfurt (project sgdlzafvhrfulwidqsno)."
     @echo "Run 'just dev-web' and 'just dev-agent' in separate terminals (or use a process-manager)."
 
 # Next.js dev server
@@ -48,13 +48,17 @@ codegen:
     curl -s http://localhost:8000/openapi.json > packages/shared-types/openapi.json
     pnpm --filter @weg-verwaltung/shared-types codegen
 
-# Apply Supabase migrations to the linked project
+# Apply Supabase migrations to the linked cloud project.
+# Workdir is `infra` because migrations live under infra/supabase/.
 db-migrate:
-    supabase db push
+    supabase db push --workdir infra
 
-# Reset local Supabase + reseed
+# DANGEROUS on a remote-only project — would wipe the Frankfurt DB.
+# Left in as a guarded recipe so nobody runs it by typo.
 db-reset:
-    supabase db reset
+    @echo "ABORT: this project is remote-only; db reset would wipe the cloud DB."
+    @echo "If you really want this, run: supabase db reset --workdir infra --linked"
+    @exit 1
 
 # Clean all build artifacts
 clean:

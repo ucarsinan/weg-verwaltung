@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** **Design-Phase abgeschlossen — alle 6 Sections fertig.** Nächster Commit ist Code, nicht Spec.
+**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 18 Migrationen angewendet (0001–0018) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`). API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. Nächster Schritt = Frontend gegen Cloud verdrahten (`apps/web/src/lib/supabase/*`).
 
 ## Stack
 
@@ -22,7 +22,7 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 
 ## Sicherheits-Invarianten (immer einhalten)
 
-1. Mandanten-Iso via RLS (`tenant_id = auth.jwt() ->> 'tenant_id'`).
+1. Mandanten-Iso via RLS (`tenant_id = (select public.tenant_id())`). Helper `public.tenant_id()` extrahiert aus JWT — siehe 0001. Builtins `auth.jwt()`/`auth.uid()` bleiben in `auth` Schema; user-defined Helpers liegen in `public` (hosted-Supabase blockt CREATE auf `auth`).
 2. KI = nur Vorschläge — DB-Trigger blockiert `actor_type=agent` auf `Vote`, `BeschlussSammlungEntry`, `Protocol.unterzeichnet`, `Resolution`.
 3. `BeschlussSammlungEntry` ist append-only (Trigger lehnt UPDATE/DELETE ab).
 4. `AuditEvent` ist unlöschbar — auch für Tenant-Admin.
@@ -31,15 +31,17 @@ Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Do
 ## Commands
 
 ```bash
-just dev-web       # Next.js dev (Port 3000)
+just dev-web       # Next.js dev (Port 3000) — gegen Cloud-DB (Frankfurt)
 just dev-agent     # FastAPI dev (Port 8000, uv-managed venv)
 just test          # alle Tests (web + agent)
 just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
-just db-reset      # lokales Supabase zurücksetzen + seed
+just db-migrate    # supabase db push --workdir infra (gegen Cloud!)
 ```
+
+Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Frankfurt. `.env.local` enthält die Cloud-Credentials.
 
 ## Konventionen
 
@@ -55,6 +57,13 @@ just db-reset      # lokales Supabase zurücksetzen + seed
 - [x] Section 4 — KI-Architektur ([docs/04-ai-architecture.md](./docs/04-ai-architecture.md))
 - [x] Section 5 — UX-Leitprinzipien ([docs/05-ux-principles.md](./docs/05-ux-principles.md))
 - [x] Section 6 — End-to-End-Workflow + Risiken ([docs/06-workflows-and-risks.md](./docs/06-workflows-and-risks.md))
+
+## Backlog (Security-Hygiene, nicht blocking)
+
+- `function_search_path_mutable` auf `public.has_role`, `public.tenant_id`, 2 legacy Trigger — `SET search_path = ''` in jeder Funktion
+- `extension_in_public` für `pg_net`, `pgaudit`, `vector` → in `extensions` Schema verschieben (Supabase-Konvention)
+- `embedding`-Repartitionierung (siehe 0010 Header) — beim Skalieren über 1 Tenant hinaus
+- `audit_event` Cold-Storage (0014_audit_cold_storage geplant): Partitions >24 Mo. detachen → Supabase Storage
 
 ## Referenzen
 

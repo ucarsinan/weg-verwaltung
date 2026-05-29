@@ -114,10 +114,12 @@ eigentuemer            — Eigentümer einer Wohnung, sieht eigene Daten + öffe
 Cross-Cutting via RLS-Helper-Funktion in Postgres:
 
 ```sql
-create or replace function auth.has_role(target_role text) returns boolean as $$
+create or replace function public.has_role(target_role text) returns boolean as $$
   select (auth.jwt() -> 'app_metadata' ->> 'role') = target_role;
 $$ language sql stable;
 ```
+
+> **Hosted-Supabase-Anmerkung:** Der ursprüngliche Entwurf platzierte die Helper im `auth`-Schema. Hosted Supabase blockt seit 2024 `CREATE` auf `auth` für die `postgres`-Migration-Rolle (`supabase_admin` only), deshalb leben unsere Helper (`public.has_role`, `public.tenant_id`, `public.custom_access_token_hook`) im `public`-Schema. Die Builtins `auth.jwt()`/`auth.uid()` bleiben unverändert genutzt.
 
 ### Session-Handling
 
@@ -136,7 +138,7 @@ $$ language sql stable;
 1. `ALTER TABLE … ENABLE ROW LEVEL SECURITY;`
 2. `ALTER TABLE … FORCE ROW LEVEL SECURITY;` — schließt den Owner-Bypass.
 3. `REVOKE ALL ON … FROM PUBLIC;` — App-Rolle ≠ Table-Owner.
-4. `tenant_id uuid NOT NULL DEFAULT (SELECT (auth.jwt() -> 'app_metadata' ->> 'tenant_id')::uuid)` — Default aus JWT, NOT NULL erzwingt Befüllung.
+4. `tenant_id uuid NOT NULL DEFAULT public.tenant_id()` — Default aus JWT via Helper (`public.tenant_id()` aus 0001), NOT NULL erzwingt Befüllung.
 5. **Composite FK** `(tenant_id, id)` zwischen verwandten Tabellen — verhindert Cross-Tenant-Verlinkung strukturell.
 6. Views mit `WITH (security_invoker = true)` (PG 15+) — sonst läuft View als View-Owner und ignoriert RLS.
 7. Keine `SECURITY DEFINER`-Funktionen auf Tenant-Tabellen, außer mit explizitem `tenant_id`-Check und bewusster `LEAKPROOF`-Markierung.

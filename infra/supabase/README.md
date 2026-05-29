@@ -14,44 +14,47 @@ tests/                  pgTAP negative-path RLS tests (stubs).
 
 | # | File | Scope |
 | --- | --- | --- |
-| 0001 | `extensions_and_helpers.sql` | `pgcrypto`, `pg_cron`, `pg_net`, `pgaudit`; `auth.has_role()`, `auth.tenant_id()`. |
-| 0002 | `identity.sql` | `tenant`, `tenant_member`, Custom Access Token Hook (`auth.custom_access_token_hook`). |
+| 0001 | `extensions_and_helpers.sql` | `pgcrypto`, `pg_cron`, `pg_net`, `pgaudit`; `public.has_role()`, `public.tenant_id()`. (Helpers live in `public` because hosted Supabase blocks CREATE on `auth` for the migration role.) |
+| 0002 | `identity.sql` | `tenant`, `tenant_member`, Custom Access Token Hook (`public.custom_access_token_hook`). |
 | 0003 | `weg_domain.sql` | `weg`, `unit`, `person`, `ownership` (incl. composite FKs + tenant defaults). |
 | 0004 | `versammlung.sql` | `meeting`, `agenda_item`, `resolution`, `vote`, `proxy`, `protocol`. |
 | 0005 | `beschluss_sammlung.sql` | Append-only `beschluss_sammlung_entry` + anfechtungs-event chain (§ 24 Abs. 7 WEG). |
 | 0006 | `audit_event.sql` | Partitioned append-only audit log, 3-layer protection (schema columns for HMAC). |
 | 0007 | `agent_suggestions.sql` | `agent_suggestion` — KI-Vorschläge, getrennt von echten Beschlüssen. |
 | 0008 | `rls_policies.sql` | RLS + FORCE RLS + 4 policies per table (see § 3.4 Hardening-Checkliste). |
-| 0009 | `audit_hmac.sql` | HMAC hash-chain on `audit_event`: `audit_writer.hash_audit_row()`, BEFORE INSERT trigger, `verify_chain(tenant_id)` tamper detector. Vault secret `audit_hmac_key` required in prod. |
+| 0009 | `audit_hmac.sql` | HMAC hash-chain on `audit_event`. Header `grant audit_writer to postgres` because hosted-postgres is not auto-member of audit_writer. Vault secret seeded in 0017. |
 | 0010 | `embedding_layer.sql` | `pgvector` extension + partitioned `embedding(tenant_id, id)` table (vector(1024) for bge-m3) with HNSW + GIN(`german` FTS) indexes, composite FK to `weg`, RLS + FORCE RLS (§ 4.5). |
-| 0011 | `actor_type_guards.sql` | BEFORE-trigger `audit_writer.assert_not_agent_write()` on `vote`, `resolution`, `beschluss_sammlung_entry`, `protocol` (signing-columns only) — RAISE EXCEPTION when `current_setting('app.actor_type')='agent'` (Invariante 3, § 4.6). |
-| 0012 | `audit_partition_rotation.sql` | `audit_writer.rotate_audit_partitions(months_ahead)` + `pg_cron` job `audit-partition-rotation-monthly` (02:00 UTC on the 1st). Bootstrap call creates the next 12 monthly partitions of `audit_event`. |
-| 0013 | `set_actor_type_hook.sql` | PostgREST `db_pre_request` hook that reads `X-Actor-Type` header and sets the `app.actor_type` GUC — activates the 0011 trigger from the application layer. |
+| 0011 | `actor_type_guards.sql` | BEFORE-trigger `audit_writer.assert_not_agent_write()` on `vote`, `resolution`, `beschluss_sammlung_entry`, `protocol` (signing-columns only). |
+| 0012 | `audit_partition_rotation.sql` | `audit_writer.rotate_audit_partitions(months_ahead)` + `pg_cron` job. **Replaced in 0014** to enforce RLS on new partitions. |
+| 0013 | `set_actor_type_hook.sql` | PostgREST `db_pre_request` hook reading `X-Actor-Type` → sets `app.actor_type` GUC. Uses `ALTER ROLE authenticator SET …` (works on both local and hosted; the original `ALTER DATABASE postgres` failed on hosted with insufficient_privilege). |
+| 0014 | `partition_rls.sql` | Backfill `ENABLE+FORCE RLS` on every existing `audit_event_*` and `embedding_p*` partition, plus replacement `rotate_audit_partitions` that enforces RLS on every new partition. Closes the advisor `rls_disabled_in_public` ERROR class. |
+| 0015 | `dokumente.sql` | Dokumente-Modul: `document` + `document_version` (append-only via trigger) + private storage bucket `weg-docs` with path-based RLS (`<tenant_id>/<weg_id>/<doc_typ>/<uuid>.<ext>`). |
+| 0016 | `revoke_trigger_rpc.sql` | Backfill `REVOKE EXECUTE … FROM anon, authenticated` on `public.tg_document_set_current_version()` so the SECURITY DEFINER trigger function is not callable as `/rest/v1/rpc/`. Source-of-truth REVOKE is already inline in 0015. |
+| 0017 | `vault_seed_audit_hmac_key.sql` | Idempotently seed `audit_hmac_key` in `vault.secrets`. Replaces the operational SQL-Editor step from the 0009 header. |
+| 0018 | `pgrst_pre_request_backfill.sql` | Backfill the `ALTER ROLE authenticator SET pgrst.db_pre_request = …` on environments where 0013 was applied with the old `ALTER DATABASE` form; idempotent. |
 
 **Deferred (not in baseline):**
 
-- `0014_audit_cold_storage.sql` (planned) — detach `audit_event` partitions older than 24 months and export them to Supabase Storage (S3-Glacier-equivalent), per § 3.5 cold-storage rule. Blocked on the storage-bucket + IAM design.
+- Audit cold-storage migration (planned) — detach `audit_event` partitions older than 24 months and export them to Supabase Storage (S3-Glacier-equivalent), per § 3.5 cold-storage rule. Blocked on the storage-bucket + IAM design.
 - **Agent-side header attachment** — the 0013 hook only fires when callers send `X-Actor-Type: agent`. The remaining piece lives in `apps/agent/app/tools/runtime.py`: the `@side_effect` decorator (docs/04 § 4.3) must attach the header to every per-request supabase-py client. Until that lands, the 0011 trigger is wired end-to-end but never triggered in practice.
 
-## Workflows
+## Workflow (remote-only)
 
-**Local (no remote DB touched):**
-
-```bash
-supabase start                # boots Postgres + Auth + Storage; migrations auto-apply
-supabase status               # shows API / DB / Studio ports (54321 / 54322 / 54323)
-supabase migration new <name> # add the next 00NN_*.sql
-supabase db reset             # wipe + re-apply all migrations
-```
-
-**Remote (production):**
+This project deploys schema changes directly to the Frankfurt cloud project (`sgdlzafvhrfulwidqsno`). No local `supabase start` stack is used.
 
 ```bash
-supabase link --project-ref <ref>   # one-off, links this folder to the cloud project
-supabase db push                    # applies unmigrated files to the cloud DB
+# One-off setup
+supabase link --project-ref sgdlzafvhrfulwidqsno --workdir infra
+
+# Day-to-day
+supabase migration new <name> --workdir infra   # new 00NN_*.sql under migrations/
+just db-migrate                                  # supabase db push --workdir infra
+supabase migration list --workdir infra          # compare local files vs cloud state
 ```
 
-Both flows use the same files; the CLI tracks applied versions in `supabase_migrations.schema_migrations`.
+The CLI tracks applied versions in `supabase_migrations.schema_migrations`. Connection requires the DB password (kept in `~/.env.local` as `SUPABASE_DB_PASSWORD`, also in the macOS Keychain after `supabase link`).
+
+`supabase db reset` is **not** wired into `just`; running it remotely would wipe the cloud DB. See the guarded `just db-reset` recipe.
 
 ## RLS philosophy (binding contract)
 
