@@ -92,6 +92,7 @@ revoke update, delete, truncate on public.beschluss_anfechtung_event from public
 create or replace function public.tg_beschluss_sammlung_append_only()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   raise exception

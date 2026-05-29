@@ -126,6 +126,7 @@ grant usage on schema public to audit_writer;
 create or replace function public.tg_audit_event_immutable()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   raise exception

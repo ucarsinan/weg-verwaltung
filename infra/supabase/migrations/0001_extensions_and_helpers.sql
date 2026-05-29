@@ -32,6 +32,7 @@ create or replace function public.has_role(target_role text)
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
   select (auth.jwt() -> 'app_metadata' ->> 'role') = target_role;
 $$;
@@ -46,6 +47,7 @@ create or replace function public.tenant_id()
 returns uuid
 language sql
 stable
+set search_path = ''
 as $$
   select nullif(auth.jwt() -> 'app_metadata' ->> 'tenant_id', '')::uuid;
 $$;
