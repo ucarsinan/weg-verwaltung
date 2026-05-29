@@ -46,25 +46,17 @@ $$;
 revoke all on function app.set_actor_type_from_header() from public;
 grant execute on function app.set_actor_type_from_header() to anon, authenticated, service_role;
 
--- Tell PostgREST to call our function before each request. The setting
--- name is documented at https://postgrest.org/en/stable/configuration.html#db-pre-request
+-- Tell PostgREST to call our function before each request.
 --
--- On `supabase start` (local) we run as superuser and ALTER DATABASE works.
--- On Hosted Supabase, `postgres` cannot ALTER DATABASE — the setting must
--- instead be applied out-of-band via the Management API:
---   PATCH https://api.supabase.com/v1/projects/{ref}/postgrest
---   Body:  {"db_pre_request": "app.set_actor_type_from_header"}
--- (or Dashboard → Project Settings → API → "Database pre-request").
--- The DO block makes the migration succeed in both environments; a loud
--- WARNING surfaces the manual step in hosted logs.
-do $$
-begin
-  execute $sql$alter database postgres set "pgrst.db_pre_request" = 'app.set_actor_type_from_header'$sql$;
-exception when insufficient_privilege then
-  raise warning
-    'pgrst.db_pre_request could not be set via ALTER DATABASE (hosted Supabase). '
-    'Apply via Management API or Dashboard. See migration header.';
-end$$;
+-- The right form on Supabase is `ALTER ROLE authenticator SET ...`, not
+-- `ALTER DATABASE postgres SET ...`: PostgREST connects as the `authenticator`
+-- role, and a per-role setting wins over the per-database one. `postgres` is
+-- a member of `authenticator` on every Supabase project so this works on
+-- both `supabase start` and hosted (unlike ALTER DATABASE which needs
+-- supabase_admin on hosted). Source: docs/guides/api/securing-your-api §
+-- "Enforce additional rules on each request".
+alter role authenticator
+  set "pgrst.db_pre_request" = 'app.set_actor_type_from_header';
 
 -- Force PostgREST to pick up the new config without a restart.
 -- (Supabase auto-reloads on a NOTIFY pgrst, 'reload config'.)
