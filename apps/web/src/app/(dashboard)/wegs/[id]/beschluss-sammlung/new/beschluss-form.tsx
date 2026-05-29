@@ -27,9 +27,10 @@ export default function BeschlussSammlungForm({
   const [state, formAction, isPending] = useActionState(action, {});
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-6" noValidate>
       {state.errors?._form ? (
         <p
+          id="beschluss-form-error"
           role="alert"
           className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
         >
@@ -55,8 +56,8 @@ export default function BeschlussSammlungForm({
           aria-describedby={
             state.errors?.beschluss_text ? "beschluss_text-error" : undefined
           }
-          aria-invalid={!!state.errors?.beschluss_text}
-          className="w-full rounded-md border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm placeholder:text-[color:var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] disabled:opacity-50"
+          aria-invalid={state.errors?.beschluss_text ? true : undefined}
+          className="w-full rounded-md border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm placeholder:text-[color:var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-background) disabled:opacity-50"
         />
         {state.errors?.beschluss_text ? (
           <p
@@ -78,7 +79,7 @@ export default function BeschlussSammlungForm({
           type="date"
           required
           aria-describedby={state.errors?.datum ? "datum-error" : undefined}
-          aria-invalid={!!state.errors?.datum}
+          aria-invalid={state.errors?.datum ? true : undefined}
         />
         {state.errors?.datum ? (
           <p
@@ -100,7 +101,7 @@ export default function BeschlussSammlungForm({
           required
           defaultValue=""
           aria-describedby={state.errors?.typ ? "typ-error" : undefined}
-          aria-invalid={!!state.errors?.typ}
+          aria-invalid={state.errors?.typ ? true : undefined}
           className="w-full rounded-md border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
         >
           <option value="" disabled>
