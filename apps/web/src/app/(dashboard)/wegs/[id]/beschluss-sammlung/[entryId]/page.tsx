@@ -78,12 +78,16 @@ export default async function BeschlussSammlungDetailPage({
     throw new Error("Eintrag konnte nicht geladen werden.");
   }
 
-  const { data: events } = await supabase
+  const { data: events, error: eventsError } = await supabase
     .from("beschluss_anfechtung_event")
     .select("*")
     .eq("bse_id", entryId)
     .order("datum", { ascending: true })
     .returns<BaeRow[]>();
+
+  if (eventsError) {
+    console.error("[beschluss-sammlung/[entryId]] events select failed:", eventsError);
+  }
 
   const anfechtungEvents: BaeRow[] = events ?? [];
 
