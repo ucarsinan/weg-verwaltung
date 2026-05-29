@@ -12,7 +12,7 @@
 
 create table if not exists public.beschluss_sammlung_entry (
   id                  uuid primary key default gen_random_uuid(),
-  tenant_id           uuid not null default auth.tenant_id(),
+  tenant_id           uuid not null default public.tenant_id(),
   weg_id              uuid not null,
   lfd_nr              bigint generated always as identity,
   beschluss_text      text not null,
@@ -55,7 +55,7 @@ create index if not exists bse_weg_idx
 
 create table if not exists public.beschluss_anfechtung_event (
   id                  uuid primary key default gen_random_uuid(),
-  tenant_id           uuid not null default auth.tenant_id(),
+  tenant_id           uuid not null default public.tenant_id(),
   bse_id              uuid not null,
   event_typ           text not null check (event_typ in (
     'angefochten',         -- Klage erhoben

@@ -69,7 +69,7 @@ alter table public.tenant
 --   (b) issue tenant-scoped tokens via a dedicated /switch-tenant endpoint.
 -- Both are deferred — single-tenant-per-user is the MVP contract.
 
-create or replace function auth.custom_access_token_hook(event jsonb)
+create or replace function public.custom_access_token_hook(event jsonb)
 returns jsonb
 language plpgsql
 stable
@@ -109,9 +109,9 @@ begin
 end;
 $$;
 
-comment on function auth.custom_access_token_hook(jsonb) is
+comment on function public.custom_access_token_hook(jsonb) is
   'Custom Access Token Hook — injects tenant_id + role into app_metadata. Registered in Supabase dashboard. See docs/02-architecture-deployment.md § 2.4.';
 
 -- Allow Supabase Auth to invoke the hook.
-grant execute on function auth.custom_access_token_hook(jsonb) to supabase_auth_admin;
-revoke execute on function auth.custom_access_token_hook(jsonb) from authenticated, anon, public;
+grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
+revoke execute on function public.custom_access_token_hook(jsonb) from authenticated, anon, public;

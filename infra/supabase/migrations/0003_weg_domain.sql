@@ -16,7 +16,7 @@
 
 create table if not exists public.weg (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id()
+  tenant_id       uuid not null default public.tenant_id()
                   references public.tenant(id) on delete restrict,
   name            text not null,
   adresse         text,
@@ -38,7 +38,7 @@ create index if not exists weg_tenant_id_idx on public.weg (tenant_id);
 
 create table if not exists public.unit (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   weg_id          uuid not null,
   bezeichnung     text not null,           -- "Whg. 12, 3. OG links"
   mea_zaehler     bigint not null,         -- Miteigentumsanteil als Bruch
@@ -64,7 +64,7 @@ create index if not exists unit_weg_idx on public.unit (tenant_id, weg_id);
 
 create table if not exists public.person (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   vorname         text not null,
   nachname        text not null,
   anschrift       text,
@@ -92,7 +92,7 @@ create index if not exists person_user_id_idx on public.person (user_id);
 
 create table if not exists public.ownership (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   weg_id          uuid not null,
   unit_id         uuid not null,
   person_id       uuid not null,

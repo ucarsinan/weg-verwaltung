@@ -48,10 +48,23 @@ grant execute on function app.set_actor_type_from_header() to anon, authenticate
 
 -- Tell PostgREST to call our function before each request. The setting
 -- name is documented at https://postgrest.org/en/stable/configuration.html#db-pre-request
--- On Supabase, set per-database (not per-role) via ALTER DATABASE.
--- Safe to run repeatedly: ALTER DATABASE … SET is upsert-like.
-alter database postgres
-  set "pgrst.db_pre_request" = 'app.set_actor_type_from_header';
+--
+-- On `supabase start` (local) we run as superuser and ALTER DATABASE works.
+-- On Hosted Supabase, `postgres` cannot ALTER DATABASE — the setting must
+-- instead be applied out-of-band via the Management API:
+--   PATCH https://api.supabase.com/v1/projects/{ref}/postgrest
+--   Body:  {"db_pre_request": "app.set_actor_type_from_header"}
+-- (or Dashboard → Project Settings → API → "Database pre-request").
+-- The DO block makes the migration succeed in both environments; a loud
+-- WARNING surfaces the manual step in hosted logs.
+do $$
+begin
+  execute $sql$alter database postgres set "pgrst.db_pre_request" = 'app.set_actor_type_from_header'$sql$;
+exception when insufficient_privilege then
+  raise warning
+    'pgrst.db_pre_request could not be set via ALTER DATABASE (hosted Supabase). '
+    'Apply via Management API or Dashboard. See migration header.';
+end$$;
 
 -- Force PostgREST to pick up the new config without a restart.
 -- (Supabase auto-reloads on a NOTIFY pgrst, 'reload config'.)

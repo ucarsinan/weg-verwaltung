@@ -13,7 +13,7 @@
 
 create table if not exists public.meeting (
   id                      uuid primary key default gen_random_uuid(),
-  tenant_id               uuid not null default auth.tenant_id(),
+  tenant_id               uuid not null default public.tenant_id(),
   weg_id                  uuid not null,
   titel                   text not null,
   modus                   text not null check (modus in (
@@ -55,7 +55,7 @@ create index if not exists meeting_status_idx on public.meeting (tenant_id, stat
 
 create table if not exists public.agenda_item (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   meeting_id      uuid not null,
   position        integer not null,                -- TOP-Nr.
   titel           text not null,
@@ -82,7 +82,7 @@ create index if not exists agenda_item_meeting_idx
 
 create table if not exists public.resolution (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   meeting_id      uuid not null,
   agenda_item_id  uuid,
   text            text not null,
@@ -129,7 +129,7 @@ create index if not exists resolution_meeting_idx
 
 create table if not exists public.proxy (
   id                      uuid primary key default gen_random_uuid(),
-  tenant_id               uuid not null default auth.tenant_id(),
+  tenant_id               uuid not null default public.tenant_id(),
   meeting_id              uuid not null,
   vollmachtgeber_ownership_id uuid not null,
   vollmachtnehmer_ownership_id uuid,             -- NULL wenn Verwalter / Beirat
@@ -167,7 +167,7 @@ create index if not exists proxy_meeting_idx on public.proxy (tenant_id, meeting
 
 create table if not exists public.vote (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null default auth.tenant_id(),
+  tenant_id       uuid not null default public.tenant_id(),
   resolution_id   uuid not null,
   ownership_id    uuid not null,             -- ← Invariante 5
   wert            text not null check (wert in ('ja', 'nein', 'enthaltung')),
@@ -203,7 +203,7 @@ create index if not exists vote_ownership_idx on public.vote (tenant_id, ownersh
 
 create table if not exists public.protocol (
   id                  uuid primary key default gen_random_uuid(),
-  tenant_id           uuid not null default auth.tenant_id(),
+  tenant_id           uuid not null default public.tenant_id(),
   meeting_id          uuid not null,
   status              text not null default 'ki_entwurf' check (status in (
     'ki_entwurf', 'verwalter_revision', 'unterzeichnet'

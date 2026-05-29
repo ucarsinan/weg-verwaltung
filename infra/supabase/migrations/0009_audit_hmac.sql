@@ -21,6 +21,12 @@
 -- pg_dump exfiltration without leaking the chain-forge key. A leaked DB
 -- snapshot WITHOUT the Vault key cannot forge a valid continuation.
 
+-- Hosted Supabase: `postgres` (the migration runner) is not auto-member of
+-- the `audit_writer` role created in 0006. Without membership it cannot use
+-- `authorization audit_writer` on the schema or `owner to audit_writer` on
+-- the functions below. Granting role-membership is idempotent.
+grant audit_writer to postgres;
+
 -- ---------------------------------------------------------------------------
 -- audit_writer.hash_audit_row(prev_hash, payload)
 -- ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@
 
 create table if not exists public.agent_suggestion (
   id                  uuid primary key default gen_random_uuid(),
-  tenant_id           uuid not null default auth.tenant_id(),
+  tenant_id           uuid not null default public.tenant_id(),
 
   -- Anchor — different agent use cases anchor on different parents.
   -- Exactly one of (meeting_id, weg_id, resolution_id) should be non-null in practice,
