@@ -184,6 +184,15 @@ export default async function MeetingDetailPage({
           </Button>
         </CardContent>
       </Card>
+
+      <div className="mt-4">
+        <Link
+          href={`/versammlungen/${meetingId}/vorschlaege`}
+          className="text-sm underline underline-offset-4 hover:text-(--color-accent)"
+        >
+          KI-Vorschläge anzeigen →
+        </Link>
+      </div>
     </section>
   );
 }
