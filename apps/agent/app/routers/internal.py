@@ -7,7 +7,6 @@ is additionally blocked at the Fly edge — never exposed to the internet.
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 
 from fastapi import APIRouter, Depends
 

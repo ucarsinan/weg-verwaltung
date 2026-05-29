@@ -22,6 +22,7 @@ from langchain_core.messages import HumanMessage
 
 from app.graphs import agenda_graph, build_thread_id
 from app.graphs.agenda import (
+    AgendaItemSuggestion,
     AgendaVorschlag,
     _format_context_blob,
     _retrieved_protokolle,
@@ -136,21 +137,25 @@ async def test_propose_agenda_node_returns_suggestion_shape() -> None:
 
     fake_vorschlag = AgendaVorschlag(
         items=[
-            {
-                "titel": "Begrüßung und Beschlussfähigkeit",
-                "beschreibung": "Begrüßung der Eigentümer und Feststellung "
-                "der Beschlussfähigkeit nach § 25 WEG.",
-                "rationale": "Branchenstandard, jede Versammlung.",
-                "quelle": "branchenstandard",
-            },
-            {
-                "titel": "Genehmigung des Vorjahres-Protokolls",
-                "beschreibung": "Die Eigentümerversammlung genehmigt mit "
-                "einfacher Mehrheit das Protokoll der Versammlung vom ...",
-                "rationale": "Pflicht-TOP nach Branchenstandard.",
-                "quelle": "branchenstandard",
-            },
-        ],  # type: ignore[arg-type]
+            AgendaItemSuggestion(
+                titel="Begrüßung und Beschlussfähigkeit",
+                beschreibung=(
+                    "Begrüßung der Eigentümer und Feststellung "
+                    "der Beschlussfähigkeit nach § 25 WEG."
+                ),
+                rationale="Branchenstandard, jede Versammlung.",
+                quelle="branchenstandard",
+            ),
+            AgendaItemSuggestion(
+                titel="Genehmigung des Vorjahres-Protokolls",
+                beschreibung=(
+                    "Die Eigentümerversammlung genehmigt mit "
+                    "einfacher Mehrheit das Protokoll der Versammlung vom ..."
+                ),
+                rationale="Pflicht-TOP nach Branchenstandard.",
+                quelle="branchenstandard",
+            ),
+        ],
         konfidenz="niedrig",
         fehlende_inputs=["Vorjahres-Protokoll"],
     )
@@ -238,7 +243,7 @@ async def test_list_previous_protokolle_wraps_rows_into_pydantic() -> None:
         # coroutine on ``.coroutine``; we call that so the test does not
         # need a real LangGraph tool-dispatch context (the runtime arg
         # is normally injected by ``ToolNode``).
-        results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc]
+        results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc,attr-defined]
             weg_id="weg_07",
             runtime=fake_runtime,
             limit=2,
@@ -264,7 +269,7 @@ async def test_list_previous_protokolle_caps_limit() -> None:
     )
 
     with patch("app.tools.versammlung_tools.get_supabase", return_value=fake_sb):
-        await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc]
+        await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc,attr-defined]
             weg_id="weg_07",
             runtime=fake_runtime,
             limit=9999,

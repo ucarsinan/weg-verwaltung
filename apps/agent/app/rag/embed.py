@@ -21,7 +21,9 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
     # The real type lives in FlagEmbedding; we only need it for annotations.
-    from FlagEmbedding import BGEM3FlagModel  # noqa: F401
+    # FlagEmbedding is an opt-in `rag` extra (§ 4.5) — not installed in the
+    # default dev environment, so suppress the missing-stub error.
+    from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-not-found]  # noqa: F401
 
 
 @lru_cache(maxsize=1)
