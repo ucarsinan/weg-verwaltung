@@ -9,7 +9,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import type { Database } from "@/lib/supabase/database.types";
 
 // Server Component — TOP Detail Page.
