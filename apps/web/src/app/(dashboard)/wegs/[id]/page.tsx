@@ -301,6 +301,27 @@ export default async function WegDetailPage({
         </CardContent>
       </Card>
 
+      {/* ───────────────────────── Beschluss-Sammlung ───────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Beschluss-Sammlung</CardTitle>
+              <CardDescription>
+                Amtliches Register gem. § 24 Abs. 7 WEG.
+              </CardDescription>
+            </div>
+            <Link
+              href={`/wegs/${id}/beschluss-sammlung`}
+              className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+              aria-label="Beschluss-Sammlung dieser WEG öffnen"
+            >
+              Öffnen →
+            </Link>
+          </div>
+        </CardHeader>
+      </Card>
+
       {/* ─────────────────────────── Aktionen ─────────────────────────── */}
       <Card>
         <CardHeader>
