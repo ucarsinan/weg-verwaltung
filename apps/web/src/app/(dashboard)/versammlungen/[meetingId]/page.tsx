@@ -5,9 +5,12 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { sendInvitation } from "./actions";
+import { InvitationForm } from "./invitation-form";
 import type { Database, MeetingModus, MeetingStatus } from "@/lib/supabase/database.types";
 
 type MeetingRow = Database["public"]["Tables"]["meeting"]["Row"];
@@ -160,6 +163,21 @@ export default async function MeetingDetailPage({
           ) : null}
         </CardContent>
       </Card>
+
+      {/* ───────────────────────── Einladung ─────────────────────── */}
+      {meeting.status === "entwurf" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Einladung versenden</CardTitle>
+            <CardDescription>
+              § 24 Abs. 4 WEG — 3 Wochen Frist zwischen Versand und Termin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <InvitationForm action={sendInvitation.bind(null, meetingId)} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* ─────────────────── Tagesordnungspunkte ─────────────── */}
       <Card>

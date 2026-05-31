@@ -104,4 +104,55 @@ test.describe("versammlungen happy path", () => {
     await expect(page.getByText(/Noch keine TOPs angelegt/)).toBeVisible();
     await expect(page.getByText(topTitelEdited)).not.toBeVisible();
   });
+
+  test("Einladung versenden — Status entwurf → eingeladen wenn Frist OK", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(`E2E Einladung ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Einladungsweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    // 2. Versammlungs-Anlage mit Termin in 30 Tagen — § 24 Abs. 4 WEG-Frist
+    //    (21 Tage) sicher eingehalten.
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+
+    const terminVon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 16);
+    const meetingTitel = `Einladungs-ETV ${stamp()}`;
+    await page.getByLabel(/Titel/).fill(meetingTitel);
+    await page.getByLabel(/Termin von/).fill(terminVon);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 3. Vor Versand: Status "Entwurf" + Einladungs-Card sichtbar.
+    await expect(page.getByText("Entwurf")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Einladung versenden/ }),
+    ).toBeVisible();
+
+    // 4. Einladung versenden.
+    await page
+      .getByRole("button", { name: /Einladung versenden/ })
+      .click();
+
+    // 5. Nach Versand: Status "Eingeladen", Einladungs-Card weg,
+    //    Einladungsfrist-Indikator grün.
+    await expect(page.getByText("Eingeladen")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("button", { name: /Einladung versenden/ }),
+    ).not.toBeVisible();
+    await expect(
+      page.getByText(/Einladungsfrist eingehalten/),
+    ).toBeVisible();
+  });
 });
