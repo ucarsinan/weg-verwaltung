@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
-// app_metadata claims are server-controlled (set by the Custom Access Token
-// Hook, see docs/02 §2.4) — safe to display. Never read user_metadata for
+// Hook-injected claims live in the JWT, not in auth.users.raw_app_meta_data.
+// getUser() returns the persistent row → tenant_id/role would be missing.
+// getClaims() verifies + decodes the access_token, so the Custom Access Token
+// Hook output (docs/02 §2.4) is visible. Never read user_metadata for
 // authorisation: that surface is client-mutable.
 interface AppMetadata {
   tenant_id?: string;
@@ -11,11 +13,11 @@ interface AppMetadata {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
-  const appMetadata = (user?.app_metadata ?? {}) as AppMetadata;
+  const email = (claims?.email as string | undefined) ?? "—";
+  const appMetadata = ((claims?.app_metadata as AppMetadata | undefined) ?? {});
   const tenantId = appMetadata.tenant_id ?? "—";
   const role = appMetadata.role ?? "—";
 
@@ -31,9 +33,7 @@ export default async function DashboardPage() {
           <dt className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
             Angemeldet als
           </dt>
-          <dd className="mt-1 font-mono text-sm break-all">
-            {user?.email ?? "—"}
-          </dd>
+          <dd className="mt-1 font-mono text-sm break-all">{email}</dd>
         </div>
         <div className="rounded-md border border-[var(--color-border)] p-4">
           <dt className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
