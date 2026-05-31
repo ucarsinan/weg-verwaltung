@@ -189,7 +189,12 @@ test.describe("versammlungen happy path", () => {
     await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
     // 2. Abstimmung — anfangs "Keine Beschlussvorlage".
-    await page.getByRole("link", { name: /Zur Abstimmung/ }).click();
+    //    Button asChild Link — gleicher Workaround wie bei "Neue
+    //    Versammlung anlegen".
+    const abstimmungHref = await page
+      .getByRole("link", { name: /Zur Abstimmung/ })
+      .getAttribute("href");
+    await page.goto(abstimmungHref!);
     await expect(page).toHaveURL(/\/abstimmung$/);
     await expect(
       page.getByText(/Noch keine Beschlussvorlage/),
