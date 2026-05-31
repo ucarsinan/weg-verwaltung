@@ -118,7 +118,7 @@ export default async function AbstimmungPage({ params }: PageProps) {
 
   const { data: ownerships } = await supabase
     .from("ownership")
-    .select("id, person_id, person:person_id(vorname, nachname)")
+    .select("id, person_id, person(vorname, nachname)")
     .eq("weg_id", meeting?.weg_id ?? "")
     .is("bis", null)
     .order("person_id")

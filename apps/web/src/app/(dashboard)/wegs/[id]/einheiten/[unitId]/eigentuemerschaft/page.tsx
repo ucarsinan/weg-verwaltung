@@ -61,7 +61,7 @@ export default async function EigentuemerschaftPage({
   // We use a Supabase implicit join via foreign key (ownership.person_id → person.id).
   const { data: ownerships, error: ownershipsError } = await supabase
     .from("ownership")
-    .select("*, person:person_id(vorname, nachname)")
+    .select("*, person(vorname, nachname)")
     .eq("unit_id", unitId)
     .order("von", { ascending: false })
     .returns<OwnershipWithPerson[]>();

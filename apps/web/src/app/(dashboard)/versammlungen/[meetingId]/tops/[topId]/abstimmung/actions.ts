@@ -158,6 +158,11 @@ export async function castVote(
   }
 
   const supabase = await createClient();
+  // Vote-UNIQUE in 0004: (tenant_id, resolution_id, ownership_id) — alle
+  // drei Spalten müssen in onConflict referenziert werden, sonst 42P10
+  // (invalid_column_reference: kein passendes UNIQUE). tenant_id wird
+  // beim Insert vom Column-Default `public.tenant_id()` aufgelöst, so
+  // dass der Konflikt-Check trotzdem matched.
   const { error } = await supabase.from("vote").upsert(
     {
       resolution_id: resolutionId,
@@ -165,7 +170,7 @@ export async function castVote(
       wert: wert as VoteWert,
       quelle: "praesenz" as VoteQuelle,
     },
-    { onConflict: "resolution_id,ownership_id" },
+    { onConflict: "tenant_id,resolution_id,ownership_id" },
   );
 
   if (error) {

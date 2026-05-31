@@ -224,4 +224,119 @@ test.describe("versammlungen happy path", () => {
       page.getByRole("button", { name: /Beschluss feststellen/ }),
     ).not.toBeVisible();
   });
+
+  test("Voller Vote-Pfad: Einheit + Eigentümer + Vote + Feststellung → Beschluss-Sammlung-Eintrag", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(`E2E Vote ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Voteweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+
+    // 2. Erste Einheit anlegen (Empty-State Link).
+    await page
+      .getByRole("link", { name: /Jetzt erste Einheit anlegen/ })
+      .click();
+    await expect(page).toHaveURL(/\/einheiten\/new$/);
+    await page.getByLabel(/Bezeichnung/).fill(`Whg ${stamp()}`);
+    await page.getByLabel("Zähler").fill("100");
+    // Nenner defaultet auf 1000 — nicht überschreiben.
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    // 3. Eigentümerschaft öffnen über den frisch erstellten Einheit-Listeneintrag.
+    //    Der Link hat aria-label="Eigentümer von <Bezeichnung> anzeigen", das
+    //    den accessible name überschreibt — entsprechend matchen.
+    await page
+      .getByRole("link", { name: /Eigentümer von .* anzeigen/ })
+      .click();
+    await expect(page).toHaveURL(/\/eigentuemerschaft$/);
+
+    // 4. Eigentümer anlegen.
+    await page
+      .getByRole("link", { name: /Eigentümer hinzufügen/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/eigentuemerschaft\/new$/);
+    await page.getByLabel(/Vorname/).fill("Max");
+    await page.getByLabel(/Nachname/).fill(`Tester ${stamp()}`);
+    // Einzug-Datum defaultet auf heute.
+    await page
+      .getByRole("button", { name: /Eigentümer speichern/ })
+      .click();
+    await expect(page).toHaveURL(/\/eigentuemerschaft$/, { timeout: 15_000 });
+
+    // 5. Versammlung anlegen.
+    await page.goto(`/wegs/${wegId}/versammlungen/new`);
+    const meetingTitel = `Vote-ETV ${stamp()}`;
+    await page.getByLabel(/Titel/).fill(meetingTitel);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 6. TOP anlegen.
+    await page
+      .getByRole("link", { name: /Jetzt ersten TOP anlegen/ })
+      .click();
+    await page.getByLabel(/Titel/).fill(`Vote-TOP ${stamp()}`);
+    await page.getByRole("button", { name: /TOP anlegen/ }).click();
+    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    // 7. Abstimmung öffnen (Button asChild Link).
+    const abstimmungHref = await page
+      .getByRole("link", { name: /Zur Abstimmung/ })
+      .getAttribute("href");
+    await page.goto(abstimmungHref!);
+    await expect(page).toHaveURL(/\/abstimmung$/);
+
+    // 8. Beschlussvorlage anlegen.
+    await page
+      .getByRole("link", { name: /Beschlussvorlage anlegen/ })
+      .click();
+    const beschlussText = `Vote-Test-Beschluss ${stamp()}: WP wird verabschiedet.`;
+    await page.getByLabel(/Beschlusstext/).fill(beschlussText);
+    await page.getByLabel(/Mehrheitstyp/).selectOption("einfach");
+    await page.getByLabel(/Stimmprinzip/).selectOption("kopf");
+    await page.getByRole("button", { name: /Beschluss anlegen/ }).click();
+    await expect(page).toHaveURL(/\/abstimmung$/, { timeout: 15_000 });
+
+    // 9. Eigentümer sichtbar in Stimm-Liste.
+    await expect(page.getByText("Max")).toBeVisible();
+    await expect(page.getByText(/0 von 1 Stimmen abgegeben/)).toBeVisible();
+
+    // 10. Ja-Stimme abgeben.
+    await page.getByLabel("Ja").check();
+    await page.getByRole("button", { name: "Speichern" }).click();
+
+    // 11. Nach Stimme: Counter aktualisiert, Feststellungs-Button da.
+    await expect(page.getByText(/1 von 1 Stimmen abgegeben/)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByRole("button", { name: /Beschluss feststellen/ }),
+    ).toBeVisible();
+
+    // 12. Beschluss feststellen.
+    await page
+      .getByRole("button", { name: /Beschluss feststellen/ })
+      .click();
+    await expect(page.getByText(/Beschluss festgestellt am/)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByRole("button", { name: /Beschluss feststellen/ }),
+    ).not.toBeVisible();
+
+    // 13. Beschluss-Sammlung-Seite öffnen — Eintrag muss vorhanden sein
+    //     (§ 24 Abs. 7 WEG: automatischer Append durch
+    //     appendToBeschlussSammlung-Helper bei Feststellung).
+    await page.goto(`/wegs/${wegId}/beschluss-sammlung`);
+    await expect(page.getByText(beschlussText)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });
