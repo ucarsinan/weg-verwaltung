@@ -236,10 +236,9 @@ test.describe("versammlungen happy path", () => {
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
 
-    // 2. Erste Einheit anlegen (Empty-State Link).
-    await page
-      .getByRole("link", { name: /Jetzt erste Einheit anlegen/ })
-      .click();
+    // 2. Erste Einheit anlegen — Direkt-Navigation für stabile Erst-Compile-
+    //    Zeiten auf Next 16 dev statt Link-Click.
+    await page.goto(`/wegs/${wegId}/einheiten/new`);
     await expect(page).toHaveURL(/\/einheiten\/new$/);
     await page.getByLabel(/Bezeichnung/).fill(`Whg ${stamp()}`);
     await page.getByLabel("Zähler").fill("100");
