@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from app.auth import AuthContext, get_auth
 from app.graphs.base import build_thread_id
 from app.graphs.beschluss import beschluss_graph
+from app.guardrails import validate_agent_input
 from app.schemas import BeschlussRequest
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,13 @@ async def post_beschluss(
     entity_id = str(payload.weg_id)
     thread_id = build_thread_id(str(ctx.tenant_id), "beschluss", entity_id)
     jwt = _extract_jwt(request)
+
+    # § 4.6 guardrail pipeline — runs before the LLM call.
+    validate_agent_input(
+        payload.draft_text,
+        user_id=str(ctx.user_id),
+        field_name="Beschlusstext",
+    )
 
     logger.info(
         "beschluss graph invoke: tenant=%s weg_id=%s draft_chars=%d thread_id=%s",

@@ -68,7 +68,7 @@ export default async function BeschlussSammlungNewPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <BeschlussSammlungForm action={boundAction} />
+          <BeschlussSammlungForm wegId={id} action={boundAction} />
         </CardContent>
       </Card>
     </section>
