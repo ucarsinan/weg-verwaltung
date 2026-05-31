@@ -23,7 +23,13 @@ import type { TopFormState } from "./actions";
 
 const initialState: TopFormState = {};
 
-function SubmitButton() {
+function SubmitButton({
+  label,
+  labelPending,
+}: {
+  label: string;
+  labelPending: string;
+}) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -32,22 +38,34 @@ function SubmitButton() {
       aria-busy={pending}
       className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
     >
-      {pending ? "Speichern …" : "TOP anlegen"}
+      {pending ? labelPending : label}
     </button>
   );
 }
 
 interface TopFormProps {
   action: (prev: TopFormState, formData: FormData) => Promise<TopFormState>;
+  defaultTitel?: string;
+  defaultBeschreibung?: string;
+  cardTitle?: string;
+  submitLabel?: string;
+  submitLabelPending?: string;
 }
 
-export function TopForm({ action }: TopFormProps) {
+export function TopForm({
+  action,
+  defaultTitel,
+  defaultBeschreibung,
+  cardTitle = "Tagesordnungspunkt anlegen",
+  submitLabel = "TOP anlegen",
+  submitLabelPending = "Speichern …",
+}: TopFormProps) {
   const [state, formAction] = useActionState(action, initialState);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tagesordnungspunkt anlegen</CardTitle>
+        <CardTitle>{cardTitle}</CardTitle>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4" noValidate>
@@ -76,6 +94,7 @@ export function TopForm({ action }: TopFormProps) {
               minLength={3}
               maxLength={200}
               autoComplete="off"
+              defaultValue={defaultTitel}
             />
             {state.errors?.titel ? (
               <p
@@ -101,6 +120,7 @@ export function TopForm({ action }: TopFormProps) {
                 state.errors?.beschreibung ? "beschreibung-error" : undefined
               }
               className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+              defaultValue={defaultBeschreibung}
             />
             {state.errors?.beschreibung ? (
               <p
@@ -114,7 +134,7 @@ export function TopForm({ action }: TopFormProps) {
           </div>
 
           <div className="flex items-center gap-4 pt-2">
-            <SubmitButton />
+            <SubmitButton label={submitLabel} labelPending={submitLabelPending} />
           </div>
         </form>
       </CardContent>

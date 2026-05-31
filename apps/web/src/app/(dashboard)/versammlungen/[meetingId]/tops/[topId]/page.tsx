@@ -9,6 +9,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { deleteAgendaItem } from "./actions";
 import type { Database } from "@/lib/supabase/database.types";
 
 // Server Component — TOP Detail Page.
@@ -144,6 +145,32 @@ export default async function TopDetailPage({
               Zur Abstimmung
             </Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* ───────────────────────── TOP-Verwaltung ─────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>TOP-Verwaltung</CardTitle>
+          <CardDescription>
+            Inhalt korrigieren oder TOP entfernen, bevor die Versammlung läuft.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <Button asChild variant="outline">
+            <Link href={`/versammlungen/${meetingId}/tops/${topId}/edit`}>
+              TOP bearbeiten
+            </Link>
+          </Button>
+          <form action={deleteAgendaItem.bind(null, meetingId, topId)}>
+            <button
+              type="submit"
+              className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+              aria-label="Diesen TOP löschen"
+            >
+              TOP löschen
+            </button>
+          </form>
         </CardContent>
       </Card>
     </section>

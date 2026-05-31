@@ -79,5 +79,29 @@ test.describe("versammlungen happy path", () => {
     await expect(
       page.getByText(/Noch keine TOPs angelegt/),
     ).not.toBeVisible();
+
+    // 10. Edit-Flow — TOP bearbeiten, neuer Titel landet auf Detail.
+    await page.getByText(topTitel).click();
+    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/);
+    await page.getByRole("link", { name: /TOP bearbeiten/ }).click();
+    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}\/edit$/);
+    const topTitelEdited = `${topTitel} (überarbeitet)`;
+    await page.getByLabel(/Titel/).fill(topTitelEdited);
+    await page
+      .getByRole("button", { name: /Änderungen speichern/ })
+      .click();
+    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { level: 1, name: topTitelEdited }),
+    ).toBeVisible();
+
+    // 11. Delete-Flow — TOP löschen, redirect zur Meeting-Detail,
+    //     Empty-State wieder sichtbar (war einziger TOP).
+    await page.getByRole("button", { name: /TOP löschen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/Noch keine TOPs angelegt/)).toBeVisible();
+    await expect(page.getByText(topTitelEdited)).not.toBeVisible();
   });
 });
