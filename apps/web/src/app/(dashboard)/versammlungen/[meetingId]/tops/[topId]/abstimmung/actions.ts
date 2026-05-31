@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { evaluateMajority } from "@/lib/voting/majority";
 import type { VoteWert, VoteQuelle } from "@/lib/supabase/database.types";
 
 const VALID_WERT: VoteWert[] = ["ja", "nein", "enthaltung"];
@@ -78,7 +79,11 @@ async function appendToBeschlussSammlung(
     { data: votes },
   ] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from("resolution").select("text").eq("id", resolutionId).single(),
+    supabase
+      .from("resolution")
+      .select("text, mehrheits_typ")
+      .eq("id", resolutionId)
+      .single(),
     supabase.from("meeting").select("weg_id, modus").eq("id", meetingId).single(),
     supabase.from("vote").select("wert").eq("resolution_id", resolutionId),
   ]);
@@ -97,24 +102,27 @@ async function appendToBeschlussSammlung(
     return;
   }
 
-  // Einfacher Tally: bei Mehrheits-Voten zählt ja > nein als positiv.
-  // Qualifizierte Schwellen (qualifiziert, doppelt_qualifiziert,
-  // allstimmig) gehören in einen eigenen Strategy-Modul — wird hier nicht
-  // mitgewertet, fällt aktuell auf einfache Mehrheit zurück. Umlauf-Modus
-  // markiert den Eintrag-Typ separat.
+  // Tally aggregation + Strategy-Modul-Auswertung. MEA-Daten und
+  // total_eligible aktuell nicht ermittelt — der Strategy fällt für
+  // doppelt_qualifiziert/allstimmig in einen explizit dokumentierten
+  // Fallback-Pfad. Wenn das jemals fachlich kritisch wird, hier
+  // ownership + MEA-Summen joinen.
   let jaCount = 0;
   let neinCount = 0;
+  let enthaltungCount = 0;
   for (const vote of votes ?? []) {
     if (vote.wert === "ja") jaCount++;
     else if (vote.wert === "nein") neinCount++;
+    else if (vote.wert === "enthaltung") enthaltungCount++;
   }
 
+  const evaluation = evaluateMajority(
+    { ja: jaCount, nein: neinCount, enthaltung: enthaltungCount },
+    resolution.mehrheits_typ,
+  );
+
   const typ: "positiv_beschluss" | "negativ_beschluss" | "umlaufbeschluss" =
-    meeting.modus === "umlauf"
-      ? "umlaufbeschluss"
-      : jaCount > neinCount
-        ? "positiv_beschluss"
-        : "negativ_beschluss";
+    meeting.modus === "umlauf" ? "umlaufbeschluss" : evaluation.outcome;
 
   const { error: insertError } = await supabase
     .from("beschluss_sammlung_entry")
