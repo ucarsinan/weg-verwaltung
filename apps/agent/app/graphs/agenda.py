@@ -4,35 +4,36 @@ Two-node graph:
 
   START → retrieve_context → propose_agenda → END
 
-``retrieve_context_node`` is a deterministic pass-through today: the
-``HybridRetriever`` (§ 4.5) is still scaffold-only (returns ``[]``) and the
-LLM-driven tool-binding for :func:`list_previous_protokolle_for_weg` is
-deferred to the next iteration. The graph still runs end-to-end and produces
-a usable ``AgendaVorschlag`` because the prompt explicitly handles
-``"Keine Vorjahres-Protokolle im Kontext."`` as a valid input case (§ 4.6
-Output-Validation rules and § 4.10 prompt frontmatter sit alongside).
+``retrieve_context_node`` is now wired: it calls
+:func:`app.tools.versammlung_tools.list_previous_protokolle_for_weg` directly
+using the JWT from ``RunnableConfig.configurable`` (§ 4.3 pattern). The LangGraph
+executor injects the config as the second argument to the node function. The
+tool is read-only (scope="read", § 4.3) so no confirm-gate is needed (§ 4.7).
 
 ``propose_agenda_node`` calls Sonnet 4.6 (per § 4.9 routing) via
 ``instructor`` + Anthropic ``tool_use`` for structured output (§ 4.6).
 
-TODO(tool-binding):
-  - Wire :func:`list_previous_protokolle_for_weg` into the LLM tool-call
-    surface via ``bind_tools``; today the retrieve node is a stub. The
-    tool itself is fully functional and unit-tested.
-  - Once HybridRetriever is populated, also fan-in RAG-chunks via
-    ``app.rag.retrieve.HybridRetriever`` for cross-document recap.
+Empty-retrieval is handled gracefully: the prompt's Empty-Retrieval-Fallback
+section fires when ``Keine Vorjahres-Protokolle im Kontext.`` appears in the
+context blob (§ 4.6 Output-Validation rules; § 4.10 prompt frontmatter).
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Literal
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from app.graphs.base import AgentState
 from app.llm.anthropic_client import get_instructor_client
+from app.tools.versammlung_tools import list_previous_protokolle_for_weg
+
+logger = logging.getLogger(__name__)
 
 # Per § 4.9 routing table: Tagesordnung-Vorschlag = Sonnet 4.6 (workhorse).
 # Opus 4.7 is the confidence-< 0.7 fallback — not wired in this iter (the
@@ -100,21 +101,64 @@ class AgendaVorschlag(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def retrieve_context_node(state: AgentState) -> dict[str, Any]:
-    """Holt die letzten N Protokolle der WEG.
+async def retrieve_context_node(
+    state: AgentState,
+    config: RunnableConfig,
+) -> dict[str, Any]:
+    """Holt die letzten N Protokolle der WEG via list_previous_protokolle_for_weg.
 
-    TODO(tool-binding): heute pass-through — die LLM-getriebene Tool-Bindung
-    via :func:`app.tools.versammlung_tools.list_previous_protokolle_for_weg`
-    landet im nächsten Iter. Der Prompt fängt empty-retrieval gracefully ab
-    (siehe ``prompts/agenda/system.md`` Empty-Retrieval-Fallback).
+    The LangGraph executor injects the ``RunnableConfig`` as the second
+    argument when the node function accepts it (§ 4.3 / § 4.2 pattern).
+    The JWT is pulled from ``config["configurable"]["jwt"]`` and forwarded
+    to the tool via a minimal runtime proxy — exactly like ToolNode does it,
+    but without the extra LLM hop for tool-selection (the tool to call is
+    deterministic for this use-case: always ``list_previous_protokolle_for_weg``
+    for the WEG identified by ``state["meeting_id"]``).
+
+    If the JWT is absent (e.g. in unit tests without a real config) or the
+    tool call fails for any reason, the node degrades gracefully to empty
+    retrieval so ``propose_agenda_node`` can still produce branchenstandard
+    TOPs (§ 4.6 Empty-Retrieval-Fallback).
     """
 
-    _ = state  # state is read in propose_agenda_node — this node is a stub today
-    return {
-        "suggestions": [
-            {"type": "retrieved_protokolle", "data": []},
-        ],
-    }
+    weg_id: str = str(state.get("meeting_id") or "")
+    if not weg_id:
+        logger.warning("retrieve_context_node: no weg_id in state — skipping tool call")
+        return {"suggestions": [{"type": "retrieved_protokolle", "data": []}]}
+
+    # Build a ToolRuntime proxy carrying the JWT from the graph config.
+    # This mirrors what LangGraph's ToolNode does internally (§ 4.3):
+    #   runtime.config["configurable"]["jwt"] → get_supabase(runtime) → RLS-scoped client.
+    configurable: dict[str, Any] = {}
+    if config and isinstance(config, dict):
+        configurable = config.get("configurable", {})
+
+    jwt: str | None = configurable.get("jwt")
+    if not jwt:
+        logger.warning(
+            "retrieve_context_node: JWT missing in config — degrading to empty retrieval"
+        )
+        return {"suggestions": [{"type": "retrieved_protokolle", "data": []}]}
+
+    runtime = SimpleNamespace(config={"configurable": {"jwt": jwt}})
+
+    try:
+        results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc,attr-defined]
+            weg_id=weg_id,
+            runtime=runtime,
+            limit=3,
+        )
+        protokolle_data = [r.model_dump() for r in results]
+        logger.info(
+            "retrieve_context_node: loaded %d protokolle for weg_id=%s",
+            len(protokolle_data),
+            weg_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("retrieve_context_node: tool call failed (%s) — empty retrieval", exc)
+        protokolle_data = []
+
+    return {"suggestions": [{"type": "retrieved_protokolle", "data": protokolle_data}]}
 
 
 def _extract_user_hint(state: AgentState) -> str:

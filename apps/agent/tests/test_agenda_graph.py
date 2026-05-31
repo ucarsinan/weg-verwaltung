@@ -5,10 +5,12 @@ new versammlung_tools surface. Layers, in order of cost:
 
   1. Compile-smoke — does the graph build without an ANTHROPIC_API_KEY?
   2. thread_id-format — § 4.2 contract for the agenda use-case.
-  3. propose_agenda_node — mocked instructor client; verifies shape contract.
-  4. list_previous_protokolle_for_weg — mocked supabase-py client; verifies
+  3. retrieve_context_node — mocked tool call; verifies JWT-present and
+     JWT-absent (degraded) paths.
+  4. propose_agenda_node — mocked instructor client; verifies shape contract.
+  5. list_previous_protokolle_for_weg — mocked supabase-py client; verifies
      the row → ``ProtokollSummary`` mapping.
-  5. Live LLM — skipped by default (needs ANTHROPIC_API_KEY + eval-gate).
+  6. Live LLM — skipped by default (needs ANTHROPIC_API_KEY + eval-gate).
 """
 
 from __future__ import annotations
@@ -62,13 +64,18 @@ def test_build_thread_id_format_for_agenda() -> None:
 
 
 # ---------------------------------------------------------------------------
-# retrieve_context_node — pass-through stub for this iter
+# retrieve_context_node — wired tool call (JWT-present + JWT-absent paths)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_retrieve_context_node_emits_empty_retrieval() -> None:
-    """Today the retrieve node is a deterministic stub; verify its envelope shape."""
+async def test_retrieve_context_node_degrades_without_jwt() -> None:
+    """Without a JWT in config the node must degrade to empty retrieval.
+
+    This covers the unit-test path where no real Supabase client is available.
+    The degraded result still satisfies the ``retrieved_protokolle`` envelope
+    so ``propose_agenda_node`` can safely fall back to branchenstandard TOPs.
+    """
 
     state: AgentState = {
         "tenant_id": "t_a1b2",
@@ -77,12 +84,55 @@ async def test_retrieve_context_node_emits_empty_retrieval() -> None:
         "meeting_id": "weg_07",
         "messages": [HumanMessage(content="Bitte Vorschlag.")],
     }
-    result = await retrieve_context_node(state)
+    # Empty config (no JWT) → graceful degradation.
+    result = await retrieve_context_node(state, config={})
     assert "suggestions" in result
     assert len(result["suggestions"]) == 1
     sug = result["suggestions"][0]
     assert sug["type"] == "retrieved_protokolle"
     assert sug["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_retrieve_context_node_calls_tool_with_jwt() -> None:
+    """With a valid JWT in config the node must call the tool and wrap results.
+
+    The Supabase client is mocked so no real network call is made.
+    """
+
+    from types import SimpleNamespace
+
+    long_text = "TOP 1 Heizungsmodernisierung. " * 20  # > 500 chars
+    rows: list[dict[str, Any]] = [
+        {
+            "id": "p_99",
+            "meeting_id": "m_99",
+            "status": "unterzeichnet",
+            "text": long_text,
+        }
+    ]
+    fake_sb = _build_fake_supabase(rows)
+
+    state: AgentState = {
+        "tenant_id": "t_a1b2",
+        "user_id": "u_42",
+        "use_case": "agenda",
+        "meeting_id": "weg_07",
+        "messages": [HumanMessage(content="Bitte Vorschlag.")],
+    }
+    config = {"configurable": {"jwt": "fake-jwt-token"}}
+
+    with patch("app.tools.versammlung_tools.get_supabase", return_value=fake_sb):
+        result = await retrieve_context_node(state, config=config)
+
+    assert "suggestions" in result
+    assert len(result["suggestions"]) == 1
+    sug = result["suggestions"][0]
+    assert sug["type"] == "retrieved_protokolle"
+    assert len(sug["data"]) == 1
+    assert sug["data"][0]["id"] == "p_99"
+    # excerpt is capped at 500 chars by the tool.
+    assert len(sug["data"][0]["text_excerpt"]) == 500
 
 
 # ---------------------------------------------------------------------------
