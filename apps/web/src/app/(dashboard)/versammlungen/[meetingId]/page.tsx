@@ -70,6 +70,29 @@ export default async function MeetingDetailPage({
     throw new Error("Versammlung konnte nicht geladen werden.");
   }
 
+  // Secondary aggregate: TOPs for this meeting. RLS scopes via JWT, no
+  // explicit tenant_id filter needed. A query error degrades to an empty
+  // list — the detail page must not 500 if the sub-query fails.
+  type AgendaItemRow = Pick<
+    Database["public"]["Tables"]["agenda_item"]["Row"],
+    "id" | "position" | "titel" | "beschreibung"
+  >;
+
+  const { data: agendaItemsRaw, error: agendaItemsError } = await supabase
+    .from("agenda_item")
+    .select("id, position, titel, beschreibung")
+    .eq("meeting_id", meetingId)
+    .order("position", { ascending: true });
+
+  if (agendaItemsError) {
+    console.error(
+      "[versammlungen/[meetingId]] agenda_item select failed:",
+      agendaItemsError,
+    );
+  }
+
+  const agendaItems: AgendaItemRow[] = agendaItemsRaw ?? [];
+
   return (
     <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
       <header className="flex items-baseline justify-between gap-4">
@@ -155,19 +178,50 @@ export default async function MeetingDetailPage({
           </div>
         </CardHeader>
         <CardContent>
-          <p
-            role="status"
-            className="rounded-md border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-muted-foreground)]"
-          >
-            Noch keine TOPs angelegt.{" "}
-            <Link
-              href={`/versammlungen/${meetingId}/tops/new`}
-              className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+          {agendaItems.length === 0 ? (
+            <p
+              role="status"
+              className="rounded-md border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-muted-foreground)]"
             >
-              Jetzt ersten TOP anlegen
-            </Link>
-            .
-          </p>
+              Noch keine TOPs angelegt.{" "}
+              <Link
+                href={`/versammlungen/${meetingId}/tops/new`}
+                className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+              >
+                Jetzt ersten TOP anlegen
+              </Link>
+              .
+            </p>
+          ) : (
+            <ol className="space-y-3">
+              {agendaItems.map((top) => (
+                <li
+                  key={top.id}
+                  className="flex gap-3 rounded-md border border-[color:var(--color-border)] p-3"
+                >
+                  <span
+                    className="shrink-0 text-sm font-medium tabular-nums text-[color:var(--color-muted-foreground)]"
+                    aria-label={`Position ${top.position}`}
+                  >
+                    {top.position}.
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/versammlungen/${meetingId}/tops/${top.id}`}
+                      className="text-sm font-medium underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+                    >
+                      {top.titel}
+                    </Link>
+                    {top.beschreibung ? (
+                      <p className="mt-1 line-clamp-1 text-xs text-[color:var(--color-muted-foreground)]">
+                        {top.beschreibung}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </CardContent>
       </Card>
 
