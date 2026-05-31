@@ -8,7 +8,8 @@ import type {
 } from "@/lib/supabase/database.types";
 
 type ResolutionRow = Database["public"]["Tables"]["resolution"]["Row"];
-import { castVote } from "./actions";
+import { castVote, feststellenResolution } from "./actions";
+import { FeststellenForm } from "./feststellen-form";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -194,6 +195,38 @@ export default async function AbstimmungPage({ params }: PageProps) {
       <p className="text-sm text-[var(--color-muted-foreground)]">
         {voteMap.size} von {ownershipList.length} Stimmen abgegeben
       </p>
+
+      {/* Feststellung — konstitutiv per st. Rspr. (BGH V ZR 113/12 ff.).
+          Sichtbar erst wenn mind. eine Stimme abgegeben; ausgegraut wenn
+          bereits festgestellt (Status statt Button). */}
+      <div className="rounded-lg border border-[var(--color-border)] p-4 space-y-3">
+        {resolution.festgestellt_am !== null ? (
+          <p role="status" className="text-sm text-green-700 dark:text-green-400">
+            Beschluss festgestellt am{" "}
+            {new Date(resolution.festgestellt_am).toLocaleString("de-DE", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            .
+          </p>
+        ) : voteMap.size > 0 ? (
+          <FeststellenForm
+            action={feststellenResolution.bind(
+              null,
+              resolution.id,
+              meetingId,
+              topId,
+            )}
+          />
+        ) : (
+          <p
+            role="status"
+            className="text-sm text-[var(--color-muted-foreground)]"
+          >
+            Feststellung möglich, sobald mindestens eine Stimme abgegeben wurde.
+          </p>
+        )}
+      </div>
 
       {/* Per-ownership vote forms */}
       <div className="rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]">

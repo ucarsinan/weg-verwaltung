@@ -4,6 +4,12 @@ import { test, expect } from "@playwright/test";
 // Tenant-Admin (auth.setup.ts persistierter Storage-State); RLS scoped
 // alles auf diesen Tenant. Erstellte WEGs, Meetings, TOPs bleiben in
 // der Cloud-DB stehen — gleiches Trade-off wie wegs.spec.ts.
+//
+// Serial-Modus weil jeder Test mehrere Routen neu hits (/wegs/new,
+// /wegs/[id]/versammlungen/new, /versammlungen/[id]/tops/new, …) und
+// Next 16 dev sie on-demand kompiliert; parallele Ausführung lässt den
+// Dev-Server hängen bevor die ersten Server Actions zurückkehren.
+test.describe.configure({ mode: "serial" });
 
 const stamp = () => Date.now();
 
@@ -154,5 +160,63 @@ test.describe("versammlungen happy path", () => {
     await expect(
       page.getByText(/Einladungsfrist eingehalten/),
     ).toBeVisible();
+  });
+
+  test("Beschlussvorlage anlegen — Abstimmung zeigt Vorlage + Feststellungs-Gate", async ({
+    page,
+  }) => {
+    // 1. WEG + Versammlung + TOP — Setup für den Beschluss-Pfad.
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(`E2E Beschluss ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Beschlussweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+    await page.getByLabel(/Titel/).fill(`Beschluss-ETV ${stamp()}`);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("link", { name: /Jetzt ersten TOP anlegen/ }).click();
+    const topTitel = `Beschluss-Test TOP ${stamp()}`;
+    await page.getByLabel(/Titel/).fill(topTitel);
+    await page.getByRole("button", { name: /TOP anlegen/ }).click();
+    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    // 2. Abstimmung — anfangs "Keine Beschlussvorlage".
+    await page.getByRole("link", { name: /Zur Abstimmung/ }).click();
+    await expect(page).toHaveURL(/\/abstimmung$/);
+    await expect(
+      page.getByText(/Noch keine Beschlussvorlage/),
+    ).toBeVisible();
+
+    // 3. Beschlussvorlage anlegen.
+    await page
+      .getByRole("link", { name: /Beschlussvorlage anlegen/ })
+      .click();
+    await expect(page).toHaveURL(/\/beschluss\/new$/);
+    const beschlussText = `Test-Beschluss ${stamp()}: Verwaltervertrag wird um zwei Jahre verlängert.`;
+    await page.getByLabel(/Beschlusstext/).fill(beschlussText);
+    await page.getByLabel(/Mehrheitstyp/).selectOption("einfach");
+    await page.getByLabel(/Stimmprinzip/).selectOption("kopf");
+    await page.getByRole("button", { name: /Beschluss anlegen/ }).click();
+
+    // 4. Redirect zur Abstimmung. Beschluss + Mehrheits-Label sichtbar.
+    await expect(page).toHaveURL(/\/abstimmung$/, { timeout: 15_000 });
+    await expect(page.getByText(beschlussText)).toBeVisible();
+    await expect(page.getByText(/Einfache Mehrheit/)).toBeVisible();
+
+    // 5. Feststellungs-Gate: ohne Stimme kein Button, sondern Hinweis-Text.
+    await expect(
+      page.getByText(/Feststellung möglich, sobald mindestens eine Stimme/),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Beschluss feststellen/ }),
+    ).not.toBeVisible();
   });
 });
