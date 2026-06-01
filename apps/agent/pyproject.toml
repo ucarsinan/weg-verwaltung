@@ -19,7 +19,7 @@ dependencies = [
     "instructor>=1.7.0",
     "langfuse>=2.50.0",
     # Reserved for HITL graphs (protokoll) — not used by beschluss_graph:
-    # "langgraph-checkpoint-postgres>=2.0.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
 ]
 
 [project.optional-dependencies]
