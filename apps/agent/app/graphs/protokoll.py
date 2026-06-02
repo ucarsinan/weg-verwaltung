@@ -40,6 +40,7 @@ _MAX_TOKENS = 4000
 _SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "protokoll" / "system.md"
 
 _protokoll_graph: Any | None = None
+_checkpointer: Any | None = None  # kept alive at module level — do not let GC close pool
 
 
 def _load_system_prompt() -> str:
@@ -298,14 +299,20 @@ def build_graph(checkpointer: Any | None = None) -> Any:
 
 
 async def setup_protokoll_graph(db_url: str) -> None:
-    """Initialize the checkpointed graph. Called once in FastAPI lifespan."""
+    """Initialize the checkpointed graph. Called once in FastAPI lifespan.
 
-    global _protokoll_graph
+    We enter the AsyncPostgresSaver context manager and store the live
+    checkpointer at module scope so the connection pool is not closed
+    prematurely. The pool stays open for the process lifetime.
+    """
+
+    global _protokoll_graph, _checkpointer
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    async with AsyncPostgresSaver.from_conn_string(db_url) as checkpointer:
-        await checkpointer.setup()
-        _protokoll_graph = build_graph(checkpointer=checkpointer)
+    cm = AsyncPostgresSaver.from_conn_string(db_url)
+    _checkpointer = await cm.__aenter__()
+    await _checkpointer.setup()
+    _protokoll_graph = build_graph(checkpointer=_checkpointer)
     logger.info("protokoll_graph initialized with AsyncPostgresSaver")
 
 

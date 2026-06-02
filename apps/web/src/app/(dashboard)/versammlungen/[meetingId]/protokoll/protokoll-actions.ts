@@ -113,14 +113,27 @@ export async function submitRevision(
   threadId: string,
   editedDraft: string,
 ): Promise<void> {
-  await agentJson<AgentProtokollResponse>("/agent/protokoll", {
-    method: "POST",
-    body: JSON.stringify({
-      meeting_id: meetingId,
-      resume_token: threadId,
-      edited_draft: editedDraft,
-    }),
-  });
+  try {
+    await agentJson<AgentProtokollResponse>("/agent/protokoll", {
+      method: "POST",
+      body: JSON.stringify({
+        meeting_id: meetingId,
+        resume_token: threadId,
+        edited_draft: editedDraft,
+      }),
+    });
+  } catch (err) {
+    if (err instanceof AgentAuthError) {
+      throw new Error("Sitzung abgelaufen — bitte neu einloggen.");
+    }
+    if (err instanceof AgentResponseError) {
+      throw new Error(
+        `Revision konnte nicht übermittelt werden (${err.status}). Bitte erneut versuchen.`,
+      );
+    }
+    console.error("[submitRevision] unexpected error", err);
+    throw new Error("Unbekannter Fehler beim Übermitteln der Revision.");
+  }
 
   revalidatePath(`/versammlungen/${meetingId}/protokoll`);
 }
