@@ -99,13 +99,9 @@ async def generate_or_resume_protokoll(
         )
 
         try:
-            await graph.ainvoke(initial_state, config=config)
-            # hitl_node always interrupts — reaching here is unexpected
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Protokoll-Graph beendet sich unerwartet ohne Interrupt.",
-            )
+            result = await graph.ainvoke(initial_state, config=config)
         except GraphInterrupt as exc:
+            # No-checkpointer path (local dev fallback): GraphInterrupt raised directly.
             payload: dict[str, Any] = exc.args[0] if exc.args else {}
             return ProtokollResponse(
                 status="awaiting_review",
@@ -114,6 +110,25 @@ async def generate_or_resume_protokoll(
                 konfidenz=payload.get("konfidenz"),
                 fehlende_daten=payload.get("fehlende_daten") or [],
             )
+
+        # With checkpointer (production + MemorySaver): LangGraph returns
+        # {"__interrupt__": [Interrupt(value=payload)]} instead of raising.
+        interrupts = result.get("__interrupt__", ())
+        if not interrupts:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Protokoll-Graph beendet sich unerwartet ohne Interrupt.",
+            )
+        interrupt_value: dict[str, Any] = (
+            interrupts[0].value if hasattr(interrupts[0], "value") else interrupts[0]
+        )
+        return ProtokollResponse(
+            status="awaiting_review",
+            thread_id=thread_id,
+            draft=interrupt_value.get("draft"),
+            konfidenz=interrupt_value.get("konfidenz"),
+            fehlende_daten=interrupt_value.get("fehlende_daten") or [],
+        )
 
     else:
         # ------------------------------------------------------------------ #
