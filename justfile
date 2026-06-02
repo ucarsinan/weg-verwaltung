@@ -30,7 +30,8 @@ test-web:
     pnpm --filter @weg-verwaltung/web test
 
 test-agent:
-    uv run --project apps/agent pytest
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/pytest --rootdir apps/agent apps/agent/tests
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
