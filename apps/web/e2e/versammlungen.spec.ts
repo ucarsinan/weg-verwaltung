@@ -338,4 +338,153 @@ test.describe("versammlungen happy path", () => {
       timeout: 15_000,
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Protokoll HITL tests
+  // ---------------------------------------------------------------------------
+
+  test("Protokoll Seite zugänglich — null-Status zeigt Generieren-Button", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(`E2E Protokoll-Null ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Protokollweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 2. Versammlung anlegen.
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+    await page.getByLabel(/Titel/).fill(`Protokoll-ETV ${stamp()}`);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
+    expect(meetingId).toBeTruthy();
+
+    // 3. "Protokoll"-Link auf der Meeting-Seite — Button asChild/Link-Pattern,
+    //    href abgreifen und direkt navigieren.
+    const protokollHref = await page
+      .getByRole("link", { name: /^Protokoll$/ })
+      .getAttribute("href");
+    expect(protokollHref).toMatch(
+      new RegExp(`/versammlungen/${meetingId}/protokoll`),
+    );
+    await page.goto(protokollHref!);
+    await expect(page).toHaveURL(/\/protokoll$/);
+
+    // 4. Kein Protokoll vorhanden → "Protokoll generieren"-Button sichtbar.
+    //    (Klick wird NICHT ausgeführt — Agent läuft nicht im E2E-Kontext.)
+    await expect(
+      page.getByRole("button", { name: /Protokoll generieren/ }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // 5. "Kein Protokoll vorhanden"-Heading als zusätzlicher Smoke-Check.
+    await expect(
+      page.getByRole("heading", { name: /Kein Protokoll vorhanden/ }),
+    ).toBeVisible();
+  });
+
+  test("Protokoll ki_entwurf — Unterzeichnen-Button sichtbar", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page
+      .getByLabel(/Name der WEG/)
+      .fill(`E2E Protokoll-Entwurf ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Entwurfweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 2. Versammlung anlegen.
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+    await page.getByLabel(/Titel/).fill(`Entwurf-ETV ${stamp()}`);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
+    expect(meetingId).toBeTruthy();
+
+    // 3. Protokoll-Row mit status='ki_entwurf' direkt via Supabase REST API
+    //    seeden — Agent läuft nicht im E2E-Kontext, daher kein Click auf
+    //    "Protokoll generieren". Supabase-Session-Cookie enthält das JWT.
+    const cookies = await page.context().cookies();
+    const sbCookie = cookies.find(
+      (c) =>
+        c.name.startsWith("sb-") && c.name.endsWith("-auth-token"),
+    );
+    expect(sbCookie).toBeTruthy();
+
+    // Cookie-Wert ist URL-encoded JSON: [access_token, refresh_token] oder {access_token, ...}
+    const tokenData = JSON.parse(decodeURIComponent(sbCookie!.value));
+    const accessToken: string = Array.isArray(tokenData)
+      ? (tokenData[0] as string)
+      : (tokenData as { access_token: string }).access_token;
+    expect(accessToken).toBeTruthy();
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    expect(supabaseUrl).toBeTruthy();
+    expect(supabaseKey).toBeTruthy();
+
+    const insertRes = await page.request.post(
+      `${supabaseUrl}/rest/v1/protocol`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        data: {
+          meeting_id: meetingId,
+          status: "ki_entwurf",
+          text: "# Test Protokoll\n\n## Entwurf\n\nDieser Entwurf wurde vom KI-System generiert.",
+          generierungs_quelle: "ki",
+          // tenant_id wird via RLS aus dem JWT gesetzt — nicht mitsenden.
+        },
+      },
+    );
+    expect(insertRes.ok()).toBeTruthy();
+
+    // 4. Protokoll-Seite direkt aufrufen.
+    await page.goto(`/versammlungen/${meetingId}/protokoll`);
+    await expect(page).toHaveURL(/\/protokoll$/, { timeout: 15_000 });
+
+    // 5. ki_entwurf-Zustand: Entwurfs-Text ist lesbar (read-only <pre>).
+    await expect(
+      page.getByText(/Dieser Entwurf wurde vom KI-System generiert/),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // 6. "Protokoll unterzeichnen"-Button sichtbar (kein Klick — erfordert
+    //    Storage + PDF-Rendering).
+    await expect(
+      page.getByRole("button", { name: /Protokoll unterzeichnen/ }),
+    ).toBeVisible();
+
+    // 7. Status-Pill "KI-Entwurf freigegeben" sichtbar.
+    await expect(page.getByText("KI-Entwurf freigegeben")).toBeVisible();
+
+    // 8. "Protokoll"-Link auf der Meeting-Seite zeigt zur korrekten URL.
+    await page.goto(`/versammlungen/${meetingId}`);
+    const protokollHref = await page
+      .getByRole("link", { name: /^Protokoll$/ })
+      .getAttribute("href");
+    expect(protokollHref).toMatch(
+      new RegExp(`/versammlungen/${meetingId}/protokoll`),
+    );
+  });
 });
