@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import get_auth
 from app.config import get_settings
+from app.graphs.protokoll import setup_protokoll_graph
 from app.routers import agenda, beschluss, health, internal, protokoll
 
 logging.basicConfig(
@@ -31,6 +32,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     logger.info("agent service starting (project_ref=%s)", settings.SUPABASE_PROJECT_REF)
+    if settings.SUPABASE_DB_URL:
+        await setup_protokoll_graph(settings.SUPABASE_DB_URL)
     yield
     logger.info("agent service stopping")
 

@@ -218,3 +218,119 @@ async def test_draft_node_returns_protokoll_entwurf_shape() -> None:
     assert payload["konfidenz"] == "hoch"
     assert payload["fehlende_daten"] == []
     fake_client.messages.create.assert_awaited_once()
+
+
+# -----------------------------------------------------------------------
+# Task 7: Interrupt / Resume tests
+# -----------------------------------------------------------------------
+
+import asyncio
+
+from langgraph.types import Command
+
+
+def test_graph_interrupt_raises_graph_interrupt_on_first_run() -> None:
+    """Graph pauses at hitl_node: ainvoke returns result with __interrupt__ key."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_entwurf = ProtokollEntwurf(
+        text="# Protokoll\n\nEntwurf.",
+        konfidenz="mittel",
+        fehlende_daten=[],
+    )
+    fake_client = AsyncMock()
+    fake_client.messages.create = AsyncMock(return_value=fake_entwurf)
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "test-tenant:protokoll:mtg-1:abc",
+            "jwt": None,
+        }
+    }
+    state: AgentState = {
+        "tenant_id": "test-tenant",
+        "user_id": "u1",
+        "use_case": "protokoll",
+        "meeting_id": "mtg-1",
+        "messages": [],
+        "suggestions": [],
+        "interrupt_payload": None,
+    }
+
+    with patch("app.graphs.protokoll.get_instructor_client", return_value=fake_client):
+        result = asyncio.run(graph.ainvoke(state, config=config))
+
+    # LangGraph signals interrupt via __interrupt__ key in result dict (not by raising)
+    assert "__interrupt__" in result, "Graph must pause at hitl_node and set __interrupt__"
+    interrupts = result["__interrupt__"]
+    assert len(interrupts) == 1
+    interrupt_value = interrupts[0].value
+    assert "draft" in interrupt_value, "Interrupt payload must include draft text"
+
+
+def test_graph_resume_with_edited_draft_reaches_persist() -> None:
+    """After interrupt, resuming with Command(resume=edited_draft) advances to END."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_entwurf = ProtokollEntwurf(
+        text="# Protokoll\n\nEntwurf.",
+        konfidenz="hoch",
+        fehlende_daten=[],
+    )
+    fake_client = AsyncMock()
+    fake_client.messages.create = AsyncMock(return_value=fake_entwurf)
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "test-tenant:protokoll:mtg-1:abc2",
+            "jwt": None,
+        }
+    }
+    initial_state: AgentState = {
+        "tenant_id": "test-tenant",
+        "user_id": "u1",
+        "use_case": "protokoll",
+        "meeting_id": "mtg-1",
+        "messages": [],
+        "suggestions": [],
+        "interrupt_payload": None,
+    }
+
+    # First run → graph pauses at hitl_node, signals via __interrupt__
+    with patch("app.graphs.protokoll.get_instructor_client", return_value=fake_client):
+        first_result = asyncio.run(graph.ainvoke(initial_state, config=config))
+
+    assert "__interrupt__" in first_result, "First run must produce an interrupt"
+
+    # Resume — jwt=None so persist_node skips real Supabase call (no mock needed)
+    with patch("app.graphs.protokoll.get_instructor_client", return_value=fake_client):
+        result = asyncio.run(
+            graph.ainvoke(
+                Command(resume={"edited_draft": "# Protokoll\n\nBearbeitet."}),
+                config=config,
+            )
+        )
+
+    # Graph reached END: no __interrupt__ in resumed result
+    assert result is not None
+    assert "__interrupt__" not in result, "Resumed graph must reach END, not interrupt again"
+
+
+def test_agent_cannot_set_status_unterzeichnet() -> None:
+    """persist_node never writes status='unterzeichnet'. DB trigger also enforces this."""
+    import ast
+    import pathlib
+
+    source = pathlib.Path(
+        "/Users/sinanucar/Development/weg-verwaltung/apps/agent/app/graphs/protokoll.py"
+    ).read_text()
+    tree = ast.parse(source)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and node.value == "unterzeichnet":
+            pytest.fail(
+                "Found literal 'unterzeichnet' in protokoll.py — "
+                "agent must never set this status (Invariante 2)"
+            )
