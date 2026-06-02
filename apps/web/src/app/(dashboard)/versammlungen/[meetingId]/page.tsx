@@ -269,6 +269,11 @@ export default async function MeetingDetailPage({
               Neuen TOP anlegen
             </Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href={`/versammlungen/${meetingId}/protokoll`}>
+              Protokoll
+            </Link>
+          </Button>
         </CardContent>
       </Card>
 
