@@ -41,6 +41,7 @@ _SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "protokoll" / "
 
 _protokoll_graph: Any | None = None
 _checkpointer: Any | None = None  # kept alive at module level — do not let GC close pool
+_checkpointer_cm: Any | None = None  # context manager — held for __aexit__ on shutdown
 
 
 def _load_system_prompt() -> str:
@@ -304,16 +305,33 @@ async def setup_protokoll_graph(db_url: str) -> None:
     We enter the AsyncPostgresSaver context manager and store the live
     checkpointer at module scope so the connection pool is not closed
     prematurely. The pool stays open for the process lifetime.
+    The context manager is stored in _checkpointer_cm so teardown_protokoll_graph
+    can close the pool cleanly on shutdown.
     """
 
-    global _protokoll_graph, _checkpointer
+    global _protokoll_graph, _checkpointer, _checkpointer_cm
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     cm = AsyncPostgresSaver.from_conn_string(db_url)
+    _checkpointer_cm = cm
     _checkpointer = await cm.__aenter__()
     await _checkpointer.setup()
     _protokoll_graph = build_graph(checkpointer=_checkpointer)
     logger.info("protokoll_graph initialized with AsyncPostgresSaver")
+
+
+async def teardown_protokoll_graph() -> None:
+    """Close the AsyncPostgresSaver connection pool. Called in FastAPI lifespan after yield."""
+
+    global _checkpointer_cm
+    if _checkpointer_cm is not None:
+        try:
+            await _checkpointer_cm.__aexit__(None, None, None)
+            logger.info("protokoll_graph checkpointer pool closed")
+        except Exception as exc:  # pragma: no cover
+            logger.warning("teardown_protokoll_graph: error closing pool: %s", exc)
+        finally:
+            _checkpointer_cm = None
 
 
 def get_protokoll_graph() -> Any:

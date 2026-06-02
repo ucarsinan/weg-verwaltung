@@ -13,7 +13,7 @@ import { renderProtokollPDF } from "@/lib/protokoll/render-pdf";
 export type Konfidenz = "hoch" | "mittel" | "niedrig";
 
 export interface GenerateResult {
-  status: "ok" | "needs_clarification" | "error";
+  status: "awaiting_review" | "completed" | "error";
   threadId: string | null;
   draft?: string;
   konfidenz?: Konfidenz;
@@ -22,7 +22,7 @@ export interface GenerateResult {
 }
 
 interface AgentProtokollResponse {
-  status: "ok" | "needs_clarification";
+  status: "awaiting_review" | "completed";
   thread_id: string;
   draft?: string;
   konfidenz?: Konfidenz;
@@ -58,6 +58,33 @@ export async function generateProtokoll(
       method: "POST",
       body: JSON.stringify({ meeting_id: meetingId }),
     });
+
+    // Bug 1 + 2 fix: persist the awaiting_review row immediately so the page
+    // can render DraftReviewForm after revalidation. The agent's persist_node
+    // only runs AFTER the Verwalter resumes the HITL interrupt, so we must
+    // write to DB here. Store langgraph_thread_id for the resume call (Bug 3).
+    if (data.status === "awaiting_review") {
+      const supabase = await createClient();
+      const { error: upsertError } = await supabase.from("protocol").upsert(
+        {
+          meeting_id: meetingId,
+          status: "awaiting_review",
+          text: data.draft ?? "",
+          generierungs_quelle: "ki",
+          langgraph_thread_id: data.thread_id,
+        },
+        { onConflict: "tenant_id,meeting_id" },
+      );
+      if (upsertError) {
+        console.error("[generateProtokoll] protocol upsert failed:", upsertError);
+        return {
+          status: "error",
+          threadId: null,
+          error: `Protokoll konnte nicht gespeichert werden: ${upsertError.message}`,
+        };
+      }
+      revalidatePath(`/versammlungen/${meetingId}/protokoll`);
+    }
 
     return {
       status: data.status,
@@ -157,7 +184,7 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
   const { data: protocol, error: fetchError } = await supabase
     .from("protocol")
     .select(
-      "id, status, text, meeting_id, meeting!inner(id, weg_id, titel, termin_von, tenant_id)",
+      "id, status, text, meeting_id, document_id, meeting!inner(id, weg_id, titel, termin_von, tenant_id)",
     )
     .eq("id", protocolId)
     .single();
@@ -166,7 +193,15 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
     throw new Error(`Protokoll nicht gefunden: ${fetchError?.message ?? "unbekannt"}`);
   }
 
-  // 2. Assert precondition: only ki_entwurf may be signed
+  // 2a. Double-sign guard (Bug 5): defense-in-depth against duplicate calls
+  // that would create orphaned document rows.
+  if (protocol.document_id) {
+    throw new Error(
+      "Protokoll wurde bereits unterzeichnet — Dokument ist bereits verknüpft.",
+    );
+  }
+
+  // 2b. Assert precondition: only ki_entwurf may be signed
   if (protocol.status !== "ki_entwurf") {
     throw new Error(
       `Protokoll kann nicht unterzeichnet werden — aktueller Status: ${protocol.status}`,

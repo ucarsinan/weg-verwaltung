@@ -89,10 +89,10 @@ export default async function ProtokollPage({ params }: PageProps) {
   // Load protocol for this meeting (one-to-one via protocol_meeting_fk)
   const { data: protocol, error: protocolError } = await supabase
     .from("protocol")
-    .select("id, status, text, document_id, meeting_id")
+    .select("id, status, text, document_id, meeting_id, langgraph_thread_id")
     .eq("meeting_id", meetingId)
     .maybeSingle<
-      Pick<ProtocolRow, "id" | "status" | "text" | "document_id" | "meeting_id">
+      Pick<ProtocolRow, "id" | "status" | "text" | "document_id" | "meeting_id" | "langgraph_thread_id">
     >();
 
   if (protocolError) {
@@ -164,7 +164,7 @@ export default async function ProtokollPage({ params }: PageProps) {
           <CardContent>
             <DraftReviewForm
               meetingId={meetingId}
-              threadId={protocol.id}
+              threadId={protocol.langgraph_thread_id ?? ""}
               initialDraft={protocol.text ?? ""}
               submitRevisionAction={submitRevision}
             />

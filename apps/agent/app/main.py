@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import get_auth
 from app.config import get_settings
-from app.graphs.protokoll import setup_protokoll_graph
+from app.graphs.protokoll import setup_protokoll_graph, teardown_protokoll_graph
 from app.routers import agenda, beschluss, health, internal, protokoll
 
 logging.basicConfig(
@@ -36,6 +36,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await setup_protokoll_graph(settings.SUPABASE_DB_URL)
     yield
     logger.info("agent service stopping")
+    await teardown_protokoll_graph()
 
 
 def create_app() -> FastAPI:
