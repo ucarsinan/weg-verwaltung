@@ -1,4 +1,4 @@
-# WEG-Verwaltung — Projekt-CLAUDE.md
+# WEG-Verwaltung — Projekt-AGENTS.md
 
 ## Was ist das
 

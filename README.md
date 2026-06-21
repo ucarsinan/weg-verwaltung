@@ -4,7 +4,7 @@
 
 # WEG-Verwaltung
 
-> **Status:** Design-Phase · Portfolio-Piece · kein lauffähiger Code (Stand: Mai 2026)
+> **Status:** Lauffähiger lokaler Code vorhanden · Remote-only Supabase-Projekt · Worktree in Review-Vorbereitung (Stand: Juni 2026)
 
 Schlanke, KI-gestützte Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — gebaut wie ein Profi-Produkt, betrieben als Portfolio. Multi-Tenant SaaS für Profi-Hausverwalter. Sicher von Anfang an: Mandanten-Isolation auf DB-Ebene, KI-Schreibsperre als Datenbank-Constraint, append-only Audit und Beschluss-Sammlung.
 
@@ -40,7 +40,7 @@ Versammlungsmanagement für **alle vier Modi** (Präsenz · Hybrid · Virtuell �
                   └────────────────────────────────┘
 ```
 
-Modularer Monolith, zwei Deployments. Detailsektionen (Architektur, Security, KI, UX, Workflow) folgen als sichtbare Commits unter [docs/](./docs/).
+Modularer Monolith, zwei Deployments. Detailsektionen (Architektur, Security, KI, UX, Workflow) liegen unter [docs/](./docs/). Der lokale Code-Stand geht über die ursprüngliche Design-Spec hinaus.
 
 ## Stack
 
@@ -63,15 +63,28 @@ Modularer Monolith, zwei Deployments. Detailsektionen (Architektur, Security, KI
 
 | Phase | Inhalt | Status |
 | --- | --- | --- |
-| 0 | Brainstorming & System-Design | in Arbeit |
-| 1 | MVP: Versammlungsmanagement | geplant |
-| 2 | Dokumente + RAG-Suche | offen |
-| 3 | Hausgeld & Abrechnung | offen |
+| 0 | Brainstorming & System-Design | abgeschlossen |
+| 1 | WEG-, Personen-, Eigentümerschafts- und Versammlungsflows | teilweise implementiert |
+| 2 | Dokumente, Protokoll-PDF und RAG-Suche | Dokument-/PDF-Grundlagen vorhanden; RAG nur Scaffold |
+| 3 | Wirtschaftsplan, Hausgeld und Sollstellung | lokal implementiert; Review offen |
 | 4 | Mängel-/Ticket-Workflow | offen |
 
 ## Status
 
-Aktuell **Design-First-Phase**. Code-Implementation hat noch nicht begonnen. Iterationen sind als Commits unter [docs/](./docs/) sichtbar. Der vollständige System-Design-Spec liegt in [docs/01-system-design.md](./docs/01-system-design.md).
+Aktuell existieren eine Next.js-16-Web-App unter [apps/web](./apps/web), ein FastAPI/LangGraph-Agent unter [apps/agent](./apps/agent) und Supabase-Migrationen unter [infra/supabase/migrations](./infra/supabase/migrations).
+
+Belegt lokal:
+
+- Web-App mit Supabase-Auth, Dashboard, WEG-Stammdaten, Personen/Eigentümerschaft, Versammlungen, Beschluss-Sammlung, Audit-Ansicht, Protokoll-PDF und Finanzseiten.
+- Agent-Service mit FastAPI-Routern, JWT-Prüfung, LangGraph-orientierten Graphen für Agenda/Beschluss/Protokoll und RAG-Scaffold.
+- Lokale Migrationen `0001` bis `0049`.
+- RAG-Retrieval ist bewusst nicht produktiv: `apps/agent/app/rag/retrieve.py` liefert bis zur Datenpipeline `[]`.
+
+Nicht in diesem Audit verifiziert:
+
+- Cloud-Migrationsstand des Supabase-Projekts.
+- Aktueller E2E-Lauf gegen die Cloud.
+- Produktives Hosting für Web-App und Agent.
 
 ## Lizenz
 

@@ -1,7 +1,7 @@
 # apps/agent — FastAPI Agent Service
 
-KI-Agent-Service für WEG-Verwaltung. FastAPI + (geplant) LangGraph, deployed nach Fly.io
-Frankfurt. Tenant-Iso via JWT-Pass-Through an Supabase-RLS (siehe `docs/02-architecture-deployment.md` § 2.4).
+KI-Agent-Service für WEG-Verwaltung. FastAPI + LangGraph-orientierte Graphen.
+Tenant-Iso via JWT-Pass-Through an Supabase-RLS (siehe `docs/02-architecture-deployment.md` § 2.4). Ein produktives Fly.io-Deployment ist in diesem Audit nicht belegt.
 
 ## Run lokal
 
@@ -31,13 +31,16 @@ Optional (für nächste Phase):
 - `app/main.py` — FastAPI-App, CORS, Router-Mount, JWT-Dependency-Wiring
 - `app/auth.py` — JWKS-Cache + JWT-Verify nach § 2.4 + per-Request `supabase-py`-Client
 - `app/config.py` — Settings via pydantic-settings
-- `app/routers/` — `health` + Stub-Endpoints für Agenda / Beschluss / Protokoll / Internal-Frist-Scan
+- `app/routers/` — `health` + Endpoints für Agenda / Beschluss / Protokoll / Internal-Frist-Scan
+- `app/graphs/` — Graphen für Agenda, Beschluss und Protokoll
+- `app/rag/` — Chunking/Embedding/Retrieval-Scaffold; `retrieve()` liefert bis zur Datenpipeline bewusst `[]`
+- `app/tools/` — Runtime- und Versammlungs-Tooling
 
-## Was hier NOCH NICHT ist
+## Statusgrenzen
 
-- Vier LangGraph-Graphen (`agenda`, `beschluss`, `protokoll`, `frist`) aus § 4.1
-- `tools/`-Inventory mit `@side_effect`-Decorator (§ 4.3 / § 4.7)
-- RAG-Layer (pgvector + bge-m3, § 4.5)
+- Der RAG-Layer ist nicht produktiv; die Embedding-Datenpipeline ist offen.
+- Der Agent-Write-Header für Audit-/Actor-Kontext ist als TODO dokumentiert und wird in diesem Sprint nicht implementiert.
+- Der `frist`-Graph und vollständige `@side_effect`-/HITL-Tool-Safety sind offen.
 - Langfuse-Instrumentierung und RAGAS-Eval-Pipeline (§ 4.8)
 - `interrupt()`-HITL-Flow für `protokoll_graph` (§ 4.7)
 

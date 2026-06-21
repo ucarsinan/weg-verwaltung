@@ -237,6 +237,8 @@ class SepaAdapter(Protocol):
     on_r_transaction(mandate_id, kind: Literal["AC04","MD06","MS02","..."])  # Rücklastschrift
 ```
 
+**Scope-Grenze:** Die aktuelle `sollstellung` ist nur ein historisches unit-month Ziel aus dem Wirtschaftsplan. Sie ist Input für einen späteren SEPA-/Forderungs-Adapter, aber noch kein owner-level Receivable, kein Zahlungsstatus, kein Mahnwesen und kein Bankabgleich. Künftige DebitItems müssen `sollstellung_id` plus Ownership-/Mandatsauflösung zum Fälligkeitsstichtag referenzieren, statt alte Sollstellungen umzuschreiben.
+
 **Vendor-Kandidaten 2026:**
 
 - **GoCardless** — SEPA-Spezialist, gute R-Transaction-API
@@ -413,12 +415,12 @@ Diese 17 Unknowns sind nicht der Grund, das Projekt nicht zu starten — sie sin
 
 **Was diese sechs Sections leisten.** Sie modellieren ein produktionswürdiges WEG-Verwaltungs-System mit fünf harten Sicherheits-Invarianten, vier KI-Use-Cases mit klaren Mensch/Maschine-Grenzen, einem deutsch-rechtlich konformen Workflow-Set und einer ehrlichen Risiko- und Migrations-Story. Section 1 hat das Domain-Modell festgelegt, Section 2 die Deployment-Topologie, Section 3 das Sicherheitsmodell, Section 4 die KI-Architektur, Section 5 die UX-Leitprinzipien und Section 6 die End-to-End-Workflows samt Risiken.
 
-**Was sie bewusst nicht leisten.** Eine lauffähige Implementierung. Die Spec ist Vorstufe zum Code, nicht Code. Section 6 hat 17 Honest Unknowns offen gelassen, die im Code-Pfad als Tickets oder TODOs landen, nicht in dieser Spec. Wer nach einer fertigen Lösung sucht, sucht hier falsch — wer nach einer durchdachten Grundlage sucht, hat sie.
+**Was sie bewusst nicht leisten.** Einen aktuell verifizierten Release-Status. Diese sechs Sections sind die ursprüngliche fachliche und architektonische Grundlage; der lokale Code-Stand ist inzwischen weiter. Section 6 hat 17 Honest Unknowns offen gelassen, die im Code-Pfad als Tickets oder TODOs landen. Wer den aktuellen Implementierungsstand sucht, muss Repo, Tests, Migrationen und Statusdateien gegenprüfen.
 
-**Wann das hier endet, wann der Code beginnt.** Sobald jemand diese sechs Markdown-Dateien gelesen hat und die zwölf Tabellen plus die drei ASCII-Diagramme zu verstehen meint, ist das nächste sinnvolle Artefakt nicht eine siebte Section, sondern: das erste `apps/agent/main.py` und das erste `supabase/migrations/0001_init.sql`. Die Iteration unter `docs/` ist abgeschlossen.
+**Wann das hier endet, wann der Code beginnt.** Die ursprüngliche Spec-Iteration unter `docs/` ist abgeschlossen; Code, Migrationen und Tests liegen inzwischen unter `apps/`, `infra/supabase/` und den jeweiligen Testverzeichnissen. Statusaussagen in dieser Section sind daher als Spec-Kontext zu lesen, nicht als aktueller Release-Nachweis.
 
 **Was das Portfolio-Piece zeigen will.** Nicht "ich kann eine WEG-Software bauen", sondern "ich verstehe, wo die WEG-Software-Architektur 2026 wehtut: bei Mandanten-Iso, bei KI-Grenzen, bei DSGVO-Rolling, bei deutschem Verfahrensrecht, bei der ehrlichen Differenz zwischen 'designed well' und 'operated well'." Eine Spec, die das ehrlich benennt, ist mehr wert als ein Halbfertig-MVP, der dieselben Fragen unter dem Teppich hält.
 
-**Übergang.** Section 7 dieser Spec gibt es nicht. Der nächste Commit ist `feat(web): initial Next.js 16 scaffold mit auth + supabase-ssr` — oder `feat(agent): initial FastAPI skeleton + JWT-Middleware`. Die Spec hat ihre Aufgabe getan, wenn der erste Code-Commit sie als Referenz zitiert, ohne sie zu wiederholen.
+**Übergang.** Section 7 dieser Spec gibt es nicht. Der aktuelle Codepfad referenziert diese sechs Sections, ersetzt aber ihre historischen Statusaussagen durch belegte Projektstatusdateien und den realen Repo-Zustand.
 
-**Ende der Design-Phase.**  Die Iteration unter `docs/` ist abgeschlossen — nächster Commit ist Code, nicht Spec.
+**Ende der ursprünglichen Spec-Phase.** Die Iteration unter `docs/` ist abgeschlossen. Aktuelle Statusentscheidungen kommen aus dem realen Code-, Migrations-, Test- und Deployment-Nachweis, nicht aus dieser historischen Schlussformel.

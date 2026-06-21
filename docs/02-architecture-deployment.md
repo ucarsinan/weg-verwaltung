@@ -1,6 +1,6 @@
 # Section 2 — Architektur & Deployment
 
-> **Status:** Section 2 von 6 fertig. Sections 3–6 folgen als sichtbare Commits.
+> **Status:** Architekturdokument. Zielarchitektur und lokal belegter Repo-Stand sind von aktuell verifizierter Cloud-/Hosting-Infrastruktur zu trennen.
 > Diese Section legt die Service-Topologie, das Repo-Layout, die Deployment-Targets und den Identitäts-Fluss fest. Detail-Security folgt in Section 3, KI-Architektur in Section 4.
 
 ---
@@ -17,7 +17,8 @@ Drei Komponenten, zwei Code-Deployments, ein verwalteter Backend-Stack:
                                        │ HTTPS + Supabase-Auth-Cookie
                                        ▼
                 ┌──────────────────────────────────────────┐
-                │  apps/web   ·  Next.js 16 (Vercel, EU)   │
+                │  apps/web   ·  Next.js 16                │
+                │  Ziel: Vercel EU                         │
                 │  Server Components / Server Actions      │
                 └─────┬───────────────────────────┬────────┘
                       │                           │
@@ -27,8 +28,9 @@ Drei Komponenten, zwei Code-Deployments, ein verwalteter Backend-Stack:
                       ▼                           ▼
        ┌──────────────────────────┐    ┌────────────────────────────┐
        │  Supabase Frankfurt      │◄───┤  apps/agent · FastAPI      │
-       │  Postgres + Auth +       │    │  + LangGraph (Fly.io fra)  │
-       │  Storage + RLS           │    │  PostgresSaver-Checkpoints │
+       │  Postgres + Auth +       │    │  + LangGraph               │
+       │  Storage + RLS           │    │  Ziel: Fly.io fra          │
+       │                          │    │  PostgresSaver-Checkpoints │
        └──────────────────────────┘    └────────────┬───────────────┘
                                                     │
                                                     ▼
@@ -90,6 +92,8 @@ weg-verwaltung/
 ---
 
 ## 2.3 Deployment-Topologie
+
+Die folgende Tabelle beschreibt die Zieltopologie. Produktives Web-/Agent-Hosting und aktueller Cloud-Migrationsstand wurden in diesem Audit nicht verifiziert.
 
 | Service | Provider | Region | EU-Story | Größenordnung Kosten (idle) |
 | --- | --- | --- | --- | --- |
@@ -191,9 +195,9 @@ Drei Umgebungen, jede mit eigenem Supabase-Projekt (oder Branch), eigenem Vercel
 
 | Env | Web | Agent | DB / Auth | Daten |
 | --- | --- | --- | --- | --- |
-| **local** | `pnpm dev` (Next.js) | `uv run uvicorn` | `supabase start` (lokaler Stack) | Seed-Daten, niemals echte |
+| **local** | `just dev-web` / Next.js | `just dev-agent` / uvicorn | Remote Supabase Frankfurt | Seed-/Fake-Daten nur nach expliziter Freigabe, niemals echte |
 | **preview** | Vercel Preview pro PR | Fly Preview App `weg-agent-preview-pr-N` | Supabase Branch (oder dediziertes Preview-Projekt) | Anonymisierte Snapshots |
-| **production** | Vercel `production` | Fly App `weg-agent` (`fra`) | Supabase Prod (Frankfurt) | Reale Mandanten-Daten |
+| **production** | Ziel: Vercel `production` | Ziel: Fly App `weg-agent` (`fra`) | Ziel: Supabase Prod (Frankfurt) | Reale Mandanten-Daten |
 
 **Secrets-Verwaltung:**
 
@@ -217,42 +221,40 @@ Drei Umgebungen, jede mit eigenem Supabase-Projekt (oder Branch), eigenem Vercel
 just dev
 ```
 
-Startet parallel:
+Aktueller Repo-Stand ist remote-only gegen das Supabase-Frankfurt-Projekt. `just dev` startet keinen lokalen Supabase-Stack, sondern verweist auf separate Web-/Agent-Prozesse.
 
-1. `supabase start` (lokaler Stack: Postgres + Auth + Storage in Docker)
-2. `pnpm --filter web dev` (Next.js auf `:3000`)
-3. `uv run --project apps/agent uvicorn main:app --reload` (FastAPI auf `:8000`)
+1. `just dev-web` / `pnpm --filter @weg-verwaltung/web dev` (Next.js auf `:3000`)
+2. `just dev-agent` / `uv run uvicorn app.main:app --reload` (FastAPI auf `:8000`)
+3. Supabase bleibt remote; kein `supabase start` im normalen Entwicklungsfluss.
 
 Weitere `justfile`-Recipes (alphabetisch):
 
-- `just codegen` — OpenAPI → `packages/shared-types/`, Supabase-CLI → DB-Types
-- `just db-migrate` — Supabase-Migrationen anwenden
-- `just db-reset` — Lokale DB zurücksetzen + Seed
-- `just lint` — eslint + ruff + sqlfluff
-- `just test` — `pnpm --filter web test` + `uv run pytest apps/agent`
+- `just codegen` — OpenAPI → `packages/shared-types/`
+- `just db-migrate` — Supabase-Migrationen gegen das verlinkte Cloud-Projekt anwenden
+- `just db-reset` — guarded recipe; bricht ab, damit die Cloud-DB nicht versehentlich gelöscht wird
+- `just lint` — eslint + ruff
+- `just test` — Web- und Agent-Tests
 - `just typecheck` — `tsc --noEmit` + `mypy apps/agent`
 
 ---
 
 ## 2.8 CI / CD — skizzenhaft
 
-**Push auf `main`:**
+**Aktueller CI-/CD-Stand aus Repo-Sicht:**
 
-- Vercel deployed `apps/web` automatisch (Vercel-GitHub-App).
-- Fly.io deployed `apps/agent` via GitHub Action `fly deploy --remote-only` (Token in GH-Secrets).
-- Supabase-Migrationen: Action ruft `supabase db push` mit Service-Role-Key gegen Prod-Projekt.
+- Der gewünschte Check-Scope umfasst Web lint/typecheck/test/build, Agent ruff/mypy/pytest, SQL-Migrationsheader/-Sequenz und lokale Audit-pgTAP-Regressions.
+- Vercel/Fly-Deploys und Cloud-`supabase db push` sind in der aktuellen Workflow-Datei nicht als CI-Schritte belegt.
 
 **PRs:**
 
-- Vercel Preview-URL pro PR automatisch.
-- Fly-Preview-App optional (`fly launch --copy-config`), default aus.
-- CI-Checks: `just lint`, `just typecheck`, `just test`. Rotes CI blockt Merge.
+- CI-Checks: Web lint/typecheck/test/build, Agent ruff/mypy/pytest, SQL-Lint, lokale Audit-pgTAP-Regressions.
+- Preview-/Production-Hosting muss separat belegt werden; in diesem Audit wurde keine Deployment-URL verifiziert.
 
 **Was bewusst nicht in der MVP-Pipeline ist:**
 
 - Canary-Deploys / Blue-Green (Single-Tenant-Demo braucht das nicht).
 - Lasttests / Chaos-Engineering (kommt mit ersten Real-Tenants).
-- E2E-Tests (Section 5 nimmt UX-Pfade auf, dann mit Playwright).
+- Cloud-E2E als Merge-Gate; Playwright-Specs existieren, wurden in diesem Audit aber nicht ausgeführt.
 
 ---
 
@@ -267,4 +269,4 @@ Bewusst hier nicht behandelt — verweist auf spätere Sections:
 
 ---
 
-**Nächster Commit:** `docs: add section 3 — security model`.
+**Hinweis:** Diese Section ist Architekturgrundlage, kein aktueller Deployment-Nachweis.

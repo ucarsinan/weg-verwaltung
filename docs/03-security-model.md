@@ -12,6 +12,7 @@
 - **Mandanten-Isolation** — Verwalter-Kanzlei A darf unter keinen Umständen Daten von Kanzlei B sehen.
 - **Eigentümer-PII** — Name, Anschrift, MEA-Anteil, Bankverbindung für Hausgeld, ggf. Vollmachtsdaten.
 - **Beschluss-Integrität** — gefasste Beschlüsse sind rechtsverbindlich; Manipulation = Rechtsbeugung.
+- **Finanzielle Integrität** — generierte Hausgeld-Sollstellungen sind sensible Forderungsziele. Direkte Mutation, rückwirkende Neuberechnung oder Löschung würde die historische Finanzlage verfälschen.
 - **Audit-Vollständigkeit** — jede Aktion (Stimmabgabe, Protokoll-Signatur, Agent-Vorschlag) muss forensisch nachweisbar bleiben.
 - **Stimmrechts-Korrektheit** — Vote referenziert `ownership_id`, nicht `user_id` (historisch korrekt bei Eigentumswechsel, Invariante aus Section 1).
 
@@ -143,8 +144,8 @@ $$ language sql stable;
 6. Views mit `WITH (security_invoker = true)` (PG 15+) — sonst läuft View als View-Owner und ignoriert RLS.
 7. Keine `SECURITY DEFINER`-Funktionen auf Tenant-Tabellen, außer mit explizitem `tenant_id`-Check und bewusster `LEAKPROOF`-Markierung.
 8. **Eine Policy pro Command** (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) mit explizitem `WITH CHECK` — kein generisches `FOR ALL`.
-9. CI-Gate auf Supabase Advisor Lints `0013_rls_disabled_in_public`, `0010_security_definer_view`, `0003_auth_rls_initplan` — schlägt Migration rot.
-10. pgTAP-Negative-Test-Suite läuft bei jeder Migration (Beispiel weiter unten).
+9. Zielzustand: CI-Gate auf Supabase Advisor Lints `0013_rls_disabled_in_public`, `0010_security_definer_view`, `0003_auth_rls_initplan` — schlägt Migration rot. Aktuell ist das als Security-Contract dokumentiert; die sichtbare Testabdeckung ist nicht vollständig als CI-Gate nachweisbar.
+10. Zielzustand: pgTAP-Negative-Test-Suite läuft bei jeder Migration (Beispiel weiter unten). `infra/supabase/tests/0002_audit_chain.sql` und `infra/supabase/tests/0046_least_privilege.sql` sind ausführbare Regressionstests für den 0045/0046-Audit-Contract; `infra/supabase/tests/0001_rls_negative.sql` bleibt eine kommentierte RLS-Negativtest-Skizze.
 
 ### Beispiel-Policy (für `weg`)
 
@@ -227,11 +228,15 @@ Wichtig: SELECT / UPDATE / DELETE, die *keine* Zeilen treffen, werfen nicht — 
 
 ### HMAC-Hash-Chain
 
-Jede Zeile trägt `row_hash = hmac_sha256(prev_hash || canonical_json(row), vault_key)`, wo der Key in Supabase Vault liegt. Ein nightly `verify_chain()`-Job prüft die Kette pro Tenant.
+Jede Zeile trägt `row_hash = hmac_sha256(prev_hash || canonical_json(row), vault_key)`, wo der Key in Supabase Vault liegt. Zielbetrieb: Ein nightly `verify_chain()`-Job soll die Kette pro Tenant prüfen; produktiver Scheduler-Stand wurde in diesem Audit nicht verifiziert.
 
 - **Warum HMAC und nicht plain SHA256?** Ein Angreifer mit DB-only-Access kann ohne Vault-Key keine valide Fortsetzung berechnen.
 - **Warum kein Merkle-Tree?** Übertrieben ohne public Anchor.
 - **Warum überhaupt?** Recruiter-Optics + echte Tamper-Detection bei service_role-Forgery.
+
+> **Incident-Status:** Laut zuletzt dokumentierter Cloud-/Runtime-Validation galt diese Zielbeschreibung ab dem tenant-spezifischen `0045`-Checkpoint vorwärts wieder. In diesem Audit wurde Cloud nicht erneut geprüft. Lokal belegt sind Migrationen `0045`/`0046`, die v2-HMAC über Audit-Metadaten plus Payload, Checkpoints, Advisory Lock, Verifier und Checkpoint-Owner-Härtung definieren. Historische Rows vor dem Checkpoint bleiben Legacy-Evidence und werden nicht rückwirkend als v2-HMAC-verifiziert dargestellt.
+>
+> **Testabdeckung:** Lokal belegt durch Migrationstext und ausführbare pgTAP-Regressionstests: `0002_audit_chain.sql` prüft den Forward-Chain-Contract, `0046_least_privilege.sql` prüft die Least-Privilege-/RLS-Kataloginvarianten. Frühere manuelle Cloud-/Runtime-Validation ist dokumentiert, aber nicht Teil dieses Audits.
 
 ### `audit_writer`-Rolle (gegen service_role-Bypass)
 
@@ -244,7 +249,7 @@ Ein gefälschter Audit-Event aus `service_role` ist anhand `db_role='service_rol
 
 ### pgaudit — orthogonal
 
-`pgaudit` (Supabase-Extension verfügbar) loggt **Statement-Level** Events (DDL, Role-Changes, raw SQL) in Postgres-Logs → Logflare/Vector-Sink → **Off-Box-Kopie**. Application-`audit_event` loggt **semantic Events** ("User X signed Protocol Y"). Beide zusammen — pgaudit ist der Plan-B, wenn jemand die `audit_event`-Tabelle direkt manipuliert.
+`pgaudit` ist als Supabase-Extension in der Migrationshistorie berücksichtigt und soll im Zielbetrieb **Statement-Level** Events (DDL, Role-Changes, raw SQL) in Postgres-Logs mit Off-Box-Kopie ergänzen. Eine aktive Logflare-/Vector-Pipeline wurde in diesem Audit nicht verifiziert. Application-`audit_event` loggt **semantic Events** ("User X signed Protocol Y"). Beide Signale zusammen sind der Plan-B, wenn jemand die `audit_event`-Tabelle direkt manipuliert.
 
 ### Schema
 
@@ -267,13 +272,106 @@ audit_event
 
 **Indexes:** `(tenant_id, created_at desc)`, `(entity_typ, entity_id)`, `(actor_user_id, created_at desc)`.
 
-**Partitioning:** monatlich (`PARTITION BY RANGE (created_at)`), 12 Monate ahead via cron vor-anlegen. Nach 24 Monaten detach + Cold-Storage (Supabase Storage / S3-Glacier). 10-Jahre-Pflicht aus WEG-Recht §28 Abs. 6.
+**Partitioning:** monatlich (`PARTITION BY RANGE (created_at)`), geplantes Voranlegen via cron. Cold-Storage-Detach/Drop bleibt deaktiviert, bis ein privilegierter Export + Manifest + HMAC-Verify-Job existiert und der Cloud-Stand erneut geprüft wurde. 10-Jahre-Pflicht aus WEG-Recht §28 Abs. 6.
+
+### Audit Incident 0042-0044 — Dokumentation
+
+**Executive Summary:** In den 0042-0044-Notizen wurde ein forensischer Audit-Integritätsvorfall dokumentiert. Betroffen war die Tamper-Evidence-Behauptung der HMAC-Kette, nicht die RLS-Mandantenisolation und nicht das Append-only-Verbot der Audit-Tabelle. `0045`/`0046` bilden lokal und laut früherer Validation den Forward-Repair ab tenant-spezifischem Checkpoint ab; aktueller Cloud-Zustand wurde in diesem Audit nicht verifiziert. Legacy-Rows bleiben unverändert und werden nicht rückwirkend aufgewertet.
+
+**Ampel:** **Grün** für lokal vorhandenen Forward-Audit-Contract ab `0045`-Checkpoint und frühere dokumentierte Validation. **Gelb** für Legacy-Beweiskraft vor dem Checkpoint. **Rot** für aktuelle Deployment-Claims, bis Cloud erneut geprüft wurde.
+
+#### Incident Timeline
+
+| Migration / Check | Bedeutung |
+| --- | --- |
+| `0006` | `audit_event` wird partitioniert, append-only und mit `prev_hash`/`row_hash` angelegt. |
+| `0009` | HMAC-v1 wird eingeführt: `prev_hash + payload` unter Vault-Key. |
+| `0026` | Business-Events werden in `audit_event` emittiert. |
+| `0029` | Vault-Permission-Fehler führen zu All-Zero-Key-Fallback. |
+| `0030` | Fehlender Zugriff auf `extensions.hmac` führt zu unkeyed `sha256`-Fallback. |
+| `0033/0034` | Vault/Extensions-Grants werden repariert; `decrypted_secret` wird als korrekte Vault-Spalte genutzt; HMAC wird fail-closed. |
+| `0042` | Fail-closed HMAC wird erneut festgeschrieben; Sollstellung-Generator wird aus der öffentlichen RPC-Fläche herausgenommen. |
+| `0043` | Lokale Datei definiert forward-only Repair: Checkpoint je Tenant, v2-HMAC über Audit-Metadaten plus Payload, Advisory Lock und neuen Verifier. |
+| `0044` | Lokale Datei tightened Read-Path, überschreibt aber die Insert-Funktion wieder mit v1 `hash_audit_row(prev_hash, payload)` und beschneidet den Verifier-Lesepfad. |
+| Prior Cloud Read-only Check | Frühere Validation notiert Migrationstabellen bis `0044`, aber fehlende `audit_chain_repair_checkpoint`, `hash_audit_event_v2()` und `verify_chain_repaired()` Objekte. `verify_chain()` scheiterte mit `permission denied for table audit_event`. Dieser Check wurde in diesem Audit nicht wiederholt. |
+| `0045` | Lokale Repair-Migration beschreibt die Reparatur der dokumentierten Drift, setzt per-Tenant Checkpoints, stellt den v2-Insert-Pfad mit Metadatenbindung und Advisory Lock wieder her und macht `verify_chain()` wieder lauffähig. Bestehende Audit-Zeilen bleiben unverändert. Cloud-Anwendung wurde in diesem Audit nicht verifiziert. |
+| `0046` | Lokale Least-Privilege-Härtung: Checkpoint-Tabelle gehört `postgres`; `audit_writer` hat nur `SELECT`/`INSERT`. Cloud-Anwendung wurde in diesem Audit nicht verifiziert. |
+
+#### Root Cause
+
+Der Vorfall entstand aus zwei getrennten Ursachen:
+
+1. **Availability-over-integrity Fallbacks:** `0029` und `0030` erlaubten Audit-Weiterbetrieb trotz fehlender hosted-Supabase Grants. Dadurch wurden HMAC-Eigenschaften zeitweise auf All-Zero-Key bzw. unkeyed SHA-256 degradiert.
+2. **Repair-/Tightening-Drift:** `0043` beschreibt die richtige forward-only-Reparaturrichtung, aber `0044` macht lokal Teile davon wieder rückgängig. Frühere Cloud-Notizen dokumentierten einen deutlicheren Drift: Die Migrationsrecords existierten, aber die erwarteten `0043`-Repair-Objekte waren nicht vorhanden. Das wurde in diesem Audit nicht erneut geprüft.
+
+#### Impact
+
+**Betroffen:**
+
+- **Audit-Integrität:** Legacy-Zeilen dürfen nicht als vollwertig Vault-HMAC-gesichert beschrieben werden.
+- **Legacy Tamper Evidence:** Zeilen vor dem 0045-Checkpoint dürfen nicht als vollständig v2-verifizierte HMAC-Evidence dargestellt werden.
+- **Legacy Metadata Tamper Evidence:** v1 bindet nur Payload, nicht `seq`, `created_at`, `actor_type`, `actor_user_id`, `db_role`, `entity_typ`, `entity_id` und `action`.
+- **Pre-0045 Concurrent Fork Detection:** Der lokal in `0043` vorgesehene per-Tenant Advisory Lock war im früher beobachteten Cloud-Schema vor der Reparatur nicht nachweisbar aktiv; lokal stellt `0045` ihn für neue Rows wieder her.
+
+**Nicht betroffen:**
+
+- **RLS:** Keine Hinweise auf Cross-Tenant-Leak; RLS bleibt die maßgebliche Schutzschicht.
+- **Tenant Isolation:** Kein Incident-Befund, der Mandanten-Isolation verletzt.
+- **Append Only:** `audit_event` bleibt gegen UPDATE/DELETE/TRUNCATE geschützt.
+- **Beschluss-Sammlung Append-only:** Keine Auswirkung auf die Beschluss-Sammlung.
+
+#### Legacy Audit Window
+
+Ein früherer read-only Cloud-Check dokumentierte eine begrenzte Audit-Population mit Legacy-Anteil vor dem `0045`-Checkpoint. Exakte Counts, Sequenzgrenzen, Zeitfenster und Tenant-IDs werden in dieser Repo-Dokumentation bewusst nicht ausgeschrieben. Der Check wurde in diesem Audit nicht wiederholt.
+
+**Legacy-Bereich:**
+
+- Ein dokumentierter beobachteter Tenant besitzt einen Legacy-Bereich vor dem `0045`-Checkpoint.
+- Ein weiterer dokumentierter beobachteter Tenant hatte in den früheren Notizen keinen beobachteten Legacy-Bereich.
+
+Für den dokumentierten Legacy-Tenant matchen Legacy-Rows die aktuelle Vault-keyed HMAC-Recomputation nicht. Viele Legacy-Rows haben zudem einen Null-`prev_hash`, also keine belastbare Vorgänger-Verkettung.
+
+**Einschränkungen des Legacy-Bereichs:**
+
+- mögliche All-Zero-Key- oder unkeyed-SHA-256-Hashes in Fallback-Fenstern,
+- v1-Payload-only-HMAC statt vollständiger Audit-Metadatenbindung,
+- keine rückwirkende Reparatur ohne Rewrite; historische Zeilen müssen als Legacy-Evidence erhalten bleiben.
+- nach `0045` ist der Legacy-Bereich ein dokumentierter Altbestand: `seq <= audit_writer.audit_chain_repair_checkpoint.valid_after_seq` ist absichtlich außerhalb der v2-Verifikation.
+
+#### Verified Forward Audit Window
+
+Zuletzt dokumentierte manuell validierte neue HMAC-Segmente, nicht in diesem Audit erneut geprüft:
+
+- Für dokumentierte beobachtete Tenants wurden post-checkpoint HMAC-Segmente validiert.
+- Die Segmente wurden in den früheren Notizen als HMAC- und continuity-valide beschrieben.
+
+Das verifizierbare Forward Window beginnt pro Tenant bei `seq > audit_writer.audit_chain_repair_checkpoint.valid_after_seq`. `valid_after_row_hash` ist der Forward-Anker für die erste neue v2-Zeile. Die zuletzt dokumentierte Runtime-Validation nach `0045` erzeugte repräsentative post-repair Rows für beobachtete Tenants; die Notizen dokumentieren valide 32-Byte-Hashes, Prev-Hash-Kontinuität, v2-Recompute und `0` Broken Rows in `verify_chain_repaired()` sowie `verify_chain()`. Vor Deployment-Claims muss erneut gegen Cloud geprüft werden.
+
+#### Operational Review
+
+**Umgesetzt:**
+
+- `0042`: HMAC fail-closed, keine SHA-/Zero-Key-Fallbacks; Sollstellung-Generator aus der öffentlichen internen Fläche herausgenommen.
+- `0043`: Lokale forward-only-Reparaturkonzeption mit Checkpoint, v2-HMAC, Advisory Lock und Verifier.
+- `0044`: Lokaler Versuch, den internen `audit_writer`-Read-Path auf benötigte Spalten und Tenant-Kontext zu begrenzen.
+- `0045`: lokal vorhandene Reparatur mit v2-Insert-Pfad, Checkpoints, tenant-bound Verifier und Compatibility-Wrapper.
+- `0046`: lokal vorhandene Checkpoint-Owner-Härtung auf `postgres`; `audit_writer` hat nur `SELECT`/`INSERT`.
+
+**Verbleibende Risiken:**
+
+- Legacy-Audit-Zeilen vor dem 0045-Checkpoint haben reduzierte forensische Stärke und bleiben außerhalb v2-Verifikation.
+- Advisory-Lock-Serialisierung ist migrationsseitig und durch v2-Continuity-Tests indirekt abgesichert, aber noch nicht durch einen echten parallelen Zwei-Transaktions-Stresstest.
+- Die neuen pgTAP-Regressionstests sind ausführbar, aber noch nicht als verpflichtendes CI-Gate nachgewiesen.
+
+**Nächste empfohlene Aufgabe:** die neuen pgTAP-DB-Regressionstests als CI-Gate bzw. dokumentierten Remote-Testlauf verdrahten, ohne lokale `supabase start`-Abhängigkeit.
 
 ---
 
 ## 3.6 KI-Threat-Model
 
 ### STRIDE-Tabelle
+
+RAG ist in diesem Projekt aktuell Scaffold: Retrieval liefert bewusst keine Treffer, bis Embedding-Datenpipeline und Eval-Gates stehen. Die folgenden RAG-Risiken beschreiben den Zielbetrieb und bleiben als Threat-Model erhalten.
 
 | # | Bedrohung | Vektor | Mitigation in unserem Stack | Residual Risk |
 | --- | --- | --- | --- | --- |
@@ -306,7 +404,7 @@ audit_event
 ### Langfuse — PII-Redaction-Pflicht
 
 - **EU-Cloud (Frankfurt)** oder Self-Host — non-negotiable (DSGVO Art. 44, Schrems II).
-- DPA mit Langfuse GmbH (Berlin) unterschrieben + im Sub-Processor-Verzeichnis.
+- DPA mit Langfuse GmbH (Berlin) vor produktiver Nutzung abschließen und im Sub-Processor-Verzeichnis führen.
 - **Client-Side Masking IM Agent-Service**, *bevor* der Trace die Prozess-Grenze verlässt — Namen, Anschriften, IBAN, WEG-Nummern werden durch stabile Hashes ersetzt.
 - Retention 30 Tage max; in Prod gesampled (10 %), nicht 100 %.
 
@@ -314,7 +412,7 @@ audit_event
 
 ## 3.7 Sub-Processor-Kette
 
-Pflicht-Offenlegung nach Art. 28 Abs. 2 DSGVO. Jede Position hat eigene AVV.
+Pflicht-Offenlegung nach Art. 28 Abs. 2 DSGVO. Die Tabelle beschreibt geplante bzw. architektonisch vorgesehene Sub-Processor für den Zielbetrieb; produktives Web-/Agent-Hosting ist aus diesem Repo nicht belegt. Jede Position braucht eigene AVV vor produktiver Nutzung.
 
 | Sub-Processor | Funktion | Sitz | EU-Region | Besonderheit |
 | --- | --- | --- | --- | --- |
@@ -331,9 +429,11 @@ CLOUD-Act-Caveat aus Section 2.3 gilt weiter: EU-Region ≠ Daten-Sovereignty be
 
 ## 3.8 Encryption — at-rest, in-transit, app-level
 
+Die folgenden Punkte sind Anbieter-/Zielannahmen für den Produktivbetrieb. Konkrete produktive Konfiguration und Hosting-Stand wurden in diesem Audit nicht verifiziert.
+
 **In-Transit:**
 
-- TLS 1.3 zwischen allen Komponenten (Vercel, Fly, Supabase, Langfuse erzwingen).
+- TLS 1.3 zwischen allen Komponenten als Zielvorgabe; konkrete Provider-Konfiguration vor Produktivbetrieb prüfen.
 - HSTS-Preload auf Web-Domain, `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`.
 - mTLS zwischen `apps/agent` und Supabase optional — Postgres-Connection ist sowieso TLS, mTLS bringt für Single-Tenant-DB keinen Mehrwert.
 
