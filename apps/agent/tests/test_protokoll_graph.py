@@ -321,9 +321,9 @@ def test_agent_cannot_set_status_unterzeichnet() -> None:
     import ast
     import pathlib
 
-    source = pathlib.Path(
-        "/Users/sinanucar/Development/weg-verwaltung/apps/agent/app/graphs/protokoll.py"
-    ).read_text()
+    source = (
+        pathlib.Path(__file__).resolve().parents[1] / "app/graphs/protokoll.py"
+    ).read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     for node in ast.walk(tree):
