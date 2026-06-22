@@ -44,9 +44,13 @@ supabase/.branches/
 supabase/.temp/
 infra/supabase/.branches/
 infra/supabase/.temp/
+**/supabase/.branches/
+**/supabase/.temp/
 
 # Claude Code / superpowers tool artefacts
 .claude/
+.agents/
+.superpowers/
 docs/superpowers/
 
 # LLMOps / local traces
