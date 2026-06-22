@@ -32,7 +32,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { DeletePersonButton } from "./personen/delete-person-button";
 
 // Server Component — RLS scopes all SELECTs to the user's tenant automatically.
-// The middleware (apps/web/src/middleware.ts) refreshes the session and passes
+// The proxy (apps/web/src/proxy.ts) refreshes the session and passes
 // the user JWT into PostgREST via the supabase-ssr cookies adapter, so the
 // policy `tenant_id = (auth.jwt() ->> 'tenant_id')::uuid` runs server-side on
 // every row — no client-side tenant filter, no service-role key in this path.

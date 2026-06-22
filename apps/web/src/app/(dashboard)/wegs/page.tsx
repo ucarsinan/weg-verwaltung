@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 // Server Component — RLS scopes the SELECT to the user's tenant automatically.
-// The middleware (apps/web/src/middleware.ts) refreshes the session and passes
+// The proxy (apps/web/src/proxy.ts) refreshes the session and passes
 // the user JWT into PostgREST via the supabase-ssr cookies adapter (see
 // lib/supabase/server.ts). Postgres then evaluates the policy
 // `tenant_id = (auth.jwt() ->> 'tenant_id')::uuid` on every row — there is no

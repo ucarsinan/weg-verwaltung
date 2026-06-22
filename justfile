@@ -39,7 +39,7 @@ test-audit-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
-    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql --local
+    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0050_audit_console_read_api.sql supabase/tests/0052_vorgangszentrale_foundation.sql supabase/tests/0054_agent_suggestion_vorgang_anchor.sql --local
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.

@@ -8,7 +8,7 @@ Tailwind v4 für Styling.
 - App Router (`src/app/`) — Landing, Login, OAuth-Callback, geschützte
   `(dashboard)`-Routen-Group mit Dashboard, WEGs, Audit, Versammlungen,
   Beschluss-Sammlung, Personen/Eigentümerschaft, Protokoll-PDF und Finanzen.
-- `src/middleware.ts` + `src/lib/supabase/middleware.ts` — refresht die
+- `src/proxy.ts` + `src/lib/supabase/middleware.ts` — refresht die
   Supabase-Session bei jedem Request und redirected unauth Zugriffe auf
   `/login?next=<path>`.
 - `src/lib/supabase/{client,server}.ts` — Browser- und Server-Client-Factories.

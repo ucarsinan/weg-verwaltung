@@ -51,10 +51,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        # Scaffold phase: no `pnpm-lock.yaml` committed yet, so we cannot use
-        # --frozen-lockfile. Switch to `pnpm install --frozen-lockfile` once a
-        # lockfile lands in the repo (first real `pnpm install` post-scaffold).
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm --filter @weg-verwaltung/web lint
@@ -247,4 +244,7 @@ jobs:
           supabase test db \
             supabase/tests/0002_audit_chain.sql \
             supabase/tests/0046_least_privilege.sql \
+            supabase/tests/0050_audit_console_read_api.sql \
+            supabase/tests/0052_vorgangszentrale_foundation.sql \
+            supabase/tests/0054_agent_suggestion_vorgang_anchor.sql \
             --local
