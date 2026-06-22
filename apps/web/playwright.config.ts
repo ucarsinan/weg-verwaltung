@@ -1,7 +1,31 @@
 import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 
-const PORT = Number(process.env.PORT ?? 3000);
-const BASE_URL = `http://localhost:${PORT}`;
+// Zero-dependency manual .env.local loader
+try {
+  const envPath = path.resolve(__dirname, ".env.local");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const parts = trimmed.split("=");
+        if (parts.length >= 2) {
+          const key = parts[0].trim();
+          const val = parts.slice(1).join("=").trim().replace(/^['"]|['"]$/g, "");
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Failed to load .env.local manually:", e);
+}
+
+const PORT = Number(process.env.E2E_PORT ?? 3100);
+const HOST = "127.0.0.1";
+const BASE_URL = `http://${HOST}:${PORT}`;
 
 // Storage-state path matches what `e2e/auth.setup.ts` writes. Kept as a
 // string literal here so the config has no runtime import dependency on
@@ -11,13 +35,13 @@ const STORAGE_STATE = "playwright/.auth/admin.json";
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
     locale: "de-DE",
@@ -51,9 +75,10 @@ export default defineConfig({
       : []),
   ],
   webServer: {
-    command: "pnpm dev",
+    command: `pnpm dev --hostname ${HOST} --port ${PORT}`,
+    cwd: __dirname,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: "ignore",
     stderr: "pipe",

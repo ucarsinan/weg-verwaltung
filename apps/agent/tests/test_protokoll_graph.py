@@ -11,12 +11,21 @@ Layers (cheapest first):
 """
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langgraph.types import Command
 
+from app.graphs.base import AgentState, build_thread_id
+from app.graphs.protokoll import (
+    ProtokollEntwurf,
+    assemble_context_node,
+    build_graph,
+    draft_node,
+)
 from app.tools.versammlung_tools import (
     MeetingFullContext,
     get_meeting_full_context,
@@ -129,14 +138,6 @@ async def test_get_meeting_full_context_returns_full_context_shape() -> None:
 # Task 6 Tests: graph nodes
 # ---------------------------------------------------------------------------
 
-from app.graphs.protokoll import (
-    ProtokollEntwurf,
-    assemble_context_node,
-    draft_node,
-    build_graph,
-)
-from app.graphs.base import AgentState, build_thread_id
-from langchain_core.messages import HumanMessage
 
 
 def test_protokoll_graph_compiles() -> None:
@@ -224,9 +225,6 @@ async def test_draft_node_returns_protokoll_entwurf_shape() -> None:
 # Task 7: Interrupt / Resume tests
 # -----------------------------------------------------------------------
 
-import asyncio
-
-from langgraph.types import Command
 
 
 def test_graph_interrupt_raises_graph_interrupt_on_first_run() -> None:

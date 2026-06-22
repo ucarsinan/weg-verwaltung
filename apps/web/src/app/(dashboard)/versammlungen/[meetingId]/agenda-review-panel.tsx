@@ -113,7 +113,7 @@ function VorschlagDisplay({ result }: { result: AgendaSuggestResult }) {
 
   return (
     <div
-      className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4 space-y-4"
+      className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-secondary)] p-4 space-y-4"
       role="region"
       aria-label="KI-Tagesordnungsvorschlag"
     >
@@ -152,8 +152,8 @@ function VorschlagDisplay({ result }: { result: AgendaSuggestResult }) {
       ) : null}
 
       <p className="text-xs text-[color:var(--color-muted-foreground)]">
-        KI-Vorschlag — der Verwalter entscheidet. TOPs können über „TOP
-        hinzufügen" manuell übernommen werden.
+        KI-Vorschlag — der Verwalter entscheidet. TOPs können über „TOP hinzufügen“
+        manuell übernommen werden.
       </p>
     </div>
   );
@@ -179,7 +179,7 @@ const _initial: AgendaSuggestResult = {
 };
 
 export default function AgendaReviewPanel({ wegId }: AgendaReviewPanelProps) {
-  const suggestAction: SuggestAction = async (_prev, _fd) => {
+  const suggestAction: SuggestAction = async () => {
     return suggestAgendaWithAgent(wegId);
   };
 

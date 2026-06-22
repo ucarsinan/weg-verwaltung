@@ -197,6 +197,7 @@ export async function renderProtokollPDF(
     sections,
     signature: { wegName: opts.wegName, datum: opts.datum },
   });
-  const buf = await renderToBuffer(element);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buf = await renderToBuffer(element as any);
   return Buffer.from(buf);
 }

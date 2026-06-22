@@ -143,7 +143,7 @@ async def retrieve_context_node(
     runtime = SimpleNamespace(config={"configurable": {"jwt": jwt}})
 
     try:
-        results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[misc,attr-defined]
+        results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[attr-defined]
             weg_id=weg_id,
             runtime=runtime,
             limit=3,
@@ -233,7 +233,7 @@ async def propose_agenda_node(state: AgentState) -> dict[str, Any]:
 def build_graph() -> Any:
     """Compile the two-node Tagesordnung-Vorschlag graph."""
 
-    graph: StateGraph = StateGraph(AgentState)
+    graph: StateGraph[AgentState] = StateGraph(AgentState)
     graph.add_node("retrieve", retrieve_context_node)
     graph.add_node("propose", propose_agenda_node)
     graph.add_edge(START, "retrieve")

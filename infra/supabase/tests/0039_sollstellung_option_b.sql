@@ -1,0 +1,109 @@
+-- WEG-Verwaltung pgTAP contract shape for Option B Sollstellungen.
+--
+-- This file follows the existing tests/0001_* convention: it documents the
+-- negative-path database contract and can be made runnable once the project
+-- wires pgTAP fixtures for remote-safe test tenants.
+
+-- ============================================================================
+-- Historical Sollstellungen: insert-only generator, no direct writes
+-- ============================================================================
+
+-- BEGIN;
+--   SELECT plan(10);
+--
+--   SET LOCAL request.jwt.claims = '{
+--     "sub": "11111111-1111-1111-1111-111111111111",
+--     "role": "authenticated",
+--     "app_metadata": {
+--       "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+--       "role": "tenant_admin"
+--     }
+--   }';
+--
+--   -- Fixture shape:
+--   -- 1. create tenant_a WEG with two Units.
+--   -- 2. create tenant_a Wirtschaftsplan; trigger generates 24 rows.
+--   -- 3. save generated row ids, betrag, updated_at.
+--
+--   SELECT is(
+--     (SELECT count(*) FROM public.sollstellung WHERE wirtschaftsplan_id = '<plan_a>'::uuid),
+--     24::bigint,
+--     'generator creates exactly 12 rows per unit for the plan fixture'
+--   );
+--
+--   SELECT lives_ok(
+--     $$SELECT public.generate_sollstellungen('<plan_a>'::uuid)$$,
+--     'generator RPC is idempotent for same-tenant tenant_admin'
+--   );
+--
+--   SELECT is(
+--     (SELECT count(*) FROM public.sollstellung WHERE wirtschaftsplan_id = '<plan_a>'::uuid),
+--     24::bigint,
+--     'second generator call does not duplicate rows'
+--   );
+--
+--   SELECT throws_ok(
+--     $$INSERT INTO public.sollstellung (tenant_id, wirtschaftsplan_id, unit_id, monat, betrag)
+--       VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '<plan_a>'::uuid, '<unit_a>'::uuid, 1, 1.00)$$,
+--     '42501',
+--     'authenticated direct INSERT into own Sollstellung is rejected'
+--   );
+--
+--   SELECT throws_ok(
+--     $$UPDATE public.sollstellung SET betrag = 999.99 WHERE wirtschaftsplan_id = '<plan_a>'::uuid$$,
+--     '42501',
+--     'authenticated direct UPDATE of own Sollstellung is rejected'
+--   );
+--
+--   SELECT throws_ok(
+--     $$DELETE FROM public.sollstellung WHERE wirtschaftsplan_id = '<plan_a>'::uuid$$,
+--     '42501',
+--     'authenticated direct DELETE of own Sollstellung is rejected'
+--   );
+--
+--   SELECT throws_ok(
+--     $$UPDATE public.wirtschaftsplan SET gesamtkosten = gesamtkosten + 1 WHERE id = '<plan_a>'::uuid$$,
+--     '23514',
+--     'posted plan costs cannot be rewritten after Sollstellungen exist'
+--   );
+--
+--   SELECT throws_ok(
+--     $$UPDATE public.unit SET mea_zaehler = mea_zaehler + 1 WHERE id = '<unit_a>'::uuid$$,
+--     '23514',
+--     'posted Unit MEA cannot be rewritten after Sollstellungen exist'
+--   );
+--
+--   SET LOCAL request.jwt.claims = '{
+--     "sub": "22222222-2222-2222-2222-222222222222",
+--     "role": "authenticated",
+--     "app_metadata": {
+--       "tenant_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+--       "role": "tenant_admin"
+--     }
+--   }';
+--
+--   SELECT throws_ok(
+--     $$SELECT public.generate_sollstellungen('<plan_a>'::uuid)$$,
+--     '42501',
+--     'cross-tenant generator RPC is denied'
+--   );
+--
+--   SET LOCAL request.jwt.claims = '{
+--     "sub": "11111111-1111-1111-1111-111111111111",
+--     "role": "authenticated",
+--     "app_metadata": {
+--       "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+--       "role": "tenant_admin"
+--     }
+--   }';
+--   SET LOCAL app.actor_type = 'agent';
+--
+--   SELECT throws_ok(
+--     $$SELECT public.generate_sollstellungen('<plan_a>'::uuid)$$,
+--     '42501',
+--     'agent actor cannot invoke the Sollstellung generator'
+--   );
+--
+--   RESET app.actor_type;
+--   SELECT finish();
+-- ROLLBACK;

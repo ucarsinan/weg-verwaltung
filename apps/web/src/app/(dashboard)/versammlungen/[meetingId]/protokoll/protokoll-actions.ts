@@ -33,6 +33,30 @@ export interface SignResult {
   documentId: string;
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+async function assertMeetingEnded(
+  supabase: SupabaseServerClient,
+  meetingId: string,
+): Promise<string | null> {
+  const { data: meeting, error } = await supabase
+    .from("meeting")
+    .select("id, status")
+    .eq("id", meetingId)
+    .single();
+
+  if (error || !meeting) {
+    console.error("[protokoll] meeting status check failed:", error);
+    return "Versammlung konnte nicht geladen werden.";
+  }
+
+  if (meeting.status !== "beendet") {
+    return "Protokoll-Generierung und Review sind erst nach Beenden der Versammlung verfügbar.";
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // generateProtokoll — POST /agent/protokoll, returns structured draft
 // ---------------------------------------------------------------------------
@@ -54,6 +78,12 @@ export async function generateProtokoll(
   }
 
   try {
+    const supabase = await createClient();
+    const statusError = await assertMeetingEnded(supabase, meetingId);
+    if (statusError) {
+      return { status: "error", threadId: null, error: statusError };
+    }
+
     const data = await agentJson<AgentProtokollResponse>("/agent/protokoll", {
       method: "POST",
       body: JSON.stringify({ meeting_id: meetingId }),
@@ -64,7 +94,6 @@ export async function generateProtokoll(
     // only runs AFTER the Verwalter resumes the HITL interrupt, so we must
     // write to DB here. Store langgraph_thread_id for the resume call (Bug 3).
     if (data.status === "awaiting_review") {
-      const supabase = await createClient();
       const { error: upsertError } = await supabase.from("protocol").upsert(
         {
           meeting_id: meetingId,
@@ -140,6 +169,28 @@ export async function submitRevision(
   threadId: string,
   editedDraft: string,
 ): Promise<void> {
+  const supabase = await createClient();
+  const statusError = await assertMeetingEnded(supabase, meetingId);
+  if (statusError) {
+    throw new Error(statusError);
+  }
+
+  const { data: protocol, error: protocolError } = await supabase
+    .from("protocol")
+    .select("id, status")
+    .eq("meeting_id", meetingId)
+    .single();
+
+  if (protocolError || !protocol) {
+    throw new Error("Protokoll-Entwurf nicht gefunden.");
+  }
+
+  if (protocol.status !== "awaiting_review") {
+    throw new Error(
+      `Protokoll kann nicht geprüft werden — aktueller Status: ${protocol.status}`,
+    );
+  }
+
   try {
     await agentJson<AgentProtokollResponse>("/agent/protokoll", {
       method: "POST",
@@ -184,7 +235,7 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
   const { data: protocol, error: fetchError } = await supabase
     .from("protocol")
     .select(
-      "id, status, text, meeting_id, document_id, meeting!inner(id, weg_id, titel, termin_von, tenant_id)",
+      "id, status, text, meeting_id, document_id, meeting!inner(id, weg_id, titel, termin_von, tenant_id, status)",
     )
     .eq("id", protocolId)
     .single();
@@ -215,6 +266,12 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
 
   if (!meeting) {
     throw new Error("Versammlung zu diesem Protokoll nicht gefunden.");
+  }
+
+  if (meeting.status !== "beendet") {
+    throw new Error(
+      "Protokoll kann erst nach Beenden der Versammlung unterzeichnet werden.",
+    );
   }
 
   // 3. Get current user

@@ -23,7 +23,7 @@ describe("parseMarkdownSections", () => {
   it("strips bold markers from paragraph text", () => {
     const md = "**Abstimmung:** 5 Ja, 2 Nein.";
     const sections = parseMarkdownSections(md);
-    expect(sections[0].text).toBe("Abstimmung: 5 Ja, 2 Nein.");
+    expect(sections[0]?.text).toBe("Abstimmung: 5 Ja, 2 Nein.");
   });
 
   it("skips empty lines", () => {

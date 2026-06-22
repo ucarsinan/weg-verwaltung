@@ -34,10 +34,13 @@ const VOTE_LABEL: Record<string, string> = {
   enthaltung: "Enthalten",
 };
 
-type OwnershipWithPerson = {
+type OwnershipWithCoOwners = {
   id: string;
   person_id: string;
   person: { vorname: string; nachname: string } | null;
+  ownership_co_owner?: {
+    person: { vorname: string; nachname: string } | null;
+  }[] | null;
 };
 
 interface PageProps {
@@ -112,28 +115,47 @@ export default async function AbstimmungPage({ params }: PageProps) {
 
   const { data: meeting } = await supabase
     .from("meeting")
-    .select("weg_id")
+    .select("weg_id, termin_von")
     .eq("id", meetingId)
     .single();
 
+  const stichtag = meeting?.termin_von
+    ? new Date(meeting.termin_von).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+
   const { data: ownerships } = await supabase
     .from("ownership")
-    .select("id, person_id, person(vorname, nachname)")
+    .select(`
+      id,
+      person_id,
+      person(vorname, nachname),
+      ownership_co_owner(
+        person(vorname, nachname)
+      )
+    `)
     .eq("weg_id", meeting?.weg_id ?? "")
-    .is("bis", null)
+    .lte("von", stichtag)
+    .or(`bis.is.null,bis.gte.${stichtag}`)
     .order("person_id")
-    .returns<OwnershipWithPerson[]>();
+    .returns<OwnershipWithCoOwners[]>();
 
   const { data: votes } = await supabase
     .from("vote")
     .select("ownership_id, wert")
     .eq("resolution_id", resolution.id);
 
+  const { data: beschlussSammlungEntry } = await supabase
+    .from("beschluss_sammlung_entry")
+    .select("id, lfd_nr")
+    .eq("resolution_id", resolution.id)
+    .maybeSingle();
+
   const voteMap = new Map<string, string>(
     (votes ?? []).map((v) => [v.ownership_id, v.wert]),
   );
 
   const ownershipList = ownerships ?? [];
+  const isFestgestellt = resolution.festgestellt_am !== null;
 
   const jaCount = Array.from(voteMap.values()).filter((v) => v === "ja").length;
   const neinCount = Array.from(voteMap.values()).filter(
@@ -200,15 +222,27 @@ export default async function AbstimmungPage({ params }: PageProps) {
           Sichtbar erst wenn mind. eine Stimme abgegeben; ausgegraut wenn
           bereits festgestellt (Status statt Button). */}
       <div className="rounded-lg border border-[var(--color-border)] p-4 space-y-3">
-        {resolution.festgestellt_am !== null ? (
-          <p role="status" className="text-sm text-green-700 dark:text-green-400">
-            Beschluss festgestellt am{" "}
-            {new Date(resolution.festgestellt_am).toLocaleString("de-DE", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-            .
-          </p>
+        {isFestgestellt ? (
+          <div role="status" className="space-y-2 text-sm">
+            <p className="text-green-700 dark:text-green-400">
+              Beschluss festgestellt am{" "}
+              {new Date(resolution.festgestellt_am!).toLocaleString("de-DE", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              .
+            </p>
+            {beschlussSammlungEntry ? (
+              <p className="text-[var(--color-muted-foreground)]">
+                In der Beschluss-Sammlung eingetragen als Nr.{" "}
+                {beschlussSammlungEntry.lfd_nr}.
+              </p>
+            ) : (
+              <p className="text-red-700 dark:text-red-400">
+                Kein Beschluss-Sammlung-Eintrag gefunden.
+              </p>
+            )}
+          </div>
         ) : voteMap.size > 0 ? (
           <FeststellenForm
             action={feststellenResolution.bind(
@@ -238,49 +272,61 @@ export default async function AbstimmungPage({ params }: PageProps) {
             Keine aktiven Eigentümer für diese WEG gefunden.
           </p>
         ) : (
-          ownershipList.map((ownership) => (
-            <form
-              key={ownership.id}
-              action={boundCastVote}
-              className="flex items-center gap-3 px-4 py-2"
-            >
-              <input
-                type="hidden"
-                name="ownership_id"
-                value={ownership.id}
-              />
-              <span className="flex-1 text-sm">
-                {ownership.person?.vorname} {ownership.person?.nachname}
-              </span>
-              {voteMap.has(ownership.id) && (
-                <span className="text-xs px-2 py-0.5 rounded-full border border-[var(--color-border)]">
-                  {VOTE_LABEL[voteMap.get(ownership.id)!]}
-                </span>
-              )}
-              <div className="flex gap-2">
-                {(["ja", "nein", "enthaltung"] as const).map((wert) => (
-                  <label
-                    key={wert}
-                    className="flex items-center gap-1 text-xs cursor-pointer"
-                  >
-                    <input
-                      type="radio"
-                      name="wert"
-                      value={wert}
-                      defaultChecked={voteMap.get(ownership.id) === wert}
-                    />
-                    {VOTE_LABEL[wert]}
-                  </label>
-                ))}
-              </div>
-              <button
-                type="submit"
-                className="text-xs px-2 py-1 rounded border border-[var(--color-border)] hover:bg-[var(--color-border)]"
+          ownershipList.map((ownership) => {
+            const primaryName = ownership.person ? `${ownership.person.vorname} ${ownership.person.nachname}` : "";
+            const coNames = ownership.ownership_co_owner?.map(co => co.person ? `${co.person.vorname} ${co.person.nachname}` : "").filter(Boolean) ?? [];
+            const displayName = [primaryName, ...coNames].filter(Boolean).join(", ") || "—";
+            return (
+              <form
+                key={ownership.id}
+                action={boundCastVote}
+                className="flex items-center gap-3 px-4 py-2"
               >
-                Speichern
-              </button>
-            </form>
-          ))
+                <input
+                  type="hidden"
+                  name="ownership_id"
+                  value={ownership.id}
+                />
+                <span className="flex-1 text-sm">
+                  {displayName}
+                </span>
+                {voteMap.has(ownership.id) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border border-[var(--color-border)]">
+                    {VOTE_LABEL[voteMap.get(ownership.id)!]}
+                  </span>
+                )}
+                <div className="flex gap-2">
+                  {(["ja", "nein", "enthaltung"] as const).map((wert) => (
+                    <label
+                      key={wert}
+                      className="flex items-center gap-1 text-xs cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="wert"
+                        value={wert}
+                        defaultChecked={voteMap.get(ownership.id) === wert}
+                        disabled={isFestgestellt}
+                      />
+                      {VOTE_LABEL[wert]}
+                    </label>
+                  ))}
+                </div>
+                {isFestgestellt ? (
+                  <span className="text-xs text-[var(--color-muted-foreground)]">
+                    Gesperrt
+                  </span>
+                ) : (
+                  <button
+                    type="submit"
+                    className="text-xs px-2 py-1 rounded border border-[var(--color-border)] hover:bg-[var(--color-border)]"
+                  >
+                    Speichern
+                  </button>
+                )}
+              </form>
+            );
+          })
         )}
       </div>
     </div>

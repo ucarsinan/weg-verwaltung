@@ -71,10 +71,10 @@ export default async function ProtokollPage({ params }: PageProps) {
   // Load meeting
   const { data: meeting, error: meetingError } = await supabase
     .from("meeting")
-    .select("id, titel, weg_id, tenant_id")
+    .select("id, titel, weg_id, tenant_id, status")
     .eq("id", meetingId)
     .single<
-      Pick<MeetingRow, "id" | "titel" | "weg_id" | "tenant_id">
+      Pick<MeetingRow, "id" | "titel" | "weg_id" | "tenant_id" | "status">
     >();
 
   if (meetingError?.code === "PGRST116" || !meeting) {
@@ -84,6 +84,39 @@ export default async function ProtokollPage({ params }: PageProps) {
   if (meetingError) {
     console.error("[protokoll] meeting select failed:", meetingError);
     throw new Error("Versammlung konnte nicht geladen werden.");
+  }
+
+  if (meeting.status !== "beendet") {
+    return (
+      <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
+        <header className="min-w-0">
+          <p className="mb-2 text-sm text-[color:var(--color-muted-foreground)]">
+            <Link
+              href={`/versammlungen/${meetingId}`}
+              className="underline underline-offset-4 hover:text-[color:var(--color-foreground)]"
+            >
+              ← Zurück zur Versammlung
+            </Link>
+          </p>
+          <h1 className="truncate text-2xl font-semibold tracking-tight">
+            Protokoll
+          </h1>
+          <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
+            {meeting.titel}
+          </p>
+        </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Protokoll noch gesperrt</CardTitle>
+            <CardDescription>
+              Protokoll-Generierung und Review sind erst verfügbar, wenn die
+              Versammlung beendet wurde.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </section>
+    );
   }
 
   // Load protocol for this meeting (one-to-one via protocol_meeting_fk)
@@ -183,7 +216,7 @@ export default async function ProtokollPage({ params }: PageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <pre className="overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--color-muted)] px-4 py-3 font-mono text-sm text-[color:var(--color-foreground)]">
+              <pre className="overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--color-secondary)] px-4 py-3 font-mono text-sm text-[color:var(--color-foreground)]">
                 {protocol.text}
               </pre>
             </CardContent>
@@ -247,7 +280,7 @@ export default async function ProtokollPage({ params }: PageProps) {
                 <summary className="cursor-pointer text-sm text-[color:var(--color-muted-foreground)] underline underline-offset-4">
                   Protokoll-Text anzeigen
                 </summary>
-                <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--color-muted)] px-4 py-3 font-mono text-sm text-[color:var(--color-foreground)]">
+                <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--color-secondary)] px-4 py-3 font-mono text-sm text-[color:var(--color-foreground)]">
                   {protocol.text}
                 </pre>
               </details>

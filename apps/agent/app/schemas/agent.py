@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-UseCase = Literal["agenda", "beschluss", "frist", "protokoll"]
+UseCase = Literal["agenda", "beschluss", "frist", "protokoll", "vorgang"]
 
 
 class AgendaRequest(BaseModel):

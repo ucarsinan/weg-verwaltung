@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "seed:admin": "node scripts/seed-admin.mjs"
+    "seed:admin": "node scripts/seed-admin.mjs",
+    "seed:fake": "node scripts/seed-fake-data.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.0",

@@ -113,7 +113,7 @@ async def analyze_node(state: AgentState) -> dict[str, Any]:
 def build_graph() -> Any:
     """Compile the single-node Beschluss analysis graph."""
 
-    graph: StateGraph = StateGraph(AgentState)
+    graph: StateGraph[AgentState] = StateGraph(AgentState)
     graph.add_node("analyze", analyze_node)
     graph.add_edge(START, "analyze")
     graph.add_edge("analyze", END)

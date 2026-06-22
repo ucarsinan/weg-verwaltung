@@ -47,7 +47,7 @@ export function SuggestionActions({
         size="sm"
         disabled={isPending}
         onClick={handleReject}
-        className="border-[color:var(--color-border)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+        className="border-[color:var(--color-border)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-secondary)] disabled:opacity-50"
       >
         {isPending ? "…" : "Verwerfen"}
       </Button>

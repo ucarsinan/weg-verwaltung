@@ -3,6 +3,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import {
+  formatWegAddress,
+  readWegAddressFormData,
+  validateWegAddress,
+  type WegAddressErrors,
+} from "../address";
 
 // Server Action — same shape as login/actions.ts: errors are returned in
 // state, redirects fire via next/navigation.redirect() on success.
@@ -19,13 +25,13 @@ export interface WegFormState {
   errors?: {
     name?: string[];
     adresse?: string[];
+    address?: WegAddressErrors;
     _form?: string[];
   };
 }
 
 const NAME_MIN = 3;
 const NAME_MAX = 200;
-const ADRESSE_MAX = 500;
 
 export async function createWeg(
   _prev: WegFormState,
@@ -33,7 +39,7 @@ export async function createWeg(
 ): Promise<WegFormState> {
   // 1. Pull + trim — never trust client whitespace.
   const name = String(formData.get("name") ?? "").trim();
-  const adresseRaw = String(formData.get("adresse") ?? "").trim();
+  const address = readWegAddressFormData(formData);
 
   // 2. Validate server-side. Browser-native validation is disabled on the
   //    form (noValidate) so this is the single source of truth.
@@ -45,15 +51,16 @@ export async function createWeg(
     errors.name = [`Name darf höchstens ${NAME_MAX} Zeichen lang sein.`];
   }
 
-  if (adresseRaw.length > ADRESSE_MAX) {
-    errors.adresse = [
-      `Adresse darf höchstens ${ADRESSE_MAX} Zeichen lang sein.`,
-    ];
+  const addressErrors = validateWegAddress(address);
+  if (Object.keys(addressErrors).length > 0) {
+    errors.address = addressErrors;
   }
 
   if (Object.keys(errors).length > 0) {
     return { errors };
   }
+
+  const adresse = formatWegAddress(address);
 
   // 3. Insert. tenant_id is intentionally omitted — the column default
   //    `auth.tenant_id()` (migration 0003) resolves it from the JWT, and the
@@ -63,7 +70,7 @@ export async function createWeg(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("weg")
-    .insert({ name, adresse: adresseRaw === "" ? null : adresseRaw })
+    .insert({ name, adresse })
     .select("id")
     .single();
 

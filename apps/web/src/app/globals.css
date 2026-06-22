@@ -5,15 +5,24 @@
  * Names are stable contracts; values will harden in the design-system pass.
  */
 @theme {
-  --color-bg: oklch(99% 0 0);
-  --color-fg: oklch(20% 0.01 250);
-  --color-muted: oklch(55% 0.01 250);
-  --color-border: oklch(90% 0.005 250);
-  --color-accent: oklch(55% 0.18 270);
+  --color-bg: oklch(98.5% 0.006 230);
+  --color-fg: oklch(22% 0.018 245);
+  --color-muted: oklch(46% 0.02 245);
+  --color-border: oklch(88% 0.012 235);
+  --color-accent: oklch(50% 0.15 255);
+  --color-accent-warm: oklch(62% 0.13 64);
+  --color-accent-calm: oklch(56% 0.11 178);
+  --color-surface: oklch(99.2% 0.003 230);
+  --color-surface-subtle: oklch(96.2% 0.014 230);
+  --color-surface-raised: oklch(100% 0 0);
+  --color-line-strong: oklch(78% 0.018 235);
+  --shadow-card: 0 1px 0 color-mix(in oklch, var(--color-foreground) 5%, transparent), 0 18px 48px color-mix(in oklch, var(--color-foreground) 7%, transparent);
+  --shadow-card-hover: 0 1px 0 color-mix(in oklch, var(--color-foreground) 6%, transparent), 0 24px 62px color-mix(in oklch, var(--color-foreground) 10%, transparent);
+  --shadow-button: 0 1px 0 color-mix(in oklch, white 24%, transparent) inset, 0 10px 24px color-mix(in oklch, var(--color-primary) 18%, transparent);
 
   /* Provenance markers — see docs/05 §5.2 */
-  --color-ai-violet: oklch(60% 0.18 290);
-  --color-user-slate: oklch(55% 0.03 250);
+  --color-ai-violet: oklch(59% 0.17 286);
+  --color-user-slate: oklch(52% 0.025 245);
 
   /* Focus ring — shadcn default fails WCAG 2.2 SC 2.4.13 (§5.10 gap #1).
      Use a high-contrast colour at full opacity, ≥ 2 px outline. */
@@ -30,16 +39,16 @@
      below carries the shadcn semantic. */
   --color-background: var(--color-bg);
   --color-foreground: var(--color-fg);
-  --color-card: var(--color-bg);
+  --color-card: var(--color-surface-raised);
   --color-card-foreground: var(--color-fg);
-  --color-popover: var(--color-bg);
+  --color-popover: var(--color-surface-raised);
   --color-popover-foreground: var(--color-fg);
   --color-primary: var(--color-accent);
   --color-primary-foreground: oklch(99% 0 0);
-  --color-secondary: oklch(96% 0.005 250);
+  --color-secondary: var(--color-surface-subtle);
   --color-secondary-foreground: var(--color-fg);
   --color-muted-foreground: var(--color-muted);
-  --color-destructive: oklch(55% 0.22 27);
+  --color-destructive: oklch(55% 0.2 28);
   --color-destructive-foreground: oklch(99% 0 0);
   --color-input: var(--color-border);
   --radius: 0.5rem;
@@ -47,10 +56,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: oklch(15% 0.01 250);
-    --color-fg: oklch(95% 0.005 250);
-    --color-muted: oklch(65% 0.01 250);
-    --color-border: oklch(28% 0.005 250);
+    --color-bg: oklch(17% 0.018 245);
+    --color-fg: oklch(94% 0.006 235);
+    --color-muted: oklch(74% 0.018 235);
+    --color-border: oklch(31% 0.018 245);
+    --color-accent: oklch(68% 0.14 252);
+    --color-accent-warm: oklch(72% 0.13 66);
+    --color-accent-calm: oklch(70% 0.11 178);
+    --color-surface: oklch(19% 0.018 245);
+    --color-surface-subtle: oklch(23% 0.021 245);
+    --color-surface-raised: oklch(20.5% 0.019 245);
+    --color-line-strong: oklch(42% 0.025 245);
+    --shadow-card: 0 1px 0 color-mix(in oklch, white 7%, transparent) inset, 0 20px 54px color-mix(in oklch, black 36%, transparent);
+    --shadow-card-hover: 0 1px 0 color-mix(in oklch, white 9%, transparent) inset, 0 26px 68px color-mix(in oklch, black 44%, transparent);
+    --shadow-button: 0 1px 0 color-mix(in oklch, white 18%, transparent) inset, 0 14px 28px color-mix(in oklch, black 24%, transparent);
+    --color-secondary: var(--color-surface-subtle);
+    --color-secondary-foreground: var(--color-fg);
+    --color-input: var(--color-border);
+    --color-ring: oklch(72% 0.16 270);
   }
 }
 
@@ -62,18 +85,21 @@ html {
 }
 
 body {
-  background-color: var(--color-bg);
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--color-surface-subtle) 72%, transparent) 0, transparent 34rem),
+    linear-gradient(135deg, color-mix(in oklch, var(--color-accent-calm) 10%, transparent) 0, transparent 24rem),
+    var(--color-bg);
   color: var(--color-fg);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-feature-settings: "kern", "liga";
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
 /* Focus-ring override — applies everywhere, no opacity reduction. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: var(--focus-ring-width) solid var(--color-ring);
   outline-offset: var(--focus-ring-offset);
-  border-radius: 2px;
 }
 
 /* Skip-link — visually hidden until focused, then anchored top-left. */

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
+import { WegAddressFields } from "../address-fields";
 import { createWeg, type WegFormState } from "./actions";
 
 // Client island for the Anlage-Form. Uses React 19 useActionState +
@@ -22,7 +23,7 @@ import { createWeg, type WegFormState } from "./actions";
 // Safe defaults per §5.6:
 //  - No pre-filled values. A WEG name is a legal commitment; the form must
 //    start empty so the act of typing the name is captured as user intent.
-//  - Most-required field first (name → adresse).
+//  - Most-required field first (name → address fields).
 
 const initialState: WegFormState = {};
 
@@ -42,6 +43,7 @@ function SubmitButton() {
 
 export function WegForm() {
   const [state, formAction] = useActionState(createWeg, initialState);
+  const addressErrors = state.errors?.address;
 
   return (
     <form action={formAction} className="space-y-4" noValidate>
@@ -83,32 +85,7 @@ export function WegForm() {
         ) : null}
       </div>
 
-      <div className="space-y-1">
-        <label htmlFor="adresse" className="block text-sm font-medium">
-          Adresse
-        </label>
-        <textarea
-          id="adresse"
-          name="adresse"
-          rows={3}
-          maxLength={500}
-          autoComplete="off"
-          aria-invalid={state.errors?.adresse ? true : undefined}
-          aria-describedby={
-            state.errors?.adresse ? "adresse-error" : undefined
-          }
-          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm"
-        />
-        {state.errors?.adresse ? (
-          <p
-            id="adresse-error"
-            role="alert"
-            className="text-sm text-red-600 dark:text-red-400"
-          >
-            {state.errors.adresse.join(" ")}
-          </p>
-        ) : null}
-      </div>
+      <WegAddressFields errors={addressErrors} />
 
       <div className="flex items-center gap-4 pt-2">
         <Link

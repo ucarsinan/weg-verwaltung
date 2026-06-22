@@ -87,6 +87,12 @@ let userId;
     const existing = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
     if (!existing) throw new Error(`user ${email} reported as existing but not found in listUsers()`);
     userId = existing.id;
+    const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+    });
+    if (updateErr) throw updateErr;
+    console.log("  password reset for existing user");
   } else {
     userId = data.user.id;
   }

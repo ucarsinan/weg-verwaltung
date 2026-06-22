@@ -8,10 +8,12 @@ with a ``RunnableConfig`` that carries the JWT (§ 4.2 — never on state).
 from app.graphs.agenda import agenda_graph
 from app.graphs.base import AgentState, build_thread_id
 from app.graphs.beschluss import beschluss_graph
+from app.graphs.vorgang import vorgang_graph
 
 __all__ = [
     "AgentState",
     "agenda_graph",
     "beschluss_graph",
     "build_thread_id",
+    "vorgang_graph",
 ]

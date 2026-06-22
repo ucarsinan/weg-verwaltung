@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import get_auth
 from app.config import get_settings
 from app.graphs.protokoll import setup_protokoll_graph, teardown_protokoll_graph
-from app.routers import agenda, beschluss, health, internal, protokoll
+from app.routers import agenda, beschluss, health, internal, protokoll, vorgang
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(agenda.router, prefix="/agent", dependencies=[Depends(get_auth)])
     app.include_router(beschluss.router, prefix="/agent", dependencies=[Depends(get_auth)])
     app.include_router(protokoll.router, prefix="/agent", dependencies=[Depends(get_auth)])
+    app.include_router(vorgang.router, prefix="/agent", dependencies=[Depends(get_auth)])
     app.include_router(internal.router, prefix="/agent/internal")
     return app
 

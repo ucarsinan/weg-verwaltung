@@ -21,11 +21,16 @@ const webDir = process.cwd();
 const seedScript = resolve(webDir, "scripts", "seed-admin.mjs");
 
 export const STORAGE_STATE_PATH = resolve(webDir, "playwright", ".auth", "admin.json");
+export const TENANT_B_STORAGE_STATE_PATH = resolve(webDir, "playwright", ".auth", "tenant_b.json");
 
 // Defaults baked into seed-admin.mjs at the time of writing — keep these in
 // sync with that script's `emailArg || …` / `passwordArg || …` fallbacks.
 export const ADMIN_EMAIL = "admin@admin.com";
 export const ADMIN_PASSWORD = "admin1";
+
+export const TENANT_B_EMAIL = "tenant_b@admin.com";
+export const TENANT_B_PASSWORD = "admin1";
+export const TENANT_B_NAME = "Secondary WEG-Verwaltung";
 
 setup("authenticate as seeded admin", async ({ page }) => {
   // Seed first. The script handles the "user already registered" path by
@@ -42,4 +47,20 @@ setup("authenticate as seeded admin", async ({ page }) => {
   // captures both the supabase-* auth cookies and the next-route cookies.
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
   await page.context().storageState({ path: STORAGE_STATE_PATH });
+});
+setup("authenticate as seeded secondary tenant (Tenant B)", async ({ page }) => {
+  const { stderr } = await execFileAsync(
+    "node",
+    [seedScript, TENANT_B_EMAIL, TENANT_B_PASSWORD, TENANT_B_NAME],
+    { cwd: webDir }
+  );
+  if (stderr.trim()) console.warn("[seed-admin Tenant B stderr]", stderr);
+
+  await page.goto("/login");
+  await page.getByLabel("E-Mail").fill(TENANT_B_EMAIL);
+  await page.getByLabel("Passwort").fill(TENANT_B_PASSWORD);
+  await page.getByRole("button", { name: /anmelden/i }).click();
+
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  await page.context().storageState({ path: TENANT_B_STORAGE_STATE_PATH });
 });
