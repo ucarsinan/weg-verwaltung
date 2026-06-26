@@ -110,86 +110,95 @@ select ok(
 );
 
 -- Advisor initplan hardening: policy expressions use SELECT-wrapped helpers/GUCs.
-select like(
-  lower(pg_get_expr(polqual, polrelid)),
-  '%( select %auth.jwt%tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polqual, polrelid)) like '%( select %auth.jwt%tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.embedding'::regclass
+      and polname = 'embedding_select_own_tenant'
+  ), false),
   'embedding_select_own_tenant SELECT-wraps auth.jwt'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.embedding'::regclass
-  and polname = 'embedding_select_own_tenant';
+);
 
-select like(
-  lower(pg_get_expr(polwithcheck, polrelid)),
-  '%( select %auth.jwt%tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polwithcheck, polrelid)) like '%( select %auth.jwt%tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.embedding'::regclass
+      and polname = 'embedding_insert_own_tenant'
+  ), false),
   'embedding_insert_own_tenant SELECT-wraps auth.jwt'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.embedding'::regclass
-  and polname = 'embedding_insert_own_tenant';
+);
 
-select like(
-  lower(pg_get_expr(polqual, polrelid)),
-  '%( select %auth.jwt%tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polqual, polrelid)) like '%( select %auth.jwt%tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.embedding'::regclass
+      and polname = 'embedding_update_own_tenant'
+  ), false),
   'embedding_update_own_tenant SELECT-wraps auth.jwt in USING'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.embedding'::regclass
-  and polname = 'embedding_update_own_tenant';
+);
 
-select like(
-  lower(pg_get_expr(polwithcheck, polrelid)),
-  '%( select %auth.jwt%tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polwithcheck, polrelid)) like '%( select %auth.jwt%tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.embedding'::regclass
+      and polname = 'embedding_update_own_tenant'
+  ), false),
   'embedding_update_own_tenant SELECT-wraps auth.jwt in WITH CHECK'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.embedding'::regclass
-  and polname = 'embedding_update_own_tenant';
+);
 
-select like(
-  lower(pg_get_expr(polqual, polrelid)),
-  '%( select %auth.jwt%tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polqual, polrelid)) like '%( select %auth.jwt%tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.embedding'::regclass
+      and polname = 'embedding_delete_own_tenant'
+  ), false),
   'embedding_delete_own_tenant SELECT-wraps auth.jwt'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.embedding'::regclass
-  and polname = 'embedding_delete_own_tenant';
+);
 
-select like(
-  lower(pg_get_expr(polwithcheck, polrelid)),
-  '%( select %current_setting%app.sollstellung_writer%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polwithcheck, polrelid)) like '%( select %current_setting%app.sollstellung_writer%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.sollstellung'::regclass
+      and polname = 'sollstellung_insert_generated'
+  ), false),
   'sollstellung_insert_generated SELECT-wraps writer GUC'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.sollstellung'::regclass
-  and polname = 'sollstellung_insert_generated';
+);
 
-select like(
-  lower(pg_get_expr(polqual, polrelid)),
-  '%( select %current_setting%app.audit_chain_tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polqual, polrelid)) like '%( select %current_setting%app.audit_chain_tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.audit_event'::regclass
+      and polname = 'audit_event_chain_read_for_audit_writer'
+  ), false),
   'audit_event_chain_read_for_audit_writer SELECT-wraps tenant GUC'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.audit_event'::regclass
-  and polname = 'audit_event_chain_read_for_audit_writer';
+);
 
-select like(
-  lower(pg_get_expr(polwithcheck, polrelid)),
-  '%( select %current_setting%app.audit_integrity_writer%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polwithcheck, polrelid)) like '%( select %current_setting%app.audit_integrity_writer%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.audit_integrity_check'::regclass
+      and polname = 'audit_integrity_check_insert_internal'
+  ), false),
   'audit_integrity_check_insert_internal SELECT-wraps writer GUC'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.audit_integrity_check'::regclass
-  and polname = 'audit_integrity_check_insert_internal';
+);
 
-select like(
-  lower(pg_get_expr(polwithcheck, polrelid)),
-  '%( select %current_setting%app.audit_integrity_tenant_id%',
+select ok(
+  coalesce((
+    select lower(pg_get_expr(polwithcheck, polrelid)) like '%( select %current_setting%app.audit_integrity_tenant_id%'
+    from pg_catalog.pg_policy
+    where polrelid = 'public.audit_integrity_check'::regclass
+      and polname = 'audit_integrity_check_insert_internal'
+  ), false),
   'audit_integrity_check_insert_internal SELECT-wraps tenant GUC'
-)
-from pg_catalog.pg_policy
-where polrelid = 'public.audit_integrity_check'::regclass
-  and polname = 'audit_integrity_check_insert_internal';
+);
 
 select * from finish();
 
