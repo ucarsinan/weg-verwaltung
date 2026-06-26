@@ -67,7 +67,7 @@ Modularer Monolith, zwei Deployments. Detailsektionen (Architektur, Security, KI
 | 1 | WEG-, Personen-, Eigentümerschafts- und Versammlungsflows | teilweise implementiert |
 | 2 | Dokumente, Protokoll-PDF und RAG-Suche | Dokument-/PDF-Grundlagen vorhanden; RAG nur Scaffold |
 | 3 | Wirtschaftsplan, Hausgeld und Sollstellung | lokal implementiert; Review offen |
-| 4 | Mängel-/Ticket-Workflow | offen |
+| 4 | Mängel-/Ticket-/Vorgangsworkflow | Grundlage lokal implementiert; Review offen |
 
 ## Status
 
@@ -75,9 +75,9 @@ Aktuell existieren eine Next.js-16-Web-App unter [apps/web](./apps/web), ein Fas
 
 Belegt lokal:
 
-- Web-App mit Supabase-Auth, Dashboard, WEG-Stammdaten, Personen/Eigentümerschaft, Versammlungen, Beschluss-Sammlung, Audit-Ansicht, Protokoll-PDF und Finanzseiten.
-- Agent-Service mit FastAPI-Routern, JWT-Prüfung, LangGraph-orientierten Graphen für Agenda/Beschluss/Protokoll und RAG-Scaffold.
-- Lokale Migrationen `0001` bis `0049`.
+- Web-App mit Supabase-Auth, Dashboard, WEG-Stammdaten, Personen/Eigentümerschaft, Versammlungen, Beschluss-Sammlung, Audit-Ansicht, Protokoll-PDF, Finanzseiten und Vorgangszentrale.
+- Agent-Service mit FastAPI-Routern, JWT-Prüfung, LangGraph-orientierten Graphen für Agenda/Beschluss/Protokoll/Vorgang und RAG-Scaffold.
+- Lokale Migrationen `0001` bis `0055`: bis `0049` Dokumente/Personen/Eigentümerschaft, Audit-/Finance-/Meeting-Hardening; `0050` Audit-Console-Read-API; `0051` Actor-Guard-DELETE-Fix; `0052` Vorgangszentrale-Foundation; `0053` Settings-Audit-Trigger; `0054` Agent-Suggestion-Vorgangsanker; `0055` Advisor-Grant- und RLS-InitPlan-Hardening.
 - RAG-Retrieval ist bewusst nicht produktiv: `apps/agent/app/rag/retrieve.py` liefert bis zur Datenpipeline `[]`.
 
 Nicht in diesem Audit verifiziert:

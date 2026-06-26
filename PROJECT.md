@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale Codezustand gilt vor aelteren Statusnotizen: lokal existieren Supabase-Migrationen bis `0049`, eine Next.js-16-Web-App, ein FastAPI/LangGraph-Agent, E2E-Specs und Audit-/Finance-/Meeting-Hardening-Artefakte.
+Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale Codezustand gilt vor aelteren Statusnotizen: lokal existieren Supabase-Migrationen bis `0055`, eine Next.js-16-Web-App, ein FastAPI/LangGraph-Agent, E2E-Specs und Audit-/Finance-/Meeting-/Vorgangs-/Advisor-Hardening-Artefakte.
 
-**Lokal belegt:** Migrationen `0001-0049` liegen unter `infra/supabase/migrations`. `0045_audit_verification_repair.sql` und `0046_audit_checkpoint_owner_hardening.sql` bilden den Audit-Forward-Repair ab. `0047`/`0048` bilden Finance-Lifecycle-Hardening ab. `0049` bildet Meeting/Resolution-Hardening ab.
+**Lokal belegt:** Migrationen `0001-0055` liegen unter `infra/supabase/migrations`. `0045_audit_verification_repair.sql` und `0046_audit_checkpoint_owner_hardening.sql` bilden den Audit-Forward-Repair ab. `0047`/`0048` bilden Finance-Lifecycle-Hardening ab. `0049` bildet Meeting/Resolution-Hardening ab. `0050` bildet die Audit-Console-Read-API ab. `0051` repariert den Actor-Guard fuer DELETE-Trigger. `0052` legt die Vorgangszentrale-Foundation an. `0053` ergaenzt Settings-relevante Audit-Trigger. `0054` verankert Agent-Suggestions optional an Vorgaengen. `0055` haertet Advisor-gefundene EXECUTE-Grants und RLS-InitPlan-Policies.
 
 **Nicht in diesem Audit verifiziert:** Cloud-Migrationsstand, aktuelle Cloud-E2E-Ergebnisse, GitHub-CI-Status und produktives Web-/Agent-Hosting.
 
@@ -20,12 +20,14 @@ Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale 
 - **Next.js Web App**:
   - `/audit`: UI interface for `tenant_admin` to view archivable partitions and archive metadata. Archive/detach/drop execution remains disabled.
   - `/wegs/[id]/finanzen`: UI page/form to list, create, edit, and delete Wirtschaftspläne for a specific WEG.
+  - `/vorgaenge`: UI interface for the operational Vorgangszentrale foundation.
 
 ## Code Layout
 
 - `infra/supabase/migrations/`: Database SQL migration files.
 - `apps/web/src/app/(dashboard)/audit/`: Audit log page and cold-storage read UI.
 - `apps/web/src/app/(dashboard)/wegs/[id]/finanzen/`: Financial management page.
+- `apps/web/src/app/(dashboard)/vorgaenge/`: Operational Vorgangszentrale pages.
 - `apps/web/src/lib/`: Next.js client-side/server-side logic.
 
 ## Audit Incident 0042-0044
@@ -161,7 +163,7 @@ Add an executable regression test for v2 insert + verification + 0044/0046-style
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | 1 | E2E Testing Suite | Design and build E2E Playwright tests for Tracks 2/3 | None | IN_PROGRESS |
-| 2 | Database Migrations | Implement migrations through `0049` locally | None | LOCAL - Cloud state not verified in this audit |
+| 2 | Database Migrations | Implement migrations through `0055` locally | None | LOCAL - Cloud state not verified in this audit |
 | 3 | Audit Cold-Storage UI | Read-only audit partition/archive visibility | M1, M2 | BLOCKED - destructive execution remains disabled until privileged export + manifest job exists |
 | 4 | Finanzen UI | Wirtschaftsplan and Hausgeld UI | M1, M2 | LOCAL - review pending |
 | 5 | E2E Verification | Run E2E/unit tests and verify RLS compliance | M3, M4 | PENDING - no `just e2e` in this audit |

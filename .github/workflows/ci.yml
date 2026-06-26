@@ -244,4 +244,5 @@ jobs:
           supabase test db \
             supabase/tests/0002_audit_chain.sql \
             supabase/tests/0046_least_privilege.sql \
+            supabase/tests/0055_advisor_hardening.sql \
             --local

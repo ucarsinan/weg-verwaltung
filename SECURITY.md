@@ -32,3 +32,11 @@ See [docs/01-system-design.md](./docs/01-system-design.md), section 4.6, for the
 - `.env.example` lists variable names only; no values, no secrets.
 - Production credentials are never committed.
 - Generated auth state, Playwright output, coverage, caches, logs, and local Supabase temp files are not product artifacts.
+
+## Agent Safety Rules
+
+- Agenten duerfen keine produktiven Daten, JWTs, Service-Role-Keys, Supabase-Credentials oder echte personenbezogene Daten ausgeben.
+- Agenten duerfen keine Remote-Supabase-Kommandos ausfuehren, solange der Nutzer das nicht ausdruecklich freigibt.
+- `just db-migrate`, `supabase db push`, `just seed-admin` und Cloud-E2E gegen das Frankfurt-Projekt sind freigabepflichtig.
+- Aenderungen an RLS, Audit, HMAC, Append-only-Triggern, Agent-Write-Guards und Migrationen brauchen explizite Risiko- und Testdokumentation.
+- Testdaten muessen synthetisch bleiben und duerfen keine echten Namen, Adressen, E-Mail-Adressen, Wohnungsdaten oder Zahlungsdaten enthalten.
