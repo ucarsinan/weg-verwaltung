@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str | None = None
     LANGFUSE_HOST: str | None = None
     REDIS_URL: str | None = None
+    SUPABASE_DB_URL: str | None = Field(
+        default=None,
+        description=(
+            "Postgres connection string for AsyncPostgresSaver checkpointer. "
+            "Format: postgresql+asyncpg://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+        ),
+    )
 
     @property
     def jwks_url(self) -> str:

@@ -1,17 +1,5 @@
-/**
- * Hand-written Supabase Database type stub.
- *
- * In production this file will be regenerated via:
- *   pnpm dlx supabase gen types typescript --linked > src/lib/supabase/database.types.ts
- *
- * For now we hand-type the tables we read from app code. Keep this in sync
- * with the migrations under infra/supabase/migrations/:
- *   - weg, unit, person, ownership → 0003_weg_domain.sql
- *   - meeting, agenda_item, resolution, vote → 0004_versammlung.sql
- *   - beschluss_sammlung_entry, beschluss_anfechtung_event → 0005_beschluss_sammlung.sql
- */
+import { Database as GeneratedDatabase } from "./database.types.gen";
 
-// CHECK-constraint string unions — supabase gen types emits them in this shape.
 export type MeetingModus = "praesenz" | "hybrid" | "virtuell" | "umlauf";
 export type MeetingStatus =
   | "entwurf"
@@ -32,9 +20,13 @@ export type VoteWert = "ja" | "nein" | "enthaltung";
 export type VoteQuelle = "praesenz" | "digital" | "umlauf";
 
 export type AuditActorType = "user" | "agent" | "system";
-
 export type AgentActorType = "agent" | "system";
 export type AgentSuggestionStatus = "vorschlag" | "uebernommen" | "verworfen";
+export type WirtschaftsplanStatus =
+  | "entwurf"
+  | "aktiv"
+  | "abgeloest"
+  | "archiviert";
 
 export type BeschlussSammlungTyp =
   | "positiv_beschluss"
@@ -52,364 +44,405 @@ export type AnfechtungsEventTyp =
   | "unwirksam_erklaert"
   | "bestaetigt";
 
-export type Database = {
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+type Overwrite<T, U> = Omit<T, keyof U> & U;
+
+export type Database = Overwrite<
+  GeneratedDatabase,
+  {
+    public: Overwrite<
+      GeneratedDatabase["public"],
+      {
+        Tables: Overwrite<
+          GeneratedDatabase["public"]["Tables"],
+          {
+            meeting: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["meeting"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["meeting"]["Row"],
+                  {
+                    modus: MeetingModus;
+                    status: MeetingStatus;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["meeting"]["Insert"],
+                  {
+                    modus: MeetingModus;
+                    status?: MeetingStatus;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["meeting"]["Update"],
+                  {
+                    modus?: MeetingModus;
+                    status?: MeetingStatus;
+                  }
+                >;
+              }
+            >;
+            agent_suggestion: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["agent_suggestion"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["agent_suggestion"]["Row"],
+                  {
+                    actor_type: AgentActorType;
+                    status: AgentSuggestionStatus;
+                    vorgang_id: string | null;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["agent_suggestion"]["Insert"],
+                  {
+                    actor_type: AgentActorType;
+                    status?: AgentSuggestionStatus;
+                    vorgang_id?: string | null;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["agent_suggestion"]["Update"],
+                  {
+                    actor_type?: AgentActorType;
+                    status?: AgentSuggestionStatus;
+                    vorgang_id?: string | null;
+                  }
+                >;
+              }
+            >;
+            audit_event: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["audit_event"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["audit_event"]["Row"],
+                  {
+                    actor_type: AuditActorType;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["audit_event"]["Insert"],
+                  {
+                    actor_type: AuditActorType;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["audit_event"]["Update"],
+                  {
+                    actor_type?: AuditActorType;
+                  }
+                >;
+              }
+            >;
+            resolution: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["resolution"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["resolution"]["Row"],
+                  {
+                    mehrheits_typ: MehrheitsTyp;
+                    stimmprinzip: Stimmprinzip;
+                    legal_state: ResolutionLegalState;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["resolution"]["Insert"],
+                  {
+                    mehrheits_typ: MehrheitsTyp;
+                    stimmprinzip: Stimmprinzip;
+                    legal_state?: ResolutionLegalState;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["resolution"]["Update"],
+                  {
+                    mehrheits_typ?: MehrheitsTyp;
+                    stimmprinzip?: Stimmprinzip;
+                    legal_state?: ResolutionLegalState;
+                  }
+                >;
+              }
+            >;
+            vote: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["vote"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["vote"]["Row"],
+                  {
+                    quelle: VoteQuelle;
+                    wert: VoteWert;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["vote"]["Insert"],
+                  {
+                    quelle: VoteQuelle;
+                    wert: VoteWert;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["vote"]["Update"],
+                  {
+                    quelle?: VoteQuelle;
+                    wert?: VoteWert;
+                  }
+                >;
+              }
+            >;
+            beschluss_sammlung_entry: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["beschluss_sammlung_entry"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_sammlung_entry"]["Row"],
+                  {
+                    anfechtungsstatus: AnfechtungsStatus;
+                    typ: BeschlussSammlungTyp;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_sammlung_entry"]["Insert"],
+                  {
+                    anfechtungsstatus?: AnfechtungsStatus;
+                    lfd_nr?: never;
+                    resolution_id?: never;
+                    typ: BeschlussSammlungTyp;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_sammlung_entry"]["Update"],
+                  {
+                    anfechtungsstatus?: AnfechtungsStatus;
+                    lfd_nr?: never;
+                    resolution_id?: never;
+                    typ?: BeschlussSammlungTyp;
+                  }
+                >;
+              }
+            >;
+            beschluss_anfechtung_event: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["beschluss_anfechtung_event"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_anfechtung_event"]["Row"],
+                  {
+                    event_typ: AnfechtungsEventTyp;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_anfechtung_event"]["Insert"],
+                  {
+                    event_typ: AnfechtungsEventTyp;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["beschluss_anfechtung_event"]["Update"],
+                  {
+                    event_typ?: AnfechtungsEventTyp;
+                  }
+                >;
+              }
+            >;
+            wirtschaftsplan: Overwrite<
+              GeneratedDatabase["public"]["Tables"]["wirtschaftsplan"],
+              {
+                Row: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["wirtschaftsplan"]["Row"],
+                  {
+                    status: WirtschaftsplanStatus;
+                    aktiviert_am: string | null;
+                    abgeloest_am: string | null;
+                    archiviert_am: string | null;
+                    version_nr: number;
+                    vorgaenger_wirtschaftsplan_id: string | null;
+                    wirksam_ab_monat: number | null;
+                  }
+                >;
+                Insert: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["wirtschaftsplan"]["Insert"],
+                  {
+                    status?: WirtschaftsplanStatus;
+                    aktiviert_am?: string | null;
+                    abgeloest_am?: string | null;
+                    archiviert_am?: string | null;
+                    version_nr?: number;
+                    vorgaenger_wirtschaftsplan_id?: string | null;
+                    wirksam_ab_monat?: number | null;
+                  }
+                >;
+                Update: Overwrite<
+                  GeneratedDatabase["public"]["Tables"]["wirtschaftsplan"]["Update"],
+                  {
+                    status?: WirtschaftsplanStatus;
+                    aktiviert_am?: string | null;
+                    abgeloest_am?: string | null;
+                    archiviert_am?: string | null;
+                    version_nr?: number;
+                    vorgaenger_wirtschaftsplan_id?: string | null;
+                    wirksam_ab_monat?: number | null;
+                  }
+                >;
+              }
+            >;
+          }
+        >;
+        Functions: Overwrite<
+          GeneratedDatabase["public"]["Functions"],
+          {
+            activate_wirtschaftsplan: {
+              Args: { p_wirtschaftsplan_id: string };
+              Returns: undefined;
+            };
+            archive_wirtschaftsplan: {
+              Args: { p_wirtschaftsplan_id: string };
+              Returns: undefined;
+            };
+            create_nachtragsplan: {
+              Args: { p_wirtschaftsplan_id: string };
+              Returns: string;
+            };
+            feststellen_resolution: {
+              Args: { p_resolution_id: string };
+              Returns: {
+                resolution_id: string;
+                beschluss_sammlung_entry_id: string;
+                lfd_nr: number;
+                festgestellt_am: string;
+                typ: BeschlussSammlungTyp;
+              }[];
+            };
+          }
+        >;
+      }
+    >;
+  }
+>;
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
   public: {
-    Tables: {
-      weg: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          adresse: string | null;
-          amtsgericht: string | null;
-          grundbuch_blatt: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          name: string;
-          adresse?: string | null;
-          amtsgericht?: string | null;
-          grundbuch_blatt?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          name?: string;
-          adresse?: string | null;
-          amtsgericht?: string | null;
-          grundbuch_blatt?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      meeting: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          weg_id: string;
-          titel: string;
-          modus: MeetingModus;
-          status: MeetingStatus;
-          termin_von: string | null;
-          termin_bis: string | null;
-          einladung_versand_am: string | null;
-          // GENERATED ALWAYS AS … STORED — read-only from app code.
-          frist_einladung_ok: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          weg_id: string;
-          titel: string;
-          modus: MeetingModus;
-          status?: MeetingStatus;
-          termin_von?: string | null;
-          termin_bis?: string | null;
-          einladung_versand_am?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          weg_id?: string;
-          titel?: string;
-          modus?: MeetingModus;
-          status?: MeetingStatus;
-          termin_von?: string | null;
-          termin_bis?: string | null;
-          einladung_versand_am?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      agenda_item: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          meeting_id: string;
-          position: number;
-          titel: string;
-          beschreibung: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          meeting_id: string;
-          position: number;
-          titel: string;
-          beschreibung?: string | null;
-        };
-        Update: {
-          position?: number;
-          titel?: string;
-          beschreibung?: string | null;
-        };
-      };
-      resolution: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          meeting_id: string;
-          agenda_item_id: string | null;
-          text: string;
-          mehrheits_typ: MehrheitsTyp;
-          stimmprinzip: Stimmprinzip;
-          legal_state: ResolutionLegalState;
-          festgestellt_am: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          meeting_id: string;
-          agenda_item_id?: string | null;
-          text: string;
-          mehrheits_typ: MehrheitsTyp;
-          stimmprinzip: Stimmprinzip;
-          legal_state?: ResolutionLegalState;
-          festgestellt_am?: string | null;
-        };
-        Update: {
-          text?: string;
-          mehrheits_typ?: MehrheitsTyp;
-          stimmprinzip?: Stimmprinzip;
-          legal_state?: ResolutionLegalState;
-          festgestellt_am?: string | null;
-        };
-      };
-      vote: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          resolution_id: string;
-          ownership_id: string;
-          wert: VoteWert;
-          quelle: VoteQuelle;
-          proxy_id: string | null;
-          abgegeben_am: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          resolution_id: string;
-          ownership_id: string;
-          wert: VoteWert;
-          quelle: VoteQuelle;
-          proxy_id?: string | null;
-          abgegeben_am?: string;
-        };
-        Update: {
-          wert?: VoteWert;
-          quelle?: VoteQuelle;
-        };
-      };
-      unit: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          weg_id: string;
-          bezeichnung: string;
-          mea_zaehler: number;
-          mea_nenner: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          weg_id: string;
-          bezeichnung: string;
-          mea_zaehler: number;
-          mea_nenner: number;
-        };
-        Update: {
-          bezeichnung?: string;
-          mea_zaehler?: number;
-          mea_nenner?: number;
-        };
-      };
-      person: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          vorname: string;
-          nachname: string;
-          anschrift: string | null;
-          email: string | null;
-          telefon: string | null;
-          user_id: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          vorname: string;
-          nachname: string;
-          anschrift?: string | null;
-          email?: string | null;
-          telefon?: string | null;
-          user_id?: string | null;
-        };
-        Update: {
-          vorname?: string;
-          nachname?: string;
-          anschrift?: string | null;
-          email?: string | null;
-          telefon?: string | null;
-        };
-      };
-      ownership: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          weg_id: string;
-          unit_id: string;
-          person_id: string;
-          von: string;
-          bis: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          weg_id: string;
-          unit_id: string;
-          person_id: string;
-          von: string;
-          bis?: string | null;
-        };
-        Update: {
-          bis?: string | null;
-        };
-      };
-      beschluss_sammlung_entry: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          weg_id: string;
-          lfd_nr: number;
-          beschluss_text: string;
-          meeting_id: string | null;
-          resolution_id: string | null;
-          datum: string;          // ISO date "YYYY-MM-DD"
-          typ: BeschlussSammlungTyp;
-          anfechtungsstatus: AnfechtungsStatus;
-          erstellt_durch: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          weg_id: string;
-          // lfd_nr: GENERATED ALWAYS — omit in Insert
-          beschluss_text: string;
-          meeting_id?: string | null;
-          resolution_id?: string | null;
-          datum: string;
-          typ: BeschlussSammlungTyp;
-          erstellt_durch: string;
-          // anfechtungsstatus defaults to 'keine' in DB
-        };
-        Update: Record<string, never>; // append-only — no updates
-      };
-      beschluss_anfechtung_event: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          bse_id: string;
-          event_typ: AnfechtungsEventTyp;
-          aktenzeichen: string | null;
-          datum: string;
-          bemerkung: string | null;
-          erfasst_durch: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          bse_id: string;
-          event_typ: AnfechtungsEventTyp;
-          aktenzeichen?: string | null;
-          datum: string;
-          bemerkung?: string | null;
-          erfasst_durch: string;
-        };
-        Update: Record<string, never>; // append-only
-      };
-      audit_event: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          seq: number;
-          created_at: string;
-          actor_type: AuditActorType;
-          actor_user_id: string | null;
-          db_role: string;
-          entity_typ: string;
-          entity_id: string;
-          action: string;
-          payload: Record<string, unknown>;
-          prev_hash: string;
-          row_hash: string;
-        };
-        Insert: Record<string, never>;
-        Update: Record<string, never>;
-      };
-      agent_suggestion: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          meeting_id: string | null;
-          weg_id: string | null;
-          resolution_id: string | null;
-          actor_type: AgentActorType;
-          vorschlag_typ: string;
-          payload: Record<string, unknown>;
-          langgraph_thread_id: string | null;
-          langfuse_trace_id: string | null;
-          status: AgentSuggestionStatus;
-          entschieden_von: string | null;
-          entschieden_am: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id?: string;
-          meeting_id?: string | null;
-          weg_id?: string | null;
-          resolution_id?: string | null;
-          actor_type: AgentActorType;
-          vorschlag_typ: string;
-          payload: Record<string, unknown>;
-          langgraph_thread_id?: string | null;
-          langfuse_trace_id?: string | null;
-          status?: AgentSuggestionStatus;
-        };
-        Update: {
-          status?: AgentSuggestionStatus;
-          entschieden_von?: string | null;
-          entschieden_am?: string | null;
-          updated_at?: string;
-        };
-      };
-    };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-  };
-};
+    Enums: {},
+  },
+} as const

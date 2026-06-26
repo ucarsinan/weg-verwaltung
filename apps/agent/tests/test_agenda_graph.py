@@ -100,8 +100,6 @@ async def test_retrieve_context_node_calls_tool_with_jwt() -> None:
     The Supabase client is mocked so no real network call is made.
     """
 
-    from types import SimpleNamespace
-
     long_text = "TOP 1 Heizungsmodernisierung. " * 20  # > 500 chars
     rows: list[dict[str, Any]] = [
         {
@@ -120,7 +118,7 @@ async def test_retrieve_context_node_calls_tool_with_jwt() -> None:
         "meeting_id": "weg_07",
         "messages": [HumanMessage(content="Bitte Vorschlag.")],
     }
-    config = {"configurable": {"jwt": "fake-jwt-token"}}
+    config: Any = {"configurable": {"jwt": "fake-jwt-token"}}
 
     with patch("app.tools.versammlung_tools.get_supabase", return_value=fake_sb):
         result = await retrieve_context_node(state, config=config)

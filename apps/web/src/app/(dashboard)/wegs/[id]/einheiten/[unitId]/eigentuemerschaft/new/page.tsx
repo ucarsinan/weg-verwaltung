@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { createEigentuemer, type EigentuemerFormState } from "./actions";
 
 // Server Component — form for adding a new owner (Person + Ownership) to a unit.
@@ -28,9 +29,24 @@ export default async function NewEigentuemerPage({
     notFound();
   }
 
+  const supabase = await createClient();
+
+  // Fetch all existing people in the tenant
+  const { data: people, error: peopleError } = await supabase
+    .from("person")
+    .select("id, vorname, nachname, email")
+    .order("nachname", { ascending: true })
+    .order("vorname", { ascending: true });
+
+  if (peopleError) {
+    console.error("[new-eigentuemer] failed to fetch people:", peopleError);
+  }
+
+  const peopleRows = people ?? [];
+
   // Cast: action returns EigentuemerFormState on validation failure but the
   // form's `action` prop expects Promise<void> — direct-bind path; inline
-  // errors require a client island (see einheiten/new for the same pattern).
+  // errors require a client island.
   const createEigentuemerWithState = createEigentuemer.bind(
     null,
     {} as EigentuemerFormState,
@@ -51,8 +67,7 @@ export default async function NewEigentuemerPage({
           Eigentümer hinzufügen
         </h1>
         <p className="mt-2 text-sm text-[var(--color-muted)]">
-          Legt eine neue Person an und verknüpft sie als Eigentümer mit dieser
-          Wohneinheit.
+          Fügen Sie einen oder mehrere Eigentümer (Haupt- und Miteigentümer) zu dieser Wohneinheit hinzu. Sie können entweder bestehende Personen auswählen, eine neue Person anlegen, oder beides kombinieren.
         </p>
       </header>
 
@@ -61,21 +76,64 @@ export default async function NewEigentuemerPage({
         <input type="hidden" name="weg_id" value={wegId} />
         <input type="hidden" name="unit_id" value={unitId} />
 
-        {/* ─── Person ─── */}
+        {/* ─── Option A: Existierende Person(en) auswählen ─── */}
         <fieldset className="space-y-4">
-          <legend className="text-base font-medium">Person</legend>
+          <legend className="text-base font-semibold">Existierende Personen auswählen</legend>
+          <p className="text-xs text-[var(--color-muted)]">
+            Wählen Sie eine oder mehrere bereits im System registrierte Personen aus, die der Eigentümerschaft hinzugefügt werden sollen:
+          </p>
+
+          {peopleRows.length === 0 ? (
+            <p className="text-sm text-[var(--color-muted)] italic p-3 border border-dashed border-[var(--color-border)] rounded-md">
+              Keine existierenden Personen vorhanden.
+            </p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto rounded-md border border-[var(--color-border)] p-4 space-y-3">
+              {peopleRows.map((person) => (
+                <label key={person.id} className="flex items-center gap-3 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="existing_person_ids"
+                    value={person.id}
+                    className="rounded border-[var(--color-border)] bg-transparent text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+                  />
+                  <span>
+                    {person.vorname} {person.nachname}
+                    {person.email && (
+                      <span className="text-[var(--color-muted)] ml-1">
+                        ({person.email})
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
+        {/* Trennlinie */}
+        <div className="relative flex py-2 items-center">
+          <div className="flex-grow border-t border-[var(--color-border)]"></div>
+          <span className="flex-shrink mx-4 text-xs font-semibold text-[var(--color-muted)] uppercase">ODER / UND</span>
+          <div className="flex-grow border-t border-[var(--color-border)]"></div>
+        </div>
+
+        {/* ─── Option B: Neue Person anlegen ─── */}
+        <fieldset className="space-y-4">
+          <legend className="text-base font-semibold">Neue Person anlegen (Inline)</legend>
+          <p className="text-xs text-[var(--color-muted)]">
+            Erstellen Sie eine neue Person, die als Eigentümer hinzugefügt werden soll:
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <label htmlFor="vorname" className="block text-sm font-medium">
-                Vorname <span aria-hidden="true">*</span>
+                Vorname
               </label>
               <input
                 id="vorname"
                 name="vorname"
                 type="text"
-                required
-                aria-required="true"
                 maxLength={100}
                 autoComplete="given-name"
                 className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm"
@@ -84,14 +142,12 @@ export default async function NewEigentuemerPage({
 
             <div className="space-y-1">
               <label htmlFor="nachname" className="block text-sm font-medium">
-                Nachname <span aria-hidden="true">*</span>
+                Nachname
               </label>
               <input
                 id="nachname"
                 name="nachname"
                 type="text"
-                required
-                aria-required="true"
                 maxLength={100}
                 autoComplete="family-name"
                 className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm"
@@ -134,12 +190,12 @@ export default async function NewEigentuemerPage({
           </div>
         </fieldset>
 
-        {/* Divider */}
+        {/* Trennlinie */}
         <hr className="border-[var(--color-border)]" />
 
         {/* ─── Eigentümerschaft ─── */}
         <fieldset className="space-y-4">
-          <legend className="text-base font-medium">Eigentümerschaft</legend>
+          <legend className="text-base font-semibold">Eigentümerschaft</legend>
 
           <div className="space-y-1">
             <label htmlFor="von" className="block text-sm font-medium">

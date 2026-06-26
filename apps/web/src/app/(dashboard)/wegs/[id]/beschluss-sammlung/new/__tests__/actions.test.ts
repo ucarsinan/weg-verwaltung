@@ -83,6 +83,19 @@ describe("createBeschlussSammlungEntry", () => {
     expect(redirect).toHaveBeenCalledWith("/wegs/weg-uuid-1/beschluss-sammlung");
   });
 
+  it("rejects resolution-linked final entries outside the Abstimmung finalization", async () => {
+    const fd = new FormData();
+    fd.set("beschluss_text", "Die Gemeinschaft beschließt die Dachsanierung.");
+    fd.set("datum", "2026-05-28");
+    fd.set("typ", "positiv_beschluss");
+    fd.set("resolution_id", "resolution-uuid-1");
+
+    const result = await createBeschlussSammlungEntry("weg-uuid-1", {}, fd);
+
+    expect(result.errors?._form?.[0]).toMatch(/Abstimmungs-Feststellung/);
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
   it("returns _form error when supabase insert fails", async () => {
     mockInsert.mockResolvedValue({ error: { code: "42501", hint: "" } });
 

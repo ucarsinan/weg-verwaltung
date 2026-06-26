@@ -18,7 +18,7 @@ from uuid import uuid4
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
-UseCase = Literal["agenda", "beschluss", "frist", "protokoll"]
+UseCase = Literal["agenda", "beschluss", "frist", "protokoll", "vorgang"]
 
 
 class AgentState(TypedDict, total=False):

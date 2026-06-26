@@ -49,7 +49,7 @@ const STATUS_CONFIG: Record<AgentSuggestionStatus, StatusConfig> = {
   verworfen: {
     label: "Verworfen",
     className:
-      "inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-muted-foreground)]",
+      "inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-secondary)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-secondary-foreground)]",
   },
 };
 
@@ -140,7 +140,7 @@ export default async function VorschlaegeListPage({
                     </div>
 
                     {/* Payload preview */}
-                    <pre className="overflow-auto rounded-md bg-[color:var(--color-muted)] p-3 text-xs text-[color:var(--color-foreground)]">
+                    <pre className="overflow-auto rounded-md bg-[color:var(--color-secondary)] p-3 text-xs text-[color:var(--color-foreground)]">
                       {JSON.stringify(suggestion.payload, null, 2)}
                     </pre>
 

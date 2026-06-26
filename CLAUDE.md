@@ -4,21 +4,21 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand:** Cloud-DB live (Supabase Frankfurt, project-ref `sgdlzafvhrfulwidqsno`), 25 Migrationen angewendet (0001–0025) inkl. Dokumente-Modul (`document`, `document_version`, Storage-Bucket `weg-docs`), `function_search_path` lockdown (0019), `extension_in_public` strukturell geschlossen (0022 pg_net, 0023 pgaudit, 0024 vector → `extensions` Schema, 0025 RLS-Backfill auf embedding_p0). pgaudit-Move (0023) schließt zusätzlich die 4 `*_security_definer_function_executable`-Advisors; Migrationen 0020+0021 sind dadurch strukturell moot, bleiben als historischer Record. API-Keys auf neues Format (`sb_publishable_…` / `sb_secret_…`); Legacy disabled. Custom Access Token Hook + `pgrst.db_pre_request` via Management API gesetzt. `just seed-admin` legt Tenant + tenant_admin via Admin-API an. Web + Agent: `just typecheck` + `just lint` + `just test` grün end-to-end. `next build` produziert 22 Routes sauber. `just e2e` (Playwright/Chromium, versammlungen.spec.ts in `serial`-mode wegen Next 16 on-demand-compile-Hänger bei paralleler Route-Discovery): **16 Tests grün** — Landing + a11y + `/login`-Navigation + Invalid-Creds-Reject + Login-Flow + WEG-CRUD + Dashboard (Email + `tenant_id` + `role` aus Hook-injected JWT-Claims, gelesen via `supabase.auth.getClaims()` — *nicht* `getUser()`, weil `auth.users.raw_app_meta_data` die Hook-Claims nicht persistiert) + Versammlungs-Pfad: (a) WEG → Versammlung → TOP-Anlage/-Edit/-Delete, (b) Status-Übergang `entwurf → eingeladen` mit § 24 Abs. 4 WEG Einladungsfrist-Check (21 Tage, gespiegelt zur DB-Generated-Column `frist_einladung_ok`), (c) Beschlussvorlage anlegen + Feststellungs-Gate auf Abstimmungs-Seite, (d) voller Vote-Pfad inkl. Einheit + Eigentümer-Anlage → Vote → `feststellenResolution` → automatischer BeschlussSammlungEntry-Append (§ 24 Abs. 7 WEG). Mehrheits-Tally per `evaluateMajority()`-Strategy-Modul (einfach/qualifiziert/doppelt_qualifiziert/allstimmig) mit 15 Vitest-Cases. Audit-Event-Wiring live: AFTER-Trigger auf weg, meeting, agenda_item, resolution, vote, beschluss_sammlung_entry emittieren in `audit_event`; HMAC-Kette degradiert auf hosted Supabase aktuell auf unkeyed SHA-256 (vault.decrypted_secrets + extensions.hmac sind für audit_writer nicht zugreifbar — DO NOT SHIP TO PROD, siehe 0029/0030-Warnlogs). Bekannter Workaround in den Tests: `<Button asChild><Link>`-Pattern (Shadcn + Radix Slot) wird auf Next 16 nicht zuverlässig per `click()` navigiert — Tests greifen den `href` ab und nutzen `page.goto`. Nächster Schritt = vault-/extensions-Hardening für audit_writer (Supabase-Support) oder Person-Modul-Erweiterungen.
+**Aktueller Stand (lokal belegt, Juni 2026):** Cloud-DB-Ziel ist das lokal verlinkte Supabase-Frankfurt-Projekt, aber der Cloud-Migrationsstand wurde in diesem Audit nicht aktiv verifiziert. Lokal liegen Migrationen `0001–0049`: Dokumente/Personen/Eigentümerschaft bis `0033`, Audit-Hotfix/Forward-Repair und Least-Privilege-Hardening bis `0046`, Finance Lifecycle bis `0048`, Meeting/Resolution-Hardening in `0049`. Next.js-16-Web-App und FastAPI/LangGraph-Agent sind vorhanden. RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Embedding-Datenpipeline und Eval-Gates stehen. E2E-Specs existieren, wurden in diesem Audit aber nicht gegen die Cloud ausgeführt. Produktives Hosting für Web-App und Agent ist aus dem Repo nicht belegt. Vote referenziert `ownership_id`, niemals `person_id` oder `user_id`; Co-Eigentümer zählen als eine Stimme pro Ownership.
 
 ## Stack
 
 - Next.js 16 (App Router, Server Components) — `apps/web/`
 - FastAPI + LangGraph — `apps/agent/`
 - Supabase Frankfurt (Postgres + Auth + Storage + RLS)
-- Langfuse (LLM-Observability) + RAGAS (RAG-Eval)
+- Langfuse (LLM-Observability) + RAGAS (RAG-Eval), derzeit noch nicht als produktives Gate belegt
 - Resend (Mail)
 
 ## Architektur
 
 Modularer Monolith mit getrenntem Agent-Service (ein Repo, zwei Deployments). Domain-Module mit harten Interfaces innerhalb `apps/web/modules/`:
 
-- `identity/` · `weg/` · `versammlung/` · `beschluss-sammlung/` · `dokumente/` · `audit/` · `agent-bridge/`
+- `identity/` · `weg/` · `versammlung/` · `beschluss-sammlung/` · `dokumente/` · `audit/` · `agent-bridge/` · `finanzen/`
 
 ## Sicherheits-Invarianten (immer einhalten)
 
@@ -37,13 +37,13 @@ just test          # alle Tests (web + agent)
 just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
-just e2e           # Playwright/Chromium — Login-Flow gegen Cloud
+just e2e           # Playwright/Chromium — Login-Flow gegen Cloud; nicht ohne explizite Freigabe im Audit laufen lassen
 just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
 just db-migrate    # supabase db push --workdir infra (gegen Cloud!)
 ```
 
-Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Frankfurt. `.env.local` enthält die Cloud-Credentials.
+Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Frankfurt. Cloud-Credentials liegen ausschließlich in lokaler Secret-Konfiguration.
 
 ## Konventionen
 
@@ -63,12 +63,14 @@ Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Fr
 ## Backlog (Security-Hygiene, nicht blocking)
 
 - ~~`function_search_path_mutable`~~ — erledigt in 0019
-- ~~`extension_in_public` für `pg_net`, `pgaudit`, `vector`~~ — erledigt in 0022/0023/0024 (DROP+CREATE WITH SCHEMA `extensions`; `ALTER EXTENSION … SET SCHEMA` schlug Cloud-seitig mit SQLSTATE 42501 fehl, weil `supabase_admin` Owner ist). Schließt zusätzlich die 4 pgaudit-RPC-Advisors strukturell. Vorbedingung war `public.embedding` leer — bei zukünftigen Daten via Snapshot/Restore oder Supabase-Support neu lösen.
-- `audit_writer` braucht `usage on schema vault, extensions` + `select on vault.decrypted_secrets` — Migration-Runner `postgres` kann das auf hosted nicht setzen (Owner: `supabase_admin`). 0029/0030 degradieren stattdessen graceful auf unkeyed SHA-256; warn-Log flaggt den Zustand. **DO NOT SHIP TO PROD** ohne diese Grants — Supabase-Support-Ticket oder Studio-UI nötig.
+- ~~`extension_in_public` für `pg_net`, `pgaudit`, `vector`~~ — lokal durch 0022/0023/0024 abgebildet (DROP+CREATE WITH SCHEMA `extensions`; `ALTER EXTENSION … SET SCHEMA` schlug laut früheren Cloud-Notizen mit SQLSTATE 42501 fehl, weil `supabase_admin` Owner ist). Frühere Cloud-Advisor-Schließung ist dokumentiert, aber in diesem Audit nicht erneut geprüft. Schließt zusätzlich die 4 pgaudit-RPC-Advisors strukturell. Vorbedingung war `public.embedding` leer — bei zukünftigen Daten via Snapshot/Restore oder Supabase-Support neu lösen.
+- Audit Forward-Repair `0045`/`0046` lokal vorhanden; frühere Cloud-/Runtime-Validation ist dokumentiert, aber in diesem Audit nicht erneut geprüft.
 - ~~`rls_disabled_in_public` auf `embedding_p0`~~ — temporäre Regression durch 0024-Rebuild, gefixt in 0025
 - `embedding`-Repartitionierung (siehe 0010 Header) — beim Skalieren über 1 Tenant hinaus
-- `audit_event` Cold-Storage (0014_audit_cold_storage geplant): Partitions >24 Mo. detachen → Supabase Storage
-- `auth_leaked_password_protection` (1× WARN) — HaveIBeenPwned-Toggle in Supabase Studio (Auth → Settings), keine Migration nötig
+- `audit_event` Cold-Storage: Tenant-UI bleibt nicht-destruktiv; detach/drop erst nach privilegiertem Export + Manifest + HMAC-Verify-Job.
+- Agent-Write-Header TODO: nicht in diesem Sprint implementieren; nur als Risiko dokumentieren.
+- Next-16 Deprecations/Workarounds: nicht in diesem Sprint migrieren; nach sauberem Build/Test separat triagieren.
+- `auth_leaked_password_protection` — zuletzt dokumentierter Supabase-Advisor-WARN; in diesem Audit nicht erneut geprüft. HaveIBeenPwned-Toggle in Supabase Studio (Auth → Settings), keine Migration nötig.
 - `rls_enabled_no_policy` (17× INFO) — alle `audit_event_*`-Partitions + `embedding_p0`: 0014-Pattern „RLS enabled, keine partition-spezifischen Policies" (zugriff geht über Parent-Tabelle, deren Policies via Partition-Routing greifen — siehe 0014-Header). Linter sieht das nicht, daher INFO-Rauschen.
 
 ## Referenzen
@@ -79,4 +81,6 @@ Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Fr
 - KI-Architektur: [docs/04-ai-architecture.md](./docs/04-ai-architecture.md)
 - UX-Leitprinzipien: [docs/05-ux-principles.md](./docs/05-ux-principles.md)
 - Workflows + Risiken: [docs/06-workflows-and-risks.md](./docs/06-workflows-and-risks.md)
-- Hub: `~/Development/personal-assistant/CLAUDE.md`
+- Projektstatus: [PROJECT.md](./PROJECT.md)
+- Test-Infrastruktur: [TEST_INFRA.md](./TEST_INFRA.md)
+- Finance Lifecycle: [docs/07-finance-lifecycle.md](./docs/07-finance-lifecycle.md)

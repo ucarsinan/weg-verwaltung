@@ -61,4 +61,116 @@ test.describe("wegs CRUD", () => {
     await expect(page.locator("#name-error")).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/wegs\/new$/);
   });
+
+  test("edits a WEG and shows the updated details on redirect", async ({ page }) => {
+    const nameAlt = wegName("Edit-Alt");
+    const nameNeu = wegName("Edit-Neu");
+    const adresseAlt = "Alte Str. 1, 12345 Testheim";
+    const adresseNeu = "Neue Str. 2, 54321 Neheim";
+
+    // 1. Create a WEG to edit
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(nameAlt);
+    await page.getByLabel("Adresse").fill(adresseAlt);
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+
+    // 2. Click "WEG bearbeiten" button/link
+    await page.getByRole("link", { name: /WEG bearbeiten/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}\/edit$/);
+
+    // 3. Edit details and save
+    await page.getByLabel(/Name der WEG/).fill(nameNeu);
+    await page.getByLabel("Adresse").fill(adresseNeu);
+    await page.getByRole("button", { name: /Speichern/ }).click();
+
+    // 4. Expect redirect back to details and updated details visible
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: nameNeu })).toBeVisible();
+    await expect(page.getByText(adresseNeu)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: nameAlt })).not.toBeVisible();
+  });
+
+  test("creates, edits, and deletes a Wohneinheit", async ({ page }) => {
+    // 1. Create a WEG
+    const wegNameVal = wegName("Unit-CRUD");
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(wegNameVal);
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+
+    // 2. Create a Wohneinheit
+    const unitBezeichnungAlt = `Whg ${Date.now()}`;
+    const unitBezeichnungNeu = `Whg-Edit ${Date.now()}`;
+    await page.goto(`/wegs/${wegId}/einheiten/new`);
+    await page.getByLabel(/Bezeichnung/).fill(unitBezeichnungAlt);
+    await page.getByLabel("Zähler").fill("50");
+    await page.getByLabel("Nenner").fill("1000");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
+    await expect(page.getByText(unitBezeichnungAlt)).toBeVisible();
+
+    // 3. Click Bearbeiten next to the Wohneinheit
+    await page.getByRole("link", { name: `${unitBezeichnungAlt} bearbeiten` }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/einheiten/[0-9a-f-]{36}/edit$`));
+
+    // 4. Edit Wohneinheit
+    await page.getByLabel(/Bezeichnung/).fill(unitBezeichnungNeu);
+    await page.getByLabel("Zähler").fill("60");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+
+    // 5. Expect redirect back and updated details visible
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
+    await expect(page.getByText(unitBezeichnungNeu)).toBeVisible();
+    await expect(page.getByText("MEA: 60/1000")).toBeVisible();
+    await expect(page.getByText(unitBezeichnungAlt)).not.toBeVisible();
+
+    // 6. Delete the Wohneinheit (has no owners yet)
+    await page.getByRole("link", { name: `${unitBezeichnungNeu} bearbeiten` }).click();
+    page.once("dialog", (dialog) => dialog.accept()); // Accept window.confirm
+    await page.getByRole("button", { name: /unwiderruflich löschen/ }).click();
+
+    // 7. Expect redirect back and unit deleted
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
+    await expect(page.getByText(unitBezeichnungNeu)).not.toBeVisible();
+  });
+
+  test("cannot delete a Wohneinheit with active ownership", async ({ page }) => {
+    // 1. Create a WEG
+    const wegNameVal = wegName("Unit-Delete-Fail");
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(wegNameVal);
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+
+    // 2. Create a Wohneinheit
+    const unitBezeichnung = `Whg ${Date.now()}`;
+    await page.goto(`/wegs/${wegId}/einheiten/new`);
+    await page.getByLabel(/Bezeichnung/).fill(unitBezeichnung);
+    await page.getByLabel("Zähler").fill("75");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
+
+    // 3. Create an Owner for the Unit
+    await page.getByRole("link", { name: `Eigentümer von ${unitBezeichnung} anzeigen` }).click();
+    await expect(page).toHaveURL(/\/eigentuemerschaft$/);
+    await page.getByRole("link", { name: /Eigentümer hinzufügen/ }).first().click();
+    const ownerNachname = `Owner-${Date.now()}`;
+    await page.getByLabel(/Vorname/).fill("Max");
+    await page.getByLabel(/Nachname/).fill(ownerNachname);
+    await page.getByRole("button", { name: /Eigentümer speichern/ }).click();
+    await expect(page).toHaveURL(/\/eigentuemerschaft$/, { timeout: 15_000 });
+
+    // 4. Try to delete the Unit
+    await page.goto(`/wegs/${wegId}`);
+    await page.getByRole("link", { name: `${unitBezeichnung} bearbeiten` }).click();
+    page.once("dialog", (dialog) => dialog.accept()); // Accept window.confirm
+    await page.getByRole("button", { name: /unwiderruflich löschen/ }).click();
+
+    // 5. Expect foreign key error message to be visible and page not redirected
+    await expect(page.getByText(/Die Wohneinheit kann nicht gelöscht werden, da ihr noch Eigentumsverhältnisse/)).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/einheiten/[0-9a-f-]{36}/edit$`));
+  });
 });

@@ -141,6 +141,7 @@ BeschlussSammlungEntry
 - **Document** — Tenant + (optional WEG + Meeting). Typ: einladung | protokoll | beschluss | vollmacht | sonst. Storage-Pfad in Supabase + SHA-256-Hash für Tamper-Detection.
 - **AuditEvent** — Append-only. `actor_type: user | agent`, `aktion`, `entity_typ`, `entity_id`, `before`, `after`, `ip`, `user_agent`, `langfuse_trace_id` (bei Agent-Aktion).
 - **AgentSuggestion** — Vorschläge der KI, getrennt von echten Beschlüssen. Status: `vorschlag | uebernommen | verworfen`. Verwalter muss aktiv übernehmen. Niemals Auto-Apply.
+- **Wirtschaftsplan / Sollstellung** — `Wirtschaftsplan` ist die fachliche Planungsgrundlage je WEG/Jahr. `Sollstellung` ist Option B: materialisierte, historische Zielstellung pro Wirtschaftsplan, Einheit und Monat. Sie referenziert `unit_id`, nicht `person_id`, `user_id` oder `ownership_id`; die Eigentümer-Zuordnung zu einem Stichtag bleibt Aufgabe der Ownership-Historie oder eines zukünftigen Forderungs-/Zahlungsmodells.
 
 ### 4.5 Aggregate-Grenzen (DDD)
 
@@ -151,6 +152,7 @@ BeschlussSammlungEntry
 | **BeschlussSammlung** | `WEG` (parent) | Append-only. Anfechtungs-Status ist eine separate immutable Folge-Event-Kette. |
 | **Document** | `Document` | Immutabel nach Upload. Neue Version = neues Dokument mit `vorgaenger_id`. |
 | **AuditEvent** | — | Niemals mutabel. Niemals löschen, auch nicht durch Tenant-Admin. |
+| **Finanzen** | `Wirtschaftsplan` | Sollstellungen sind nach Erzeugung historisch. Plan-, Unit- oder MEA-Änderungen erzeugen keine rückwirkende Neuberechnung; Korrekturen/Nachträge sind neue Fachereignisse. |
 
 ### 4.6 Harte Invarianten (datenbankseitig erzwingen via Constraints + RLS)
 
@@ -159,7 +161,8 @@ BeschlussSammlungEntry
 3. **KI = nur Vorschläge**: Trigger auf `BeschlussSammlungEntry`, `Vote`, `Protocol.unterzeichnet`, `Resolution` lehnt `actor_type=agent` ab. Erzwungen in DB, nicht nur in App.
 4. **Append-only Beschluss-Sammlung**: Trigger verhindert UPDATE/DELETE auf `BeschlussSammlungEntry` (nur INSERT). Anfechtung = eigene Event-Tabelle.
 5. **Audit-Log unverletzlich**: Eigene Tabelle, RLS erlaubt nur INSERT (auch Tenant-Admin kein DELETE).
-6. **Einladungs-Frist**: `Meeting.frist_einladung_ok` ist berechnet (`termin_von - einladungs_versand_am >= 21 days` außer bei Notfall-Beschluss).
+6. **Sollstellung-Historie**: Bestehende `sollstellung`-Rows werden nicht aktualisiert oder gelöscht. Der Generator darf fehlende Rows idempotent einfügen; Konflikte bleiben unverändert.
+7. **Einladungs-Frist**: `Meeting.frist_einladung_ok` ist berechnet (`termin_von - einladungs_versand_am >= 21 days` außer bei Notfall-Beschluss).
 
 ---
 

@@ -19,6 +19,10 @@ export interface SendInvitationState {
   error?: string;
 }
 
+export interface MeetingStatusState {
+  error?: string;
+}
+
 export async function sendInvitation(
   meetingId: string,
   _prev: SendInvitationState,
@@ -70,7 +74,8 @@ export async function sendInvitation(
       status: "eingeladen",
       einladung_versand_am: new Date().toISOString(),
     })
-    .eq("id", meetingId);
+    .eq("id", meetingId)
+    .eq("status", "entwurf");
 
   if (updateError) {
     console.error("[sendInvitation] update failed", {
@@ -78,6 +83,154 @@ export async function sendInvitation(
       hint: updateError.hint,
     });
     return { error: "Einladung konnte nicht versendet werden." };
+  }
+
+  revalidatePath(`/versammlungen/${meetingId}`);
+  redirect(`/versammlungen/${meetingId}`);
+}
+
+export async function startMeeting(
+  meetingId: string,
+  _prev: MeetingStatusState,
+  _formData: FormData,
+): Promise<MeetingStatusState> {
+  void _prev;
+  void _formData;
+  const supabase = await createClient();
+
+  const { data: meeting, error: selectError } = await supabase
+    .from("meeting")
+    .select("id, status")
+    .eq("id", meetingId)
+    .single();
+
+  if (selectError || !meeting) {
+    console.error("[startMeeting] meeting select failed:", selectError);
+    return { error: "Versammlung konnte nicht geladen werden." };
+  }
+
+  if (meeting.status !== "eingeladen") {
+    return {
+      error: `Versammlung kann nur im Status 'Eingeladen' gestartet werden (aktuell: ${meeting.status}).`,
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from("meeting")
+    .update({ status: "laufend" })
+    .eq("id", meetingId)
+    .eq("status", "eingeladen");
+
+  if (updateError) {
+    console.error("[startMeeting] update failed", {
+      code: updateError.code,
+      hint: updateError.hint,
+    });
+    return { error: "Versammlung konnte nicht gestartet werden." };
+  }
+
+  revalidatePath(`/versammlungen/${meetingId}`);
+  redirect(`/versammlungen/${meetingId}`);
+}
+
+export async function endMeeting(
+  meetingId: string,
+  _prev: MeetingStatusState,
+  _formData: FormData,
+): Promise<MeetingStatusState> {
+  void _prev;
+  void _formData;
+  const supabase = await createClient();
+
+  const { data: meeting, error: selectError } = await supabase
+    .from("meeting")
+    .select("id, status")
+    .eq("id", meetingId)
+    .single();
+
+  if (selectError || !meeting) {
+    console.error("[endMeeting] meeting select failed:", selectError);
+    return { error: "Versammlung konnte nicht geladen werden." };
+  }
+
+  if (meeting.status !== "laufend") {
+    return {
+      error: `Versammlung kann nur im Status 'Laufend' beendet werden (aktuell: ${meeting.status}).`,
+    };
+  }
+
+  const { data: resolutions, error: resolutionsError } = await supabase
+    .from("resolution")
+    .select("id, festgestellt_am")
+    .eq("meeting_id", meetingId);
+
+  if (resolutionsError) {
+    console.error("[endMeeting] resolution select failed:", resolutionsError);
+    return { error: "Beschlussvorlagen konnten nicht geprüft werden." };
+  }
+
+  const resolutionIds = (resolutions ?? []).map((resolution) => resolution.id);
+  let votedResolutionIds = new Set<string>();
+  let bseResolutionIds = new Set<string>();
+
+  if (resolutionIds.length > 0) {
+    const [{ data: votes, error: votesError }, { data: entries, error: entriesError }] =
+      await Promise.all([
+        supabase
+          .from("vote")
+          .select("resolution_id")
+          .in("resolution_id", resolutionIds),
+        supabase
+          .from("beschluss_sammlung_entry")
+          .select("resolution_id")
+          .in("resolution_id", resolutionIds),
+      ]);
+
+    if (votesError || entriesError) {
+      console.error("[endMeeting] closing checks failed", {
+        votesError,
+        entriesError,
+      });
+      return { error: "Beschlussfeststellungen konnten nicht geprüft werden." };
+    }
+
+    votedResolutionIds = new Set((votes ?? []).map((vote) => vote.resolution_id));
+    bseResolutionIds = new Set(
+      (entries ?? [])
+        .map((entry) => entry.resolution_id)
+        .filter((id): id is string => id !== null),
+    );
+  }
+
+  const unresolvedVotes = (resolutions ?? []).filter(
+    (resolution) =>
+      votedResolutionIds.has(resolution.id) &&
+      resolution.festgestellt_am === null,
+  );
+  const missingCollectionEntries = (resolutions ?? []).filter(
+    (resolution) =>
+      resolution.festgestellt_am !== null && !bseResolutionIds.has(resolution.id),
+  );
+
+  if (unresolvedVotes.length > 0 || missingCollectionEntries.length > 0) {
+    return {
+      error:
+        "Versammlung kann nicht beendet werden: Es gibt Stimmen ohne Beschlussfeststellung oder festgestellte Beschlüsse ohne Beschluss-Sammlung-Eintrag.",
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from("meeting")
+    .update({ status: "beendet" })
+    .eq("id", meetingId)
+    .eq("status", "laufend");
+
+  if (updateError) {
+    console.error("[endMeeting] update failed", {
+      code: updateError.code,
+      hint: updateError.hint,
+    });
+    return { error: "Versammlung konnte nicht beendet werden." };
   }
 
   revalidatePath(`/versammlungen/${meetingId}`);

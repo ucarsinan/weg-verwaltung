@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 // Versammlungs-Happy-Path gegen Cloud Frankfurt. Läuft als geseedeter
 // Tenant-Admin (auth.setup.ts persistierter Storage-State); RLS scoped
@@ -12,6 +13,51 @@ import { test, expect } from "@playwright/test";
 test.describe.configure({ mode: "serial" });
 
 const stamp = () => Date.now();
+
+async function getAccessToken(page: Page): Promise<string> {
+  const cookies = await page.context().cookies();
+  const sbCookie = cookies.find(
+    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"),
+  );
+  expect(sbCookie).toBeTruthy();
+
+  let cookieValue = decodeURIComponent(sbCookie!.value);
+  if (cookieValue.startsWith("base64-")) {
+    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
+  }
+
+  const tokenData = JSON.parse(cookieValue);
+  const accessToken: string = Array.isArray(tokenData)
+    ? (tokenData[0] as string)
+    : (tokenData as { access_token: string }).access_token;
+  expect(accessToken).toBeTruthy();
+  return accessToken;
+}
+
+async function updateMeetingStatus(
+  page: Page,
+  meetingId: string,
+  status: "laufend" | "beendet",
+): Promise<void> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  expect(supabaseUrl).toBeTruthy();
+  expect(supabaseKey).toBeTruthy();
+
+  const updateRes = await page.request.patch(
+    `${supabaseUrl}/rest/v1/meeting?id=eq.${meetingId}`,
+    {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${await getAccessToken(page)}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      data: { status },
+    },
+  );
+  expect(updateRes.ok()).toBeTruthy();
+}
 
 test.describe("versammlungen happy path", () => {
   test("creates a WEG, a Versammlung, and a TOP — TOP erscheint auf der Detail-Seite", async ({
@@ -276,6 +322,8 @@ test.describe("versammlungen happy path", () => {
     await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
     });
+    const meetingId = page.url().match(/\/versammlungen\/([0-9a-f-]{36})/)![1];
+    await updateMeetingStatus(page, meetingId, "laufend");
 
     // 6. TOP anlegen.
     await page
@@ -337,5 +385,151 @@ test.describe("versammlungen happy path", () => {
     await expect(page.getByText(beschlussText)).toBeVisible({
       timeout: 15_000,
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Protokoll HITL tests
+  // ---------------------------------------------------------------------------
+
+  test("Protokoll Seite ist vor Ende gesperrt und nach Ende zugänglich", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page.getByLabel(/Name der WEG/).fill(`E2E Protokoll-Null ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Protokollweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 2. Versammlung anlegen.
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+    await page.getByLabel(/Titel/).fill(`Protokoll-ETV ${stamp()}`);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
+    expect(meetingId).toBeTruthy();
+
+    // 3. Direktaufruf vor Ende: Protokoll ist serverseitig gesperrt.
+    await page.goto(`/versammlungen/${meetingId}/protokoll`);
+    await expect(page.getByText("Protokoll noch gesperrt")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Protokoll generieren/ }),
+    ).not.toBeVisible();
+
+    // 4. Nach beendetem Meeting ist der Review erreichbar.
+    await updateMeetingStatus(page, meetingId!, "beendet");
+    await page.goto(`/versammlungen/${meetingId}`);
+    const protokollHref = await page
+      .getByRole("link", { name: /^Protokoll$/ })
+      .getAttribute("href");
+    expect(protokollHref).toMatch(
+      new RegExp(`/versammlungen/${meetingId}/protokoll`),
+    );
+    await page.goto(protokollHref!);
+    await expect(page).toHaveURL(/\/protokoll$/);
+
+    // 5. Kein Protokoll vorhanden → "Protokoll generieren"-Button sichtbar.
+    //    (Klick wird NICHT ausgeführt — Agent läuft nicht im E2E-Kontext.)
+    await expect(
+      page.getByRole("button", { name: /Protokoll generieren/ }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // 6. "Kein Protokoll vorhanden"-Text als zusätzlicher Smoke-Check.
+    await expect(
+      page.getByText("Kein Protokoll vorhanden"),
+    ).toBeVisible();
+  });
+
+  test("Protokoll ki_entwurf — Unterzeichnen-Button sichtbar", async ({
+    page,
+  }) => {
+    // 1. WEG anlegen.
+    await page.goto("/wegs/new");
+    await page
+      .getByLabel(/Name der WEG/)
+      .fill(`E2E Protokoll-Entwurf ${stamp()}`);
+    await page.getByLabel("Adresse").fill("Entwurfweg 1, 12345 Testheim");
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+
+    // 2. Versammlung anlegen.
+    const newMeetingHref = await page
+      .getByRole("link", { name: /Neue Versammlung anlegen/ })
+      .getAttribute("href");
+    await page.goto(newMeetingHref!);
+    await page.getByLabel(/Titel/).fill(`Entwurf-ETV ${stamp()}`);
+    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
+    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
+      timeout: 15_000,
+    });
+    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
+    expect(meetingId).toBeTruthy();
+    await updateMeetingStatus(page, meetingId!, "beendet");
+
+    // 3. Protokoll-Row mit status='ki_entwurf' direkt via Supabase REST API
+    //    seeden — Agent läuft nicht im E2E-Kontext, daher kein Click auf
+    //    "Protokoll generieren". Supabase-Session-Cookie enthält das JWT.
+    const accessToken = await getAccessToken(page);
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    expect(supabaseUrl).toBeTruthy();
+    expect(supabaseKey).toBeTruthy();
+
+    const insertRes = await page.request.post(
+      `${supabaseUrl}/rest/v1/protocol`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        data: {
+          meeting_id: meetingId,
+          status: "ki_entwurf",
+          text: "# Test Protokoll\n\n## Entwurf\n\nDieser Entwurf wurde vom KI-System generiert.",
+          generierungs_quelle: "ki",
+          // tenant_id wird via RLS aus dem JWT gesetzt — nicht mitsenden.
+        },
+      },
+    );
+    expect(insertRes.ok()).toBeTruthy();
+
+    // 4. Protokoll-Seite direkt aufrufen.
+    await page.goto(`/versammlungen/${meetingId}/protokoll`);
+    await expect(page).toHaveURL(/\/protokoll$/, { timeout: 15_000 });
+
+    // 5. ki_entwurf-Zustand: Entwurfs-Text ist lesbar (read-only <pre>).
+    await expect(
+      page.getByText(/Dieser Entwurf wurde vom KI-System generiert/),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // 6. "Protokoll unterzeichnen"-Button sichtbar (kein Klick — erfordert
+    //    Storage + PDF-Rendering).
+    await expect(
+      page.getByRole("button", { name: /Protokoll unterzeichnen/ }),
+    ).toBeVisible();
+
+    // 7. Status-Pill "KI-Entwurf freigegeben" sichtbar.
+    await expect(page.getByText("KI-Entwurf freigegeben")).toBeVisible();
+
+    // 8. "Protokoll"-Link auf der Meeting-Seite zeigt zur korrekten URL.
+    await page.goto(`/versammlungen/${meetingId}`);
+    const protokollHref = await page
+      .getByRole("link", { name: /^Protokoll$/ })
+      .getAttribute("href");
+    expect(protokollHref).toMatch(
+      new RegExp(`/versammlungen/${meetingId}/protokoll`),
+    );
   });
 });

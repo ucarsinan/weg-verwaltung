@@ -56,6 +56,12 @@ export async function createBeschlussSammlungEntry(
     errors.typ = ["Bitte einen gültigen Beschluss-Typ auswählen."];
   }
 
+  if (resolution_id) {
+    errors._form = [
+      "Finale Einträge zu Beschlussvorlagen werden ausschließlich über die Abstimmungs-Feststellung erzeugt.",
+    ];
+  }
+
   if (Object.keys(errors).length > 0) {
     return { errors };
   }
@@ -76,7 +82,6 @@ export async function createBeschlussSammlungEntry(
     typ: typ_raw as BeschlussSammlungTyp,
     erstellt_durch: user.id,
     ...(meeting_id ? { meeting_id } : {}),
-    ...(resolution_id ? { resolution_id } : {}),
   });
 
   if (error) {

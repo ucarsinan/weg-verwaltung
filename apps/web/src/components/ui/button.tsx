@@ -6,21 +6,21 @@ import { cn } from "@/lib/utils";
 
 // § 5.10 — fix shadcn focus-ring contrast gap: full-opacity ring + offset
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-background)]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent text-sm font-semibold transition-[background-color,border-color,box-shadow,color] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-background)]",
   {
     variants: {
       variant: {
         default:
-          "bg-[color:var(--color-primary)] text-[color:var(--color-primary-foreground)] hover:bg-[color:var(--color-primary)]/90",
+          "bg-[color:var(--color-primary)] text-[color:var(--color-primary-foreground)] shadow-[var(--shadow-button)] hover:bg-[color:var(--color-primary)]/90 hover:shadow-[0_1px_0_color-mix(in_oklch,white_24%,transparent)_inset,0_16px_34px_color-mix(in_oklch,var(--color-primary)_24%,transparent)]",
         destructive:
-          "bg-[color:var(--color-destructive)] text-[color:var(--color-destructive-foreground)] hover:bg-[color:var(--color-destructive)]/90",
+          "bg-[color:var(--color-destructive)] text-[color:var(--color-destructive-foreground)] shadow-[0_10px_24px_color-mix(in_oklch,var(--color-destructive)_18%,transparent)] hover:bg-[color:var(--color-destructive)]/90",
         outline:
-          "border border-[color:var(--color-border)] bg-[color:var(--color-background)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-secondary-foreground)]",
+          "border-[color:var(--color-border)] bg-[color:var(--color-card)] text-[color:var(--color-foreground)] shadow-[0_1px_0_color-mix(in_oklch,var(--color-foreground)_4%,transparent)] hover:border-[color:var(--color-line-strong)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-secondary-foreground)]",
         secondary:
-          "bg-[color:var(--color-secondary)] text-[color:var(--color-secondary-foreground)] hover:bg-[color:var(--color-secondary)]/80",
+          "border-[color:var(--color-border)] bg-[color:var(--color-secondary)] text-[color:var(--color-secondary-foreground)] hover:border-[color:var(--color-line-strong)] hover:bg-[color:var(--color-card)]",
         ghost:
           "text-[color:var(--color-foreground)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-secondary-foreground)]",
-        link: "text-[color:var(--color-primary)] underline-offset-4 hover:underline",
+        link: "border-transparent text-[color:var(--color-primary)] underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2",

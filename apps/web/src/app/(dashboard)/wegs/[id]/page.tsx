@@ -1,20 +1,38 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
+import type { ComponentProps } from "react";
+import {
+  CalendarClock,
+  FileText,
+  Home,
+  Pencil,
+  Plus,
+  Users,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
   CardHeader,
-  CardTitle,
-  CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import { ActionBar } from "@/components/ui/action-bar";
+import { AttentionList, type AttentionItem } from "@/components/ui/attention-list";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { EntityList, EntityListItem } from "@/components/ui/entity-list";
+import { InsightCard } from "@/components/ui/insight-card";
 import { Label } from "@/components/ui/label";
+import { MetricStrip } from "@/components/ui/metric-strip";
+import { NextStepPanel } from "@/components/ui/next-step-panel";
+import { OperationalHero } from "@/components/ui/operational-hero";
+import { SectionHeader } from "@/components/ui/section-header";
+import { LifecycleBadge } from "@/components/ui/status-badge";
 import type { Database } from "@/lib/supabase/database.types";
+import { DeletePersonButton } from "./personen/delete-person-button";
 
 // Server Component — RLS scopes all SELECTs to the user's tenant automatically.
-// The middleware (apps/web/src/middleware.ts) refreshes the session and passes
+// The proxy (apps/web/src/proxy.ts) refreshes the session and passes
 // the user JWT into PostgREST via the supabase-ssr cookies adapter, so the
 // policy `tenant_id = (auth.jwt() ->> 'tenant_id')::uuid` runs server-side on
 // every row — no client-side tenant filter, no service-role key in this path.
@@ -22,6 +40,7 @@ import type { Database } from "@/lib/supabase/database.types";
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type MeetingRow = Database["public"]["Tables"]["meeting"]["Row"];
 type UnitRow = Database["public"]["Tables"]["unit"]["Row"];
+type PersonRow = Database["public"]["Tables"]["person"]["Row"];
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,6 +75,17 @@ const STATUS_LABEL: Record<MeetingRow["status"], string> = {
   laufend: "Laufend",
   beendet: "Beendet",
   abgesagt: "Abgesagt",
+};
+
+const STATUS_BADGE: Record<
+  MeetingRow["status"],
+  ComponentProps<typeof LifecycleBadge>["status"]
+> = {
+  entwurf: "entwurf",
+  eingeladen: "eingeladen",
+  laufend: "laufend",
+  beendet: "beendet",
+  abgesagt: "abgesagt",
 };
 
 export default async function WegDetailPage({
@@ -119,32 +149,236 @@ export default async function WegDetailPage({
     console.error("[wegs/[id]] units select failed:", unitsError);
   }
 
+  const { data: persons, error: personsError } = await supabase
+    .from("person")
+    .select("*")
+    .order("nachname", { ascending: true })
+    .order("vorname", { ascending: true })
+    .returns<PersonRow[]>();
+
+  if (personsError) {
+    console.error("[wegs/[id]] persons select failed:", personsError);
+  }
+
   const meetingRows: MeetingRow[] = meetings ?? [];
   const unitRows: UnitRow[] = units ?? [];
+  const personRows: PersonRow[] = persons ?? [];
+  const missingAddress = !weg.adresse;
+  const hasUnits = unitRows.length > 0;
+  const hasPersons = personRows.length > 0;
+  const hasMeetings = meetingRows.length > 0;
+  const openMeetings = meetingRows.filter(
+    (meeting) => meeting.status !== "beendet" && meeting.status !== "abgesagt",
+  );
+  const attentionItems: AttentionItem[] = [
+    missingAddress
+      ? {
+          title: "Adresse fehlt",
+          description:
+            "Die Adresse hilft bei Dokumenten, Einladungen und eindeutiger Zuordnung.",
+          action: (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/wegs/${id}/edit` as Route}>Adresse ergänzen</Link>
+            </Button>
+          ),
+        }
+      : {
+          title: "Stammdaten mit Adresse",
+          description: "Die WEG ist eindeutig beschreibbar.",
+          tone: "done",
+        },
+    !hasUnits
+      ? {
+          title: "Keine Wohneinheiten erfasst",
+          description:
+            "Eigentümerschaften und Stimmrechte brauchen zuerst Einheiten.",
+          action: (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/wegs/${id}/einheiten/new`}>
+                Einheit anlegen
+              </Link>
+            </Button>
+          ),
+        }
+      : {
+          title: "Wohneinheiten vorhanden",
+          description: `${unitRows.length} Einheit${unitRows.length === 1 ? "" : "en"} erfasst.`,
+          tone: "done",
+        },
+    !hasPersons
+      ? {
+          title: "Keine Personen erfasst",
+          description:
+            "Einladungen, Eigentümerlisten und Stimmrechte benötigen Personen.",
+          action: (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/wegs/${id}/personen/new` as Route}>
+                Person anlegen
+              </Link>
+            </Button>
+          ),
+        }
+      : {
+          title: "Personen vorhanden",
+          description: `${personRows.length} Kontakt${personRows.length === 1 ? "" : "e"} im Mandanten.`,
+          tone: "done",
+        },
+  ];
+  const nextStep = !hasUnits
+    ? {
+        title: "Wohneinheiten anlegen",
+        description:
+          "Damit Eigentümerschaften und Stimmrechte historisch korrekt abgebildet werden können.",
+        href: `/wegs/${id}/einheiten/new`,
+        label: "Einheit anlegen",
+        tone: "warning" as const,
+      }
+    : !hasPersons
+      ? {
+          title: "Personen erfassen",
+          description:
+            "Für Einladungen, Eigentümerschaften und Abstimmungen fehlen noch Kontakte.",
+          href: `/wegs/${id}/personen/new` as Route,
+          label: "Person anlegen",
+          tone: "warning" as const,
+        }
+      : !hasMeetings
+        ? {
+            title: "Erste Versammlung vorbereiten",
+            description:
+              "Die Grundlagen sind angelegt. Jetzt kann der erste Versammlungsprozess starten.",
+            href: `/wegs/${id}/versammlungen/new`,
+            label: "Versammlung anlegen",
+            tone: "default" as const,
+          }
+        : {
+            title: openMeetings.length > 0
+              ? "Offene Versammlung fortführen"
+              : "Nächste Versammlung planen",
+            description:
+              openMeetings.length > 0
+                ? "Es gibt einen laufenden oder vorbereiteten Versammlungsprozess."
+                : "Die WEG-Grundlagen stehen. Planen Sie den nächsten Verwaltungstermin.",
+            href: openMeetings[0]
+              ? `/versammlungen/${openMeetings[0].id}`
+              : `/wegs/${id}/versammlungen/new`,
+            label: openMeetings[0] ? "Versammlung öffnen" : "Versammlung anlegen",
+            tone: openMeetings.length > 0 ? ("default" as const) : ("success" as const),
+          };
 
   return (
-    <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
-      <header className="flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-tight">
-            {weg.name}
-          </h1>
-          <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-            <Link
-              href="/wegs"
-              className="underline underline-offset-4 hover:text-[color:var(--color-foreground)]"
-            >
-              ← Zurück zur WEG-Liste
-            </Link>
-          </p>
-        </div>
-      </header>
+    <section className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <OperationalHero
+        eyebrow={
+          <Link
+            href="/wegs"
+            className="underline underline-offset-4 hover:text-[color:var(--color-foreground)]"
+          >
+            Zurück zur WEG-Liste
+          </Link>
+        }
+        title={weg.name}
+        description={
+          weg.adresse ?? (
+            <span className="italic text-[color:var(--color-muted-foreground)]">
+              Adresse nicht hinterlegt
+            </span>
+          )
+        }
+        status={
+          <LifecycleBadge
+            status={
+              missingAddress || !hasUnits || !hasPersons ? "offen" : "erledigt"
+            }
+          >
+            {missingAddress || !hasUnits || !hasPersons
+              ? "Grundlagen offen"
+              : "Arbeitsbereit"}
+          </LifecycleBadge>
+        }
+        insight={
+          missingAddress || !hasUnits || !hasPersons
+            ? "Diese WEG ist angelegt, aber noch nicht vollständig arbeitsfähig."
+            : "Die wichtigsten Grundlagen sind vorhanden. Der nächste Schritt liegt im Versammlungs- oder Finanzprozess."
+        }
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href={`/wegs/${id}/edit` as Route}>
+                <Pencil className="size-4" aria-hidden="true" />
+                WEG bearbeiten
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/wegs/${id}/versammlungen/new`}>
+                <Plus className="size-4" aria-hidden="true" />
+                Neue Versammlung
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      {/* ────────────────────────── Stammdaten ────────────────────────── */}
-      <Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <NextStepPanel
+          title={nextStep.title}
+          description={nextStep.description}
+          reason="Priorisiert aus Stammdaten, Einheiten, Personen und offenen Versammlungen."
+          tone={nextStep.tone}
+          action={
+            <Button asChild>
+              <Link href={nextStep.href as Route}>{nextStep.label}</Link>
+            </Button>
+          }
+        />
+        <InsightCard
+          title="WEG-Lage"
+          description={
+            openMeetings.length > 0
+              ? `${openMeetings.length} Versammlung${openMeetings.length === 1 ? "" : "en"} sind noch offen.`
+              : "Aktuell ist kein offener Versammlungsprozess sichtbar."
+          }
+          icon={<CalendarClock />}
+        />
+      </div>
+
+      <MetricStrip
+        items={[
+          {
+            label: "Wohneinheiten",
+            value: unitRows.length,
+            hint: "Einheiten dieser Gemeinschaft.",
+            icon: <Home />,
+          },
+          {
+            label: "Personen",
+            value: personRows.length,
+            hint: "Im Mandanten erfasste Kontakte.",
+            icon: <Users />,
+          },
+          {
+            label: "Versammlungen",
+            value: meetingRows.length,
+            hint: "Zuletzt geladene Termine.",
+            icon: <CalendarClock />,
+          },
+          {
+            label: "Beschlüsse",
+            value: "Register",
+            hint: "Beschluss-Sammlung separat öffnen.",
+            icon: <FileText />,
+          },
+        ]}
+      />
+
+      <AttentionList items={attentionItems} />
+
+      <Card id="stammdaten">
         <CardHeader>
-          <CardTitle>Stammdaten</CardTitle>
-          <CardDescription>Basis-Informationen dieser WEG.</CardDescription>
+          <SectionHeader
+            title="Stammdaten"
+            description="Basis-Informationen dieser WEG."
+          />
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -157,7 +391,7 @@ export default async function WegDetailPage({
                 explizit als "nicht hinterlegt" gerendert, nicht als leerer
                 String. Italic + muted, damit der Zustand erkennbar ist,
                 ohne als Fehler zu schreien. */}
-            <p className="text-sm">
+            <p className="whitespace-pre-line text-sm">
               {weg.adresse ?? (
                 <span className="italic text-[color:var(--color-muted-foreground)]">
                   nicht hinterlegt
@@ -172,181 +406,272 @@ export default async function WegDetailPage({
         </CardContent>
       </Card>
 
-      {/* ─────────────────────────── Wohneinheiten ────────────────────── */}
-      <Card>
+      <Card id="wohneinheiten">
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>Wohneinheiten</CardTitle>
-              <CardDescription className="mt-1.5">
-                Alle Einheiten dieser WEG mit Miteigentumsanteilen.
-              </CardDescription>
-            </div>
-            <Link
-              href={`/wegs/${id}/einheiten/new`}
-              className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Wohneinheit anlegen
-            </Link>
-          </div>
+          <SectionHeader
+            title="Wohneinheiten"
+            description="Alle Einheiten dieser WEG mit Miteigentumsanteilen."
+            meta={<span>{unitRows.length}</span>}
+            actions={
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/wegs/${id}/einheiten/new`}>
+                  <Plus className="size-4" aria-hidden="true" />
+                  Einheit anlegen
+                </Link>
+              </Button>
+            }
+          />
         </CardHeader>
         <CardContent>
           {unitRows.length === 0 ? (
-            <p
-              role="status"
-              className="rounded-md border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-muted)]"
-            >
-              Noch keine Wohneinheit angelegt.{" "}
-              <Link
-                href={`/wegs/${id}/einheiten/new`}
-                className="underline underline-offset-4 hover:text-[var(--color-accent)]"
-              >
-                Jetzt erste Einheit anlegen
-              </Link>
-              .
-            </p>
+            <EmptyState
+              title="Noch keine Wohneinheit angelegt"
+              description="Erfassen Sie Einheiten, damit Eigentümerschaften und Stimmrechte sauber zugeordnet werden."
+              icon={<Home />}
+              action={
+                <Button asChild size="sm">
+                  <Link href={`/wegs/${id}/einheiten/new`}>
+                    Erste Einheit anlegen
+                  </Link>
+                </Button>
+              }
+            />
           ) : (
-            <ul
+            <EntityList
               aria-label="Wohneinheiten der WEG"
-              className="divide-y divide-[var(--color-border)]"
+              className="rounded-none border-0 shadow-none"
             >
               {unitRows.map((unit) => (
-                <li
+                <EntityListItem
                   key={unit.id}
-                  className="flex items-center justify-between gap-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {unit.bezeichnung}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[var(--color-muted)]">
-                      MEA: {unit.mea_zaehler}/{unit.mea_nenner}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/wegs/${id}/einheiten/${unit.id}/eigentuemerschaft`}
-                    className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-                    aria-label={`Eigentümer von ${unit.bezeichnung} anzeigen`}
-                  >
-                    Eigentümer →
-                  </Link>
-                </li>
+                  leading={<Home className="size-4" aria-hidden="true" />}
+                  title={unit.bezeichnung}
+                  description={`MEA: ${unit.mea_zaehler}/${unit.mea_nenner}`}
+                  actions={
+                    <>
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={
+                            `/wegs/${id}/einheiten/${unit.id}/edit` as Route
+                          }
+                          aria-label={`${unit.bezeichnung} bearbeiten`}
+                        >
+                          Bearbeiten
+                        </Link>
+                      </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link
+                          href={`/wegs/${id}/einheiten/${unit.id}/eigentuemerschaft`}
+                          aria-label={`Eigentümer von ${unit.bezeichnung} anzeigen`}
+                        >
+                          Eigentümer
+                        </Link>
+                      </Button>
+                    </>
+                  }
+                />
               ))}
-            </ul>
+            </EntityList>
           )}
         </CardContent>
       </Card>
 
-      {/* ───────────────────────── Versammlungen ──────────────────────── */}
-      <Card>
+      <Card id="personen">
         <CardHeader>
-          <CardTitle>Versammlungen</CardTitle>
-          <CardDescription>
-            Die letzten zehn Versammlungen dieser WEG.
-          </CardDescription>
+          <SectionHeader
+            title="Personen"
+            description="Alle Personen in Ihrem Mandanten."
+            meta={<span>{personRows.length}</span>}
+            actions={
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/wegs/${id}/personen/new` as Route}>
+                  <Plus className="size-4" aria-hidden="true" />
+                  Person anlegen
+                </Link>
+              </Button>
+            }
+          />
+        </CardHeader>
+        <CardContent>
+          {personRows.length === 0 ? (
+            <EmptyState
+              title="Noch keine Personen angelegt"
+              description="Erfassen Sie Eigentümer, Bevollmächtigte oder weitere Kontakte im Mandanten."
+              icon={<Users />}
+              action={
+                <Button asChild size="sm">
+                  <Link href={`/wegs/${id}/personen/new` as Route}>
+                    Erste Person anlegen
+                  </Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EntityList
+              aria-label="Personen der WEG"
+              className="rounded-none border-0 shadow-none"
+            >
+              {personRows.map((person) => (
+                <EntityListItem
+                  key={person.id}
+                  leading={<Users className="size-4" aria-hidden="true" />}
+                  title={`${person.nachname}, ${person.vorname}`}
+                  description={
+                    <span className="space-y-0.5">
+                      <span className="block">
+                        Anschrift:{" "}
+                        {person.anschrift ?? (
+                          <span className="italic">nicht hinterlegt</span>
+                        )}
+                      </span>
+                      <span className="block">
+                        E-Mail:{" "}
+                        {person.email ?? (
+                          <span className="italic">nicht hinterlegt</span>
+                        )}
+                      </span>
+                      <span className="block">
+                        Telefon:{" "}
+                        {person.telefon ?? (
+                          <span className="italic">nicht hinterlegt</span>
+                        )}
+                      </span>
+                    </span>
+                  }
+                  actions={
+                    <>
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={`/wegs/${id}/personen/${person.id}/edit` as Route}
+                          aria-label={`${person.vorname} ${person.nachname} bearbeiten`}
+                        >
+                          Bearbeiten
+                        </Link>
+                      </Button>
+                      <DeletePersonButton wegId={id} personId={person.id} />
+                    </>
+                  }
+                />
+              ))}
+            </EntityList>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="versammlungen">
+        <CardHeader>
+          <SectionHeader
+            title="Versammlungen"
+            description="Die letzten zehn Versammlungen dieser WEG."
+            meta={<span>{meetingRows.length}</span>}
+            actions={
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/wegs/${id}/versammlungen/new`}>
+                  <Plus className="size-4" aria-hidden="true" />
+                  Versammlung anlegen
+                </Link>
+              </Button>
+            }
+          />
         </CardHeader>
         <CardContent>
           {meetingRows.length === 0 ? (
-            // § 5.10 SR-pattern #2 — empty/loading states get role="status"
-            // so screen readers announce the absence instead of silent UI.
-            <p
-              role="status"
-              className="rounded-md border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-muted-foreground)]"
-            >
-              Noch keine Versammlung für diese WEG angelegt.
-            </p>
+            <EmptyState
+              title="Noch keine Versammlung angelegt"
+              description="Starten Sie eine Versammlung, sobald Tagesordnung, Einladung oder Beschlüsse vorbereitet werden sollen."
+              icon={<CalendarClock />}
+              action={
+                <Button asChild size="sm">
+                  <Link href={`/wegs/${id}/versammlungen/new`}>
+                    Erste Versammlung anlegen
+                  </Link>
+                </Button>
+              }
+            />
           ) : (
-            <ul
+            <EntityList
               aria-label="Versammlungen der WEG"
-              className="divide-y divide-[color:var(--color-border)]"
+              className="rounded-none border-0 shadow-none"
             >
               {meetingRows.map((m) => (
-                <li
+                <EntityListItem
                   key={m.id}
-                  className="flex items-center justify-between gap-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {m.termin_von ? (
-                        formatDateLongDE(m.termin_von)
-                      ) : (
-                        <span className="italic text-[color:var(--color-muted-foreground)]">
-                          Termin offen
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-muted-foreground)]">
-                      <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5">
-                        Modus: {MODUS_LABEL[m.modus] ?? m.modus}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5">
-                        Status: {STATUS_LABEL[m.status] ?? m.status}
-                      </span>
-                    </p>
-                  </div>
-                  <Link
-                    href={`/versammlungen/${m.id}`}
-                    className="shrink-0 text-sm underline underline-offset-4 hover:text-[color:var(--color-foreground)]"
-                    aria-label={`Versammlung vom ${
-                      m.termin_von
-                        ? formatDateLongDE(m.termin_von)
-                        : "offenem Termin"
-                    } öffnen`}
-                  >
-                    Detail ansehen →
-                  </Link>
-                </li>
+                  leading={
+                    <CalendarClock className="size-4" aria-hidden="true" />
+                  }
+                  title={m.titel}
+                  description={
+                    m.termin_von ? (
+                      formatDateLongDE(m.termin_von)
+                    ) : (
+                      <span className="italic">Termin offen</span>
+                    )
+                  }
+                  meta={<span>Modus: {MODUS_LABEL[m.modus] ?? m.modus}</span>}
+                  badges={
+                    <LifecycleBadge status={STATUS_BADGE[m.status]}>
+                      {STATUS_LABEL[m.status] ?? m.status}
+                    </LifecycleBadge>
+                  }
+                  actions={
+                    <Button asChild variant="outline" size="sm">
+                      <Link
+                        href={`/versammlungen/${m.id}`}
+                        aria-label={`Versammlung ${
+                          m.titel
+                        } öffnen`}
+                      >
+                        Öffnen
+                      </Link>
+                    </Button>
+                  }
+                />
               ))}
-            </ul>
+            </EntityList>
           )}
         </CardContent>
       </Card>
 
-      {/* ───────────────────────── Beschluss-Sammlung ───────────────────── */}
-      <Card>
+      <Card id="beschluesse">
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>Beschluss-Sammlung</CardTitle>
-              <CardDescription>
-                Amtliches Register gem. § 24 Abs. 7 WEG.
-              </CardDescription>
-            </div>
-            <Link
-              href={`/wegs/${id}/beschluss-sammlung`}
-              className="shrink-0 text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-              aria-label="Beschluss-Sammlung dieser WEG öffnen"
-            >
-              Öffnen →
-            </Link>
-          </div>
+          <SectionHeader
+            title="Beschluss-Sammlung"
+            description="Amtliches Register gem. § 24 Abs. 7 WEG."
+            actions={
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/wegs/${id}/beschluss-sammlung`}
+                  aria-label="Beschluss-Sammlung dieser WEG öffnen"
+                >
+                  Öffnen
+                </Link>
+              </Button>
+            }
+          />
         </CardHeader>
       </Card>
 
-      {/* ─────────────────────────── Aktionen ─────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Aktionen</CardTitle>
-          <CardDescription>
-            Ohne Verzögerung handlungsfähig — § 5.1 Tastatur-First.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          {/* Forward refs — these routes 404 today and land in later
-              iterations (Versammlung-Anlage / WEG-Edit). Linked here so
-              the navigation surface is discoverable from day one. */}
+      <ActionBar
+        secondary={
+          <>
+            <Button asChild variant="outline">
+              <Link href={`/wegs/${id}/finanzen` as Route}>Finanzen</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/wegs/${id}/beschluss-sammlung`}>
+                Beschluss-Sammlung
+              </Link>
+            </Button>
+          </>
+        }
+        primary={
           <Button asChild>
             <Link href={`/wegs/${id}/versammlungen/new`}>
               Neue Versammlung anlegen
             </Link>
           </Button>
-          <Button asChild variant="outline">
-            {/* Forward-ref: /edit route lands in a later iteration; cast
-                bypasses typedRoutes until the page exists. */}
-            <Link href={`/wegs/${id}/edit` as Route}>WEG bearbeiten</Link>
-          </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     </section>
   );
 }

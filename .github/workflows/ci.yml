@@ -51,10 +51,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        # Scaffold phase: no `pnpm-lock.yaml` committed yet, so we cannot use
-        # --frozen-lockfile. Switch to `pnpm install --frozen-lockfile` once a
-        # lockfile lands in the repo (first real `pnpm install` post-scaffold).
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm --filter @weg-verwaltung/web lint
@@ -209,3 +206,43 @@ jobs:
           fi
 
           echo "OK — ${#files[@]} migrations, headers + sequence valid."
+
+  # --------------------------------------------------------------------------
+  # infra/supabase/tests — audit pgTAP regression gate.
+  # Runs against an ephemeral local Supabase DB in CI. It intentionally never
+  # uses --linked, SUPABASE_ACCESS_TOKEN, or production secrets.
+  # --------------------------------------------------------------------------
+  audit-db-regression:
+    name: audit-db-regression (pgTAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+
+      - name: Start local Supabase Postgres
+        run: supabase db start --workdir infra
+
+      - name: Apply migrations to local DB
+        run: supabase db reset --workdir infra --local --no-seed
+
+      - name: Normalize local audit test grants
+        run: |
+          cd infra
+          supabase db query \
+            --file supabase/ci/audit_regression_bootstrap.sql \
+            --local
+
+      - name: Run audit pgTAP regressions
+        run: |
+          cd infra
+          supabase test db \
+            supabase/tests/0002_audit_chain.sql \
+            supabase/tests/0046_least_privilege.sql \
+            supabase/tests/0055_advisor_hardening.sql \
+            --local

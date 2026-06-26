@@ -11,9 +11,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-UseCase = Literal["agenda", "beschluss", "frist", "protokoll"]
+UseCase = Literal["agenda", "beschluss", "frist", "protokoll", "vorgang"]
 
 
 class AgendaRequest(BaseModel):
@@ -31,13 +31,39 @@ class BeschlussRequest(BaseModel):
 
 
 class ProtokollRequest(BaseModel):
-    """Trigger payload for the protokoll graph (§ 4.1, Use-Case 4 — HITL)."""
+    """Trigger payload for the protokoll graph (§ 4.1, Use-Case 4 — HITL).
+
+    Two modes:
+      - First call:  resume_token=None → graph runs to interrupt, returns draft.
+      - Resume call: resume_token=thread_id + edited_draft → graph continues, persists.
+    """
 
     meeting_id: UUID
     resume_token: str | None = Field(
         default=None,
         description="Set when resuming an interrupted graph via Command(resume=...).",
     )
+    edited_draft: str | None = Field(
+        default=None,
+        description="Verwalter-edited Markdown text, required when resume_token is set.",
+        max_length=50_000,
+    )
+
+    @model_validator(mode="after")
+    def validate_resume_requires_draft(self) -> "ProtokollRequest":
+        if self.resume_token is not None and not self.edited_draft:
+            raise ValueError("edited_draft is required when resume_token is set.")
+        return self
+
+
+class ProtokollResponse(BaseModel):
+    """Router response for both modes of the protokoll endpoint."""
+
+    status: Literal["awaiting_review", "completed"]
+    thread_id: str
+    draft: str | None = None
+    konfidenz: Literal["hoch", "mittel", "niedrig"] | None = None
+    fehlende_daten: list[str] = Field(default_factory=list)
 
 
 class AgentSuggestion(BaseModel):

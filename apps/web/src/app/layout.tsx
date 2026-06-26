@@ -1,10 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "WEG-Verwaltung",
   description:
     "Verwaltungssoftware für Wohnungseigentümergemeinschaften — Portfolio-Projekt.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -14,11 +19,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body>
+      <body suppressHydrationWarning>
         <a href="#main" className="skip-link">
           Zum Hauptinhalt springen
         </a>
-        <main id="main">{children}</main>
+        <div>{children}</div>
       </body>
     </html>
   );

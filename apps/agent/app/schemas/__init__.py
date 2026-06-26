@@ -7,6 +7,7 @@ from app.schemas.agent import (
     BeschlussRequest,
     FristScanResponse,
     ProtokollRequest,
+    ProtokollResponse,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "BeschlussRequest",
     "FristScanResponse",
     "ProtokollRequest",
+    "ProtokollResponse",
 ]

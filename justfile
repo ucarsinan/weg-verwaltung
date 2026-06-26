@@ -30,13 +30,22 @@ test-web:
     pnpm --filter @weg-verwaltung/web test
 
 test-agent:
-    uv run --project apps/agent pytest
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/pytest --rootdir apps/agent apps/agent/tests
+
+# Run audit pgTAP regressions against an ephemeral local Supabase DB.
+# This intentionally never uses --linked and must not target the Frankfurt cloud.
+test-audit-db:
+    supabase db start --workdir infra
+    supabase db reset --workdir infra --local --no-seed
+    cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
+    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql --local
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
 # The login spec runs `seed-admin` first (idempotent).
 e2e:
-    pnpm --filter @weg-verwaltung/web exec playwright test --project=chromium --reporter=list
+    pnpm --filter @weg-verwaltung/web exec playwright test --project=chromium --reporter=list --workers=1
 
 # Lint everything
 lint:
