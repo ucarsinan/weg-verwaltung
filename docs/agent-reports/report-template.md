@@ -27,9 +27,9 @@ Betroffener Worker-Bereich: `<laut docs/agents/worker-map.md oder nicht relevant
 
 ## Findings
 
-| Status | Prioritaet | Problem | Evidenz | Auswirkung | Konkreter Schritt |
-| --- | --- | --- | --- | --- | --- |
-| `<SUPPORTED/PARTIALLY_SUPPORTED/INSUFFICIENT_EVIDENCE>` | `<P1/P2/P3>` | `<Was ist falsch/unklar?>` | `<Datei/Zeile oder Check>` | `<Warum relevant?>` | `<Was genau tun?>` |
+| Status | Prioritaet | Problem | Evidenz | Auswirkung | Konkreter Schritt | Begruendung |
+| --- | --- | --- | --- | --- | --- | --- |
+| `<SUPPORTED/PARTIALLY_SUPPORTED/INSUFFICIENT_EVIDENCE/CONFLICTING/NOT_FOUND>` | `<P1/P2/P3>` | `<Was ist falsch/unklar?>` | `<Datei/Zeile oder Check>` | `<Warum relevant?>` | `<Was genau tun?>` | `<Warum ist dieser Schritt sinnvoll?>` |
 
 ## Geaenderte Dateien
 
