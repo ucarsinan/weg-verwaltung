@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
 
@@ -24,6 +25,7 @@ function getTokenFromAuthFile(filename: string): string {
 async function createScenarioWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
   await page.getByLabel(/Name der WEG/).fill(`Scenario ${label} ${Date.now()}`);
+  await fillWegAddress(page, { street: "Szenarioweg" });
   await page.getByRole("button", { name: /Speichern/ }).click();
   await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -88,11 +90,12 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
 
     // 2. Onboard / create Wirtschaftsplan for next year
     await page.goto("/wegs");
-    const newWegBtn = page.getByRole("link", { name: /Neue WEG anlegen/ }).first();
+    const newWegBtn = page.locator('a[href="/wegs/new"]').first();
     if (await newWegBtn.isVisible()) {
       await newWegBtn.click();
       const wegName = `E2E Scenario Year End ${Date.now()}`;
       await page.getByLabel(/Name der WEG/).fill(wegName);
+      await fillWegAddress(page, { street: "Jahresabschlussweg" });
       await page.getByRole("button", { name: /Speichern/ }).click();
       await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -114,6 +117,7 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.goto("/wegs/new");
     const wegNameVal = `Onboard-WEG-${Date.now()}`;
     await page.getByLabel(/Name der WEG/).fill(wegNameVal);
+    await fillWegAddress(page, { street: "Onboardingweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
@@ -122,6 +126,7 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.goto(`/wegs/${wegId}/einheiten/new`);
     await page.getByLabel(/Bezeichnung/).fill("Apt 1");
     await page.getByLabel("Zähler").fill("400");
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
 
@@ -129,6 +134,7 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.goto(`/wegs/${wegId}/einheiten/new`);
     await page.getByLabel(/Bezeichnung/).fill("Apt 2");
     await page.getByLabel("Zähler").fill("600");
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
 

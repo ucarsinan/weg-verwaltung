@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createWegFixture, fillWegAddress } from "./helpers/weg";
 
 // CRUD smoke for the WEG-Stammdaten path against the linked Cloud Frankfurt
 // project. Runs as the seeded admin (auth.setup.ts persisted the session)
@@ -20,28 +21,33 @@ test.describe("wegs CRUD", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "WEGs" }),
     ).toBeVisible();
-    // The page either shows the empty-state CTA or the list — in both
-    // cases the "Neue WEG anlegen" link is reachable.
+    // The page either shows the empty-state CTA or the list; in both cases
+    // a link to the WEG creation form is reachable.
     await expect(
-      page.getByRole("link", { name: /Neue WEG anlegen/ }).first(),
+      page.locator('a[href="/wegs/new"]').first(),
     ).toBeVisible();
   });
 
   test("creates a WEG, lands on detail, and lists it on /wegs", async ({ page }) => {
     const name = wegName("CRUD");
-    const adresse = "Teststraße 1, 12345 Testheim";
 
     // 1. Create — server action redirects on success.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(name);
-    await page.getByLabel("Adresse").fill(adresse);
+    await fillWegAddress(page, {
+      street: "Teststraße",
+      houseNumber: "1",
+      postalCode: "12345",
+      city: "Testheim",
+    });
     await page.getByRole("button", { name: /Speichern/ }).click();
 
     // 2. The createWeg action redirects to /wegs/<id> on success
     //    (apps/web/src/app/(dashboard)/wegs/new/actions.ts).
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-    await expect(page.getByText(adresse)).toBeVisible();
+    await expect(page.getByText(/Teststraße\s+1/)).toBeVisible();
+    await expect(page.getByText(/12345\s+Testheim/)).toBeVisible();
 
     // 3. Navigate back to the list — the new WEG must be visible there too.
     await page.goto("/wegs");
@@ -65,13 +71,16 @@ test.describe("wegs CRUD", () => {
   test("edits a WEG and shows the updated details on redirect", async ({ page }) => {
     const nameAlt = wegName("Edit-Alt");
     const nameNeu = wegName("Edit-Neu");
-    const adresseAlt = "Alte Str. 1, 12345 Testheim";
-    const adresseNeu = "Neue Str. 2, 54321 Neheim";
 
     // 1. Create a WEG to edit
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(nameAlt);
-    await page.getByLabel("Adresse").fill(adresseAlt);
+    await fillWegAddress(page, {
+      street: "Alte Str.",
+      houseNumber: "1",
+      postalCode: "12345",
+      city: "Testheim",
+    });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -81,24 +90,26 @@ test.describe("wegs CRUD", () => {
 
     // 3. Edit details and save
     await page.getByLabel(/Name der WEG/).fill(nameNeu);
-    await page.getByLabel("Adresse").fill(adresseNeu);
+    await fillWegAddress(page, {
+      street: "Neue Str.",
+      houseNumber: "2",
+      postalCode: "54321",
+      city: "Neheim",
+    });
     await page.getByRole("button", { name: /Speichern/ }).click();
 
     // 4. Expect redirect back to details and updated details visible
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name: nameNeu })).toBeVisible();
-    await expect(page.getByText(adresseNeu)).toBeVisible();
+    await expect(page.getByText(/Neue Str\.\s+2/)).toBeVisible();
+    await expect(page.getByText(/54321\s+Neheim/)).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: nameAlt })).not.toBeVisible();
   });
 
   test("creates, edits, and deletes a Wohneinheit", async ({ page }) => {
     // 1. Create a WEG
     const wegNameVal = wegName("Unit-CRUD");
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(wegNameVal);
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
-    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+    const wegId = await createWegFixture(page, wegNameVal);
 
     // 2. Create a Wohneinheit
     const unitBezeichnungAlt = `Whg ${Date.now()}`;
@@ -139,17 +150,14 @@ test.describe("wegs CRUD", () => {
   test("cannot delete a Wohneinheit with active ownership", async ({ page }) => {
     // 1. Create a WEG
     const wegNameVal = wegName("Unit-Delete-Fail");
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(wegNameVal);
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
-    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+    const wegId = await createWegFixture(page, wegNameVal);
 
     // 2. Create a Wohneinheit
     const unitBezeichnung = `Whg ${Date.now()}`;
     await page.goto(`/wegs/${wegId}/einheiten/new`);
     await page.getByLabel(/Bezeichnung/).fill(unitBezeichnung);
     await page.getByLabel("Zähler").fill("75");
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
 

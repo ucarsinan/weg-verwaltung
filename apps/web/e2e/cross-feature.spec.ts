@@ -1,6 +1,7 @@
 import { test, expect, Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
 
@@ -46,7 +47,7 @@ async function getAuthToken(page: Page) {
 async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
   await page.getByLabel(/Name der WEG/).fill(`Cross ${label} ${Date.now()}`);
-  await page.getByLabel("Adresse").fill("Crossweg 1, 12345 Teststadt");
+  await fillWegAddress(page, { street: "Crossweg", city: "Teststadt" });
   await page.getByRole("button", { name: /Speichern/ }).click();
   await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -106,14 +107,11 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
   });
 
   test("cross-audit-and-finanz: creating a Wirtschaftsplan generates audit events", async ({ page }) => {
-    await page.goto("/wegs");
-    const { token } = await getAuthToken(page);
-
     // Create a plan via UI/API and verify audit_event table gets a log entry
     const res = await page.request.get(`${url}/rest/v1/audit_event?select=*&limit=5`, {
       headers: {
         apikey: key,
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${tokenA}`
       }
     });
     expect(res.ok() || res.status() === 404).toBe(true);

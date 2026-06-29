@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { fillWegAddress } from "./helpers/weg";
 
 // Versammlungs-Happy-Path gegen Cloud Frankfurt. Läuft als geseedeter
 // Tenant-Admin (auth.setup.ts persistierter Storage-State); RLS scoped
@@ -67,7 +68,7 @@ test.describe("versammlungen happy path", () => {
     const wegLabel = `E2E Versammlung ${stamp()}`;
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(wegLabel);
-    await page.getByLabel("Adresse").fill("Versammlungsweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Versammlungsweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -163,7 +164,7 @@ test.describe("versammlungen happy path", () => {
     // 1. WEG anlegen.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Einladung ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Einladungsweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Einladungsweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -214,7 +215,7 @@ test.describe("versammlungen happy path", () => {
     // 1. WEG + Versammlung + TOP — Setup für den Beschluss-Pfad.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Beschluss ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Beschlussweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Beschlussweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -277,7 +278,7 @@ test.describe("versammlungen happy path", () => {
     // 1. WEG anlegen.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Vote ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Voteweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Voteweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
@@ -288,7 +289,7 @@ test.describe("versammlungen happy path", () => {
     await expect(page).toHaveURL(/\/einheiten\/new$/);
     await page.getByLabel(/Bezeichnung/).fill(`Whg ${stamp()}`);
     await page.getByLabel("Zähler").fill("100");
-    // Nenner defaultet auf 1000 — nicht überschreiben.
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
@@ -397,7 +398,7 @@ test.describe("versammlungen happy path", () => {
     // 1. WEG anlegen.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Protokoll-Null ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Protokollweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Protokollweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -455,7 +456,7 @@ test.describe("versammlungen happy path", () => {
     await page
       .getByLabel(/Name der WEG/)
       .fill(`E2E Protokoll-Entwurf ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Entwurfweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Entwurfweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,

@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
 
@@ -28,6 +29,7 @@ async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
   const name = `E2E Finz ${label} ${Date.now()}`;
   await page.getByLabel(/Name der WEG/).fill(name);
+  await fillWegAddress(page, { street: "Finanzweg" });
   await page.getByRole("button", { name: /Speichern/ }).click();
   await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
   const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { fillWegAddress } from "./helpers/weg";
 
 // Personen-CRUD + Eigentümerschaft E2E gegen Cloud Frankfurt.
 // Läuft als geseedeter Tenant-Admin (auth.setup.ts persistierter Storage-State).
@@ -18,7 +19,7 @@ test.describe("personen CRUD", () => {
     // 1. WEG anlegen — Fixture für diesen Test.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Person ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Personenweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Personenweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -52,7 +53,7 @@ test.describe("personen CRUD", () => {
     await page.goto("/wegs/new");
     const wegLabel = `E2E Person-Edit ${stamp()}`;
     await page.getByLabel(/Name der WEG/).fill(wegLabel);
-    await page.getByLabel("Adresse").fill("Editweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Editweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -100,7 +101,7 @@ test.describe("personen CRUD", () => {
     await page
       .getByLabel(/Name der WEG/)
       .fill(`E2E Person-Validation ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Validierungsweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Validierungsweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -132,7 +133,7 @@ test.describe("eigentümerschaft", () => {
     // 1. WEG anlegen.
     await page.goto("/wegs/new");
     await page.getByLabel(/Name der WEG/).fill(`E2E Eigentümer ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Eigentümerweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Eigentümerweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -143,6 +144,7 @@ test.describe("eigentümerschaft", () => {
     await page.goto(`/wegs/${wegId}/einheiten/new`);
     await page.getByLabel(/Bezeichnung/).fill(`Whg. ${stamp()}`);
     await page.getByLabel("Zähler").fill("250");
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -190,7 +192,7 @@ test.describe("eigentümerschaft", () => {
     await page
       .getByLabel(/Name der WEG/)
       .fill(`E2E Co-Eigentümer ${stamp()}`);
-    await page.getByLabel("Adresse").fill("Mitbesitzweg 1, 12345 Testheim");
+    await fillWegAddress(page, { street: "Mitbesitzweg" });
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -211,6 +213,7 @@ test.describe("eigentümerschaft", () => {
     await page.goto(`/wegs/${wegId}/einheiten/new`);
     await page.getByLabel(/Bezeichnung/).fill(`Co-Whg. ${stamp()}`);
     await page.getByLabel("Zähler").fill("300");
+    await page.getByLabel("Nenner").fill("1000");
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,

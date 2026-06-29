@@ -23,6 +23,7 @@ export interface UnitFormState {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const POSITIVE_INTEGER_RE = /^[1-9]\d*$/;
 
 export async function createUnit(
   _prev: UnitFormState,
@@ -47,13 +48,13 @@ export async function createUnit(
     errors.bezeichnung = ["Bezeichnung darf höchstens 200 Zeichen lang sein."];
   }
 
-  const zaehler = parseInt(zaehlerRaw, 10);
-  if (!zaehlerRaw || isNaN(zaehler) || zaehler < 1) {
+  const zaehler = Number(zaehlerRaw);
+  if (!POSITIVE_INTEGER_RE.test(zaehlerRaw)) {
     errors.mea_zaehler = ["MEA-Zähler muss eine positive ganze Zahl sein."];
   }
 
-  const nenner = parseInt(nennerRaw, 10);
-  if (!nennerRaw || isNaN(nenner) || nenner < 1) {
+  const nenner = Number(nennerRaw);
+  if (!POSITIVE_INTEGER_RE.test(nennerRaw)) {
     errors.mea_nenner = ["MEA-Nenner muss eine positive ganze Zahl sein."];
   }
 

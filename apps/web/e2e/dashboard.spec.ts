@@ -14,13 +14,10 @@ test.describe("dashboard (authenticated)", () => {
     await page.goto("/dashboard");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Dashboard" }),
+      page.getByRole("heading", { level: 1, name: "Operativer Überblick" }),
     ).toBeVisible();
 
-    const angemeldetAls = page
-      .locator("dt", { hasText: /Angemeldet als/i })
-      .locator("xpath=following-sibling::dd[1]");
-    await expect(angemeldetAls).toHaveText(ADMIN_EMAIL);
+    await expect(page.getByText(ADMIN_EMAIL).first()).toBeVisible();
   });
 
   // The Custom Access Token Hook (0002_identity.sql) injects tenant_id + role
@@ -46,7 +43,7 @@ test.describe("dashboard (authenticated)", () => {
 
   test("links into the WEGs module", async ({ page }) => {
     await page.goto("/dashboard");
-    const wegsLink = page.getByRole("link", { name: /zur WEG-Liste/i });
+    const wegsLink = page.locator('main a[href="/wegs"]').first();
     await expect(wegsLink).toBeVisible();
     await wegsLink.click();
     await expect(page).toHaveURL(/\/wegs$/);
