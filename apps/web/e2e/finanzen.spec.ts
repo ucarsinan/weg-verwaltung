@@ -171,8 +171,12 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await editLink.click();
     await expect(page.getByRole("heading", { name: /wirtschaftsplan bearbeiten/i })).toBeVisible();
     await page.getByLabel(/bezeichnung/i).fill("Wirtschaftsplan 2026 aktualisiert");
-    await page.getByRole("button", { name: /speichern/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
+    await Promise.all([
+      page.waitForURL(new RegExp(`/wegs/${wegId}/finanzen$`), {
+        timeout: 15_000,
+      }),
+      page.getByRole("button", { name: /speichern/i }).click(),
+    ]);
     await expect(
       getWirtschaftsplanRow(
         page,

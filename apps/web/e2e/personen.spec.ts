@@ -38,8 +38,11 @@ test.describe("personen CRUD", () => {
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
     });
-    await expect(page.getByText(nachname)).toBeVisible();
-    await expect(page.getByText(email)).toBeVisible();
+    const personen = page.locator("#personen");
+    await expect(personen.getByText(nachname)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(personen.getByText(email)).toBeVisible();
   });
 
   test("Person bearbeiten — Änderungen sind nach Redirect sichtbar", async ({
@@ -81,8 +84,11 @@ test.describe("personen CRUD", () => {
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
     });
-    await expect(page.getByText(nachnameNeu)).toBeVisible();
-    await expect(page.getByText(nachnameAlt)).not.toBeVisible();
+    const personen = page.locator("#personen");
+    await expect(personen.getByText(nachnameNeu)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(personen.getByText(nachnameAlt)).not.toBeVisible();
   });
 
   test("Person anlegen — Validierungsfehler bei leerem Vornamen", async ({

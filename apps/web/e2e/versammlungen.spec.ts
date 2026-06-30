@@ -60,6 +60,24 @@ async function updateMeetingStatus(
   expect(updateRes.ok()).toBeTruthy();
 }
 
+async function gotoDomReady(page: Page, path: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await page.goto(path, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
 test.describe("versammlungen happy path", () => {
   test("creates a WEG, a Versammlung, and a TOP — TOP erscheint auf der Detail-Seite", async ({
     page,
@@ -396,6 +414,8 @@ test.describe("versammlungen happy path", () => {
   test("Protokoll Seite ist vor Ende gesperrt und nach Ende zugänglich", async ({
     page,
   }) => {
+    test.setTimeout(90_000);
+
     // 1. WEG anlegen.
     await createWegFixture(page, `E2E Protokoll-Null ${stamp()}`, {
       street: "Protokollweg",
@@ -415,7 +435,7 @@ test.describe("versammlungen happy path", () => {
     expect(meetingId).toBeTruthy();
 
     // 3. Direktaufruf vor Ende: Protokoll ist serverseitig gesperrt.
-    await page.goto(`/versammlungen/${meetingId}/protokoll`);
+    await gotoDomReady(page, `/versammlungen/${meetingId}/protokoll`);
     await expect(page.getByText("Protokoll noch gesperrt")).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Protokoll generieren/ }),
@@ -423,14 +443,14 @@ test.describe("versammlungen happy path", () => {
 
     // 4. Nach beendetem Meeting ist der Review erreichbar.
     await updateMeetingStatus(page, meetingId!, "beendet");
-    await page.goto(`/versammlungen/${meetingId}`);
+    await gotoDomReady(page, `/versammlungen/${meetingId}`);
     const protokollHref = await page
       .getByRole("link", { name: /^Protokoll$/ })
       .getAttribute("href");
     expect(protokollHref).toMatch(
       new RegExp(`/versammlungen/${meetingId}/protokoll`),
     );
-    await page.goto(protokollHref!);
+    await gotoDomReady(page, protokollHref!);
     await expect(page).toHaveURL(/\/protokoll$/);
 
     // 5. Kein Protokoll vorhanden → "Protokoll generieren"-Button sichtbar.

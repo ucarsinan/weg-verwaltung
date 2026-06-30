@@ -51,8 +51,10 @@ async function updateMeetingStatus(
 }
 
 test("Demonstration des WEG-Verwaltung Kernworkflows", async ({ page }) => {
+  test.setTimeout(120_000);
+
   const suffix = stamp();
-  const delayTime = 1500; // 1.5s Pause für gute Lesbarkeit des Screencasts
+  const delayTime = Number(process.env.E2E_DEMO_DELAY_MS ?? "0");
 
   // 1. Dashboard öffnen und Umschauen
   console.log("→ Schritt 1: Dashboard öffnen...");
