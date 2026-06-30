@@ -2,7 +2,7 @@
 // One-off seed: create a tenant + tenant_admin user via the Supabase Admin API.
 //
 // Usage:
-//   node apps/web/scripts/seed-admin.mjs [email] [password] [tenantName]
+//   node apps/web/scripts/seed-admin.mjs [email] [password] [tenantName] [role]
 // Defaults: admin@admin.com / admin1 / "Default WEG-Verwaltung"
 //
 // Reads .env.local from apps/web/ (and falls back to repo root). Requires either
@@ -58,10 +58,19 @@ if (!url || !serviceKey) {
   process.exit(1);
 }
 
-const [, , emailArg, passwordArg, tenantNameArg] = process.argv;
+const [, , emailArg, passwordArg, tenantNameArg, roleArg] = process.argv;
 const email = emailArg || "admin@admin.com";
 const password = passwordArg || "admin1";
 const tenantName = tenantNameArg || "Default WEG-Verwaltung";
+const role = roleArg || "tenant_admin";
+const allowedRoles = new Set(["tenant_admin", "verwalter_mitarbeiter"]);
+
+if (!allowedRoles.has(role)) {
+  console.error(
+    `Invalid role "${role}". Expected one of: ${Array.from(allowedRoles).join(", ")}`,
+  );
+  process.exit(1);
+}
 
 const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -70,6 +79,7 @@ const admin = createClient(url, serviceKey, {
 console.log(`→ Target: ${url}`);
 console.log(`→ Email:  ${email}`);
 console.log(`→ Tenant: ${tenantName}`);
+console.log(`→ Role:   ${role}`);
 
 // 1) Create or reuse the auth user.
 let userId;
@@ -124,16 +134,16 @@ let tenantId;
   }
 }
 
-// 3) Membership with role=tenant_admin — upsert against (tenant_id, user_id).
+// 3) Membership with role — upsert against (tenant_id, user_id).
 {
   const { error } = await admin
     .from("tenant_member")
     .upsert(
-      { tenant_id: tenantId, user_id: userId, role: "tenant_admin" },
+      { tenant_id: tenantId, user_id: userId, role },
       { onConflict: "tenant_id,user_id" },
     );
   if (error) throw error;
-  console.log("✓ tenant_member upserted (role=tenant_admin)");
+  console.log(`✓ tenant_member upserted (role=${role})`);
 }
 
 console.log("\nDone. Sign in with:");

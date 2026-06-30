@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fillWegAddress } from "./helpers/weg";
+import { createWegFixture } from "./helpers/weg";
 
 // Personen-CRUD + Eigentümerschaft E2E gegen Cloud Frankfurt.
 // Läuft als geseedeter Tenant-Admin (auth.setup.ts persistierter Storage-State).
@@ -17,18 +17,14 @@ test.describe("personen CRUD", () => {
     page,
   }) => {
     // 1. WEG anlegen — Fixture für diesen Test.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Person ${stamp()}`);
-    await fillWegAddress(page, { street: "Personenweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, `E2E Person ${stamp()}`, {
+      street: "Personenweg",
     });
 
     // 2. Neue Person anlegen — direkter Link auf der WEG-Detail-Seite.
     //    Der Link ist ein plain <Link> (kein Button asChild) — click navigiert sauber.
     const nachname = `Testmann-${stamp()}`;
-    await page.getByRole("link", { name: /Neue Person anlegen/ }).first().click();
+    await page.getByRole("link", { name: /Person anlegen/ }).first().click();
     await expect(page).toHaveURL(/\/personen\/new$/);
 
     await page.getByLabel(/Vorname/).fill("Anna");
@@ -50,18 +46,14 @@ test.describe("personen CRUD", () => {
     page,
   }) => {
     // 1. WEG + Person als Fixture anlegen.
-    await page.goto("/wegs/new");
     const wegLabel = `E2E Person-Edit ${stamp()}`;
-    await page.getByLabel(/Name der WEG/).fill(wegLabel);
-    await fillWegAddress(page, { street: "Editweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, wegLabel, {
+      street: "Editweg",
     });
 
     // 2. Person anlegen.
     const nachnameAlt = `Altmann-${stamp()}`;
-    await page.getByRole("link", { name: /Neue Person anlegen/ }).first().click();
+    await page.getByRole("link", { name: /Person anlegen/ }).first().click();
     await page.getByLabel(/Vorname/).fill("Bernd");
     await page.getByLabel(/Nachname/).fill(nachnameAlt);
     await page.getByRole("button", { name: /Speichern/ }).click();
@@ -97,18 +89,12 @@ test.describe("personen CRUD", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page
-      .getByLabel(/Name der WEG/)
-      .fill(`E2E Person-Validation ${stamp()}`);
-    await fillWegAddress(page, { street: "Validierungsweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, `E2E Person-Validation ${stamp()}`, {
+      street: "Validierungsweg",
     });
 
     // 2. Neue Person ohne Vorname — Validierungsfehler erwartet.
-    await page.getByRole("link", { name: /Neue Person anlegen/ }).first().click();
+    await page.getByRole("link", { name: /Person anlegen/ }).first().click();
     await expect(page).toHaveURL(/\/personen\/new$/);
 
     await page.getByLabel(/Nachname/).fill("Schmidt");
@@ -131,14 +117,9 @@ test.describe("eigentümerschaft", () => {
     // Dieser Test verifiziert den Flow isoliert ohne Versammlung.
 
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Eigentümer ${stamp()}`);
-    await fillWegAddress(page, { street: "Eigentümerweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const wegId = await createWegFixture(page, `E2E Eigentümer ${stamp()}`, {
+      street: "Eigentümerweg",
     });
-    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
 
     // 2. Einheit anlegen.
     await page.goto(`/wegs/${wegId}/einheiten/new`);
@@ -188,16 +169,9 @@ test.describe("eigentümerschaft", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page
-      .getByLabel(/Name der WEG/)
-      .fill(`E2E Co-Eigentümer ${stamp()}`);
-    await fillWegAddress(page, { street: "Mitbesitzweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const wegId = await createWegFixture(page, `E2E Co-Eigentümer ${stamp()}`, {
+      street: "Mitbesitzweg",
     });
-    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
 
     // 2. Erste Person anlegen (wird als Co-Eigentümer per Checkbox ausgewählt).
     await page.goto(`/wegs/${wegId}/personen/new`);

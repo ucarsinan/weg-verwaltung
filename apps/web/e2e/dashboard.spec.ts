@@ -17,7 +17,7 @@ test.describe("dashboard (authenticated)", () => {
       page.getByRole("heading", { level: 1, name: "Operativer Überblick" }),
     ).toBeVisible();
 
-    await expect(page.getByText(ADMIN_EMAIL).first()).toBeVisible();
+    await expect(page.locator("aside").getByText(ADMIN_EMAIL)).toBeVisible();
   });
 
   // The Custom Access Token Hook (0002_identity.sql) injects tenant_id + role

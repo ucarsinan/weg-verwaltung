@@ -31,6 +31,7 @@ export const ADMIN_PASSWORD = "admin1";
 export const TENANT_B_EMAIL = "tenant_b@admin.com";
 export const TENANT_B_PASSWORD = "admin1";
 export const TENANT_B_NAME = "Secondary WEG-Verwaltung";
+export const TENANT_B_ROLE = "verwalter_mitarbeiter";
 
 setup("authenticate as seeded admin", async ({ page }) => {
   // Seed first. The script handles the "user already registered" path by
@@ -51,7 +52,7 @@ setup("authenticate as seeded admin", async ({ page }) => {
 setup("authenticate as seeded secondary tenant (Tenant B)", async ({ page }) => {
   const { stderr } = await execFileAsync(
     "node",
-    [seedScript, TENANT_B_EMAIL, TENANT_B_PASSWORD, TENANT_B_NAME],
+    [seedScript, TENANT_B_EMAIL, TENANT_B_PASSWORD, TENANT_B_NAME, TENANT_B_ROLE],
     { cwd: webDir }
   );
   if (stderr.trim()) console.warn("[seed-admin Tenant B stderr]", stderr);

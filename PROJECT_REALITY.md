@@ -1,44 +1,46 @@
 # PROJECT_REALITY
 
-Last audit: 2026-06-26
-Recommendation: validate
-Confidence: medium
+Last audit: 2026-06-29
+Recommendation: continue
+Confidence: high
 
 ## Core Problem
-- Problem: Profi-Hausverwalter brauchen eine schlanke, sichere WEG-Verwaltung, die Versammlungen, Beschluesse, Protokolle, Eigentuemerdaten, Finanzen und Vorgaenge weniger fehleranfaellig abwickelt.
-- Affected user: WEG-Verwalter mit mehreren Mandanten/WEGs; Wohnungseigentuemer sind Nebenakteure fuer Einsicht, Abstimmung, Vollmacht und Kommunikation.
-- Painful current workflow: Rechtlich formale WEG-Prozesse werden ueber mehrere Tools, Dokumente und manuelle Kontrollen verteilt; KI-Unterstuetzung waere riskant, wenn sie nicht als Vorschlag mit harter Audit-/RLS-Grenze umgesetzt ist.
-- Desired real-world outcome: Ein lokaler MVP/Portfolio-Schnitt, der einen realen WEG-Kernworkflow sicher demonstriert und gegen Cloud, E2E und Review-Daten belegbar ist.
-- Success criteria: Cloud-Migrationen aktuell, E2E gegen Frankfurt gruen, RLS/Audit-Gates gruen, ein kompletter Demo-Workflow mit realistischen Daten laeuft, KI bleibt HITL/Vorschlag, keine produktiven Hosting-Claims ohne Deployment-Beleg.
+- Problem: Profi-Hausverwalter brauchen eine sichere, schlanke WEG-Verwaltung fuer Versammlungen, Beschluesse, Protokolle, Eigentuemerdaten, Finanzen, Audit und Vorgaenge.
+- Affected user: WEG-Verwalter mit mehreren Mandanten/WEGs; Eigentuemer, Beirat und Mitarbeitende sind Nebenrollen fuer Einsicht, Abstimmung, Vollmacht und Kommunikation.
+- Painful current workflow: Rechtlich formale WEG-Prozesse laufen heute oft ueber viele Tools, Dokumente und manuelle Kontrollen; KI-Unterstuetzung waere gefaehrlich, wenn sie kritische Writes ausloesen oder Mandanten-Iso umgehen koennte.
+- Desired real-world outcome: Ein lokal belegbarer MVP/Portfolio-Schnitt, der einen realistischen WEG-Kernworkflow sicher demonstriert: RLS-first, append-only Audit/Beschluss-Sammlung, Vote ueber `ownership_id`, KI nur als Vorschlag.
+- Success criteria: Lokale Checks gruen, Cloud-Migrationen verifiziert, Cloud-E2E gegen Frankfurt gruen, Demo-Workflow mit synthetischen Daten laeuft, produktive Hosting-/RAG-/Compliance-Claims nur mit Beleg.
 
 ## Current State
-- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Supabase-Migrationen 0001-0055, WEG/Personen/Eigentuemerschaft, Versammlung/Beschluss/Protokoll, Audit-Konsole, Finance Lifecycle, Vorgangszentrale-Grundlage, lokale Unit-/Agent-Tests und Web-Build.
-- Partially implemented: RAG ist Scaffold und liefert bewusst leere Treffer; Agent-HITL/Side-Effect-Safety, Frist-Graph, Langfuse/RAGAS-Gates, Audit-Cold-Storage-Export, produktive Betriebsautomation und E2E-Cloud-Absicherung sind offen.
-- Not verified: aktueller Supabase-Cloud-Migrationsstand, `just e2e` gegen Frankfurt, GitHub-CI-Lauf, produktives Hosting fuer Web/Agent, echte Verwalter-Nutzerakzeptanz.
-- Last stopping point: Lokaler Review-Schnitt nach 0055 Advisor-Grant-/RLS-InitPlan-Hardening; Worktree ist dirty mit Doku-/CI-/justfile-Aenderungen und neuen 0055 SQL-Artefakten.
+- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Supabase-Migrationen `0001`-`0055`, WEG/Personen/Eigentuemerschaft, Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Audit-Konsole, Finance Lifecycle, Vorgangszentrale-Grundlage, Settings- und Advisor-Hardening.
+- Partially implemented: RAG-Retrieval ist bewusst Scaffold und liefert `[]`; Agent-Write-Header, vollstaendige Frist-/HITL-/Eval-Pipeline, Langfuse/RAGAS-Gates, Audit-Cold-Storage-Export und produktive Betriebsautomation sind offen.
+- Not verified: produktives Hosting fuer Web/Agent, GitHub-CI nach den E2E-Fixes, echte Verwalter-Nutzerakzeptanz, produktive Datenschutz-/AVV-/Subprocessor-Artefakte, produktive RAG-Datenpipeline.
+- Last stopping point: Cloud-Validation-Gate am 2026-06-29 abgeschlossen: `supabase migration list --workdir infra` zeigte Local=Remote `0001`-`0055`; voller `just e2e` gegen Frankfurt lief gruen mit `63 passed / 11 skipped`.
 
 ## Reality Findings
-- Local evidence: `README.md`, `PROJECT.md`, `TEST_INFRA.md`, `AGENTS.md`, `apps/web`, `apps/agent`, `infra/supabase`; lokale Checks am 2026-06-26: Web Vitest 148 passed, Agent pytest 73 passed/5 skipped, ESLint gruen, TypeScript gruen, Ruff gruen, Mypy gruen, Next build gruen mit Node 22.
-- External sources: WEG §§ 23-25 bestaetigen virtuelle Versammlung, Umlaufbeschluss, Einladungs-/Niederschrifts-/Beschluss-Sammlungspflichten und Stimmrechtsmodell; Supabase-Doku bestaetigt RLS als Pflicht fuer exposed `public` schema; Next-Doku verlangt Node >=20.9.
-- Best-practice implications: Die Projektinvarianten RLS-first, DB-Constraints, append-only Audit/Beschluss und KI-nur-Vorschlag passen zum Problembereich. Der naechste Wert entsteht nicht durch weitere Features, sondern durch echte Cloud/E2E/Demo-Validierung.
-- Key uncertainty: Ob der lokal solide Stand in der verlinkten Frankfurt-Cloud und in einem realistischen Verwalter-Demoablauf genauso funktioniert.
+- Local evidence: `README.md`, `PROJECT.md`, `PROJECT_CONTEXT.md`, `WORKFLOW.md`, `TESTING.md`, `SECURITY.md`, `TEST_INFRA.md`, `docs/01-06`, `apps/web`, `apps/agent`, `infra/supabase`.
+- Local checks: `./scripts/verify.sh` gruen mit Node `v22.12.0`: ESLint/Ruff gruen, TypeScript/Mypy gruen, Web Vitest `153 passed`, Agent pytest `73 passed / 5 skipped`, Next build gruen, `git diff --check` gruen. Ein erster Verify-Versuch mit Node `18.12.1` scheiterte nur am Next-Node-Minimum.
+- Cloud checks: Read-only Supabase-Migrationsabgleich ist driftfrei (`0001`-`0055` lokal und remote). Cloud-E2E gegen Frankfurt ist gruen: `just e2e` mit `63 passed / 11 skipped`; die Skips betreffen dokumentierte Sollstellung-/Korrektur-/History-Cases, nicht heimliche Failures.
+- External sources: WEG §§ 23-25 bestaetigen virtuelle Versammlung, Textform-Umlaufbeschluss, Einladungs-/Niederschrifts-/Beschluss-Sammlungs- und Stimmrechtsanforderungen; Supabase-Doku bestaetigt RLS-Pflicht fuer exposed `public` schema; Next-Doku bestaetigt Node >=20.9.
+- Best-practice implications: Die Projektinvarianten RLS, DB-Trigger, append-only Audit/Beschluss und KI-nur-Vorschlag passen zum Problem und sind jetzt auch cloudnah validiert. Der naechste Wert entsteht durch Demo-Freeze, CI/Hosting-Beleg und klares Claim-Management, nicht durch weitere Featurebreite.
+- Key uncertainty: Ob ein echter Verwalter den demonstrierten Kernworkflow als ausreichend klar und wertvoll erkennt; produktive Betriebs- und Compliance-Artefakte sind weiterhin nicht belegt.
 
 ## Gaps And Risks
-- Missing essentials: Cloud-Migration verifizieren, E2E ausfuehren, Demo-Daten/Scenario einfrieren, Hosting-Beleg schaffen oder Hosting-Claims entfernen, RAG-Datenpipeline bewusst weiterhin aus MVP-Claims heraushalten.
-- Luftschloss/drift warnings: Mehr KI/RAG/Automationsfeatures waeren Drift, solange die Basis-Workflows nicht cloud-verifiziert und fuer einen realen Verwalter nachvollziehbar demonstrierbar sind.
-- Risks: Remote-only DB erhoeht Validierungsrisiko; E2E-Specs enthalten teilweise schwache Assertions; Audit-Legacy-Fenster bleibt forensisch eingeschraenkt; produktive Compliance-/AVV-/AI-Act-Annahmen sind nicht als Betriebsartefakte belegt.
+- Missing essentials: Demo-Daten/Scenario einfrieren, GitHub-CI/Hosting-Beleg schaffen oder Hosting-Claims weglassen, die 11 geskippten E2E-Cases bewusst priorisieren oder als Nicht-Scope dokumentieren, RAG aus MVP-Claims heraushalten.
+- Luftschloss/drift warnings: Weitere KI-, RAG-, Automations- oder Cold-Storage-Destructive-Features waeren Drift, solange Demo, CI/Hosting und Nutzerfeedback nicht belegt sind.
+- Risks: Remote-only DB macht weitere Validierung freigabepflichtig und erzeugt Testdaten im Cloud-E2E-Tenant; alte Audit-Legacy-Fenster bleiben forensisch eingeschraenkt; produktive Compliance-Claims brauchen AVV/TOM/Subprocessor/AI-Act-Artefakte.
 
 ## Next Logical Step
-1. Step: Cloud-/E2E-Validierung als Review-Gate ausfuehren: Migration-Status read-only pruefen, dann `just e2e` gegen Frankfurt nur mit expliziter Freigabe, danach CI-Status abgleichen.
-   Why: Das groesste Realitaetsrisiko ist nicht lokale Codequalitaet, sondern die Luecke zwischen lokalem Stand und echter Cloud-Laufzeit.
-   Validation: E2E-Report, Supabase-Migrationsabgleich, CI-Link/Run-ID und dokumentierte Abweichungen.
-   Stop/continue rule: Wenn Cloud/E2E rot ist, keine neuen Features; zuerst kleinste reproduzierbare Failure-Slices fixen. Wenn gruen, Demo-Workflow und Portfolio-Schnitt einfrieren.
+1. Step: Demo-/Portfolio-Schnitt einfrieren: genau einen belegten Kernworkflow dokumentieren und zeigen (`WEG -> Einheit/Person/Eigentuemerschaft -> Versammlung -> TOP -> Beschluss/Vote ueber ownership_id -> Feststellung -> Beschluss-Sammlung`).
+   Why: Dieser Workflow ist jetzt cloudnah gruen und trifft das reale Kernproblem besser als weitere Breite.
+   Validation: Demo-Run mit synthetischen Daten, Screenshot-/Screencast-Check, keine Claims zu Hosting/RAG/Produktionsbetrieb ohne Beleg.
+   Stop/continue rule: Wenn der Demo-Run holpert oder Claims nicht belegbar sind, zuerst Demo/Claim korrigieren. Wenn er sauber ist, CI/Hosting-Beleg oder Nutzerfeedback als naechstes Gate.
 
 ## Do Not Build Yet
 - Keine RAG-Produktivbehauptung vor Embedding-Pipeline, Eval-Dataset und RAGAS/Langfuse-Gate.
 - Keine destruktive Audit-Cold-Storage-Funktion vor privilegiertem Export, Manifest und HMAC-Verify-Job.
-- Keine weiteren Vorgangszentrale-/Agent-Automationen, bevor der Kern-Demoablauf cloud-verifiziert ist.
-- Keine produktiven Hosting- oder Compliance-Claims ohne belegte Deployments, AVV/Subprocessor-Liste und Betriebschecks.
+- Keine weiteren Agent-Automationen, bevor der Kern-Demoablauf cloud-verifiziert ist.
+- Keine produktiven Hosting- oder Compliance-Claims ohne Deployment-, AVV-, TOM-, Subprocessor- und Betriebscheck-Belege.
 
 ## Source Links
 - WEG §23: https://www.gesetze-im-internet.de/woeigg/__23.html
@@ -46,5 +48,3 @@ Confidence: medium
 - WEG §25: https://www.gesetze-im-internet.de/woeigg/__25.html
 - Supabase RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
 - Next.js Installation: https://nextjs.org/docs/app/getting-started/installation
-- GDPR Article 28: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679
-- EU AI Act Article 4: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689

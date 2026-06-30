@@ -46,8 +46,9 @@ test.describe("wegs CRUD", () => {
     //    (apps/web/src/app/(dashboard)/wegs/new/actions.ts).
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-    await expect(page.getByText(/Teststraße\s+1/)).toBeVisible();
-    await expect(page.getByText(/12345\s+Testheim/)).toBeVisible();
+    const stammdaten = page.locator("#stammdaten");
+    await expect(stammdaten.getByText(/Teststraße\s+1/)).toBeVisible();
+    await expect(stammdaten.getByText(/12345\s+Testheim/)).toBeVisible();
 
     // 3. Navigate back to the list — the new WEG must be visible there too.
     await page.goto("/wegs");
@@ -101,8 +102,9 @@ test.describe("wegs CRUD", () => {
     // 4. Expect redirect back to details and updated details visible
     await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name: nameNeu })).toBeVisible();
-    await expect(page.getByText(/Neue Str\.\s+2/)).toBeVisible();
-    await expect(page.getByText(/54321\s+Neheim/)).toBeVisible();
+    const stammdaten = page.locator("#stammdaten");
+    await expect(stammdaten.getByText(/Neue Str\.\s+2/)).toBeVisible();
+    await expect(stammdaten.getByText(/54321\s+Neheim/)).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: nameAlt })).not.toBeVisible();
   });
 

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { fillWegAddress } from "./helpers/weg";
+import { createWegFixture } from "./helpers/weg";
 
 // Versammlungs-Happy-Path gegen Cloud Frankfurt. Läuft als geseedeter
 // Tenant-Admin (auth.setup.ts persistierter Storage-State); RLS scoped
@@ -66,12 +66,8 @@ test.describe("versammlungen happy path", () => {
   }) => {
     // 1. WEG anlegen — Fixture für diesen Test-Run.
     const wegLabel = `E2E Versammlung ${stamp()}`;
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(wegLabel);
-    await fillWegAddress(page, { street: "Versammlungsweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, wegLabel, {
+      street: "Versammlungsweg",
     });
 
     // 2. Auf der WEG-Detail-Seite die Versammlungs-Anlage starten.
@@ -108,7 +104,8 @@ test.describe("versammlungen happy path", () => {
     // 6. TOP-Anlage starten — Empty-State-Link (plain <Link>, kein aria-label,
     //    kein Button-Wrapper → click navigiert sauber).
     await page
-      .getByRole("link", { name: /Jetzt ersten TOP anlegen/ })
+      .getByRole("link", { name: /Ersten TOP anlegen|TOP anlegen/ })
+      .first()
       .click();
     await expect(page).toHaveURL(/\/tops\/new$/);
 
@@ -136,7 +133,11 @@ test.describe("versammlungen happy path", () => {
     // 10. Edit-Flow — TOP bearbeiten, neuer Titel landet auf Detail.
     await page.getByText(topTitel).click();
     await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/);
-    await page.getByRole("link", { name: /TOP bearbeiten/ }).click();
+    const editTopHref = await page
+      .getByRole("link", { name: /TOP bearbeiten/ })
+      .getAttribute("href");
+    expect(editTopHref).toMatch(/\/tops\/[0-9a-f-]{36}\/edit$/);
+    await page.goto(editTopHref!);
     await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}\/edit$/);
     const topTitelEdited = `${topTitel} (überarbeitet)`;
     await page.getByLabel(/Titel/).fill(topTitelEdited);
@@ -162,11 +163,9 @@ test.describe("versammlungen happy path", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Einladung ${stamp()}`);
-    await fillWegAddress(page, { street: "Einladungsweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await createWegFixture(page, `E2E Einladung ${stamp()}`, {
+      street: "Einladungsweg",
+    });
 
     // 2. Versammlungs-Anlage mit Termin in 30 Tagen — § 24 Abs. 4 WEG-Frist
     //    (21 Tage) sicher eingehalten.
@@ -188,7 +187,7 @@ test.describe("versammlungen happy path", () => {
     });
 
     // 3. Vor Versand: Status "Entwurf" + Einladungs-Card sichtbar.
-    await expect(page.getByText("Entwurf")).toBeVisible();
+    await expect(page.locator("dl").getByText("Entwurf")).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Einladung versenden/ }),
     ).toBeVisible();
@@ -200,12 +199,14 @@ test.describe("versammlungen happy path", () => {
 
     // 5. Nach Versand: Status "Eingeladen", Einladungs-Card weg,
     //    Einladungsfrist-Indikator grün.
-    await expect(page.getByText("Eingeladen")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("dl").getByText("Eingeladen")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(
       page.getByRole("button", { name: /Einladung versenden/ }),
     ).not.toBeVisible();
     await expect(
-      page.getByText(/Einladungsfrist eingehalten/),
+      page.locator("dl").getByText(/Einladungsfrist eingehalten/),
     ).toBeVisible();
   });
 
@@ -213,11 +214,9 @@ test.describe("versammlungen happy path", () => {
     page,
   }) => {
     // 1. WEG + Versammlung + TOP — Setup für den Beschluss-Pfad.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Beschluss ${stamp()}`);
-    await fillWegAddress(page, { street: "Beschlussweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await createWegFixture(page, `E2E Beschluss ${stamp()}`, {
+      street: "Beschlussweg",
+    });
 
     const newMeetingHref = await page
       .getByRole("link", { name: /Neue Versammlung anlegen/ })
@@ -229,7 +228,10 @@ test.describe("versammlungen happy path", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("link", { name: /Jetzt ersten TOP anlegen/ }).click();
+    await page
+      .getByRole("link", { name: /Ersten TOP anlegen|TOP anlegen/ })
+      .first()
+      .click();
     const topTitel = `Beschluss-Test TOP ${stamp()}`;
     await page.getByLabel(/Titel/).fill(topTitel);
     await page.getByRole("button", { name: /TOP anlegen/ }).click();
@@ -276,12 +278,9 @@ test.describe("versammlungen happy path", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Vote ${stamp()}`);
-    await fillWegAddress(page, { street: "Voteweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
-    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+    const wegId = await createWegFixture(page, `E2E Vote ${stamp()}`, {
+      street: "Voteweg",
+    });
 
     // 2. Erste Einheit anlegen — Direkt-Navigation für stabile Erst-Compile-
     //    Zeiten auf Next 16 dev statt Link-Click.
@@ -318,7 +317,11 @@ test.describe("versammlungen happy path", () => {
     // 5. Versammlung anlegen.
     await page.goto(`/wegs/${wegId}/versammlungen/new`);
     const meetingTitel = `Vote-ETV ${stamp()}`;
+    const terminVon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 16);
     await page.getByLabel(/Titel/).fill(meetingTitel);
+    await page.getByLabel(/Termin von/).fill(terminVon);
     await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
     await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
       timeout: 15_000,
@@ -327,9 +330,7 @@ test.describe("versammlungen happy path", () => {
     await updateMeetingStatus(page, meetingId, "laufend");
 
     // 6. TOP anlegen.
-    await page
-      .getByRole("link", { name: /Jetzt ersten TOP anlegen/ })
-      .click();
+    await page.goto(`/versammlungen/${meetingId}/tops/new`);
     await page.getByLabel(/Titel/).fill(`Vote-TOP ${stamp()}`);
     await page.getByRole("button", { name: /TOP anlegen/ }).click();
     await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
@@ -396,12 +397,8 @@ test.describe("versammlungen happy path", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page.getByLabel(/Name der WEG/).fill(`E2E Protokoll-Null ${stamp()}`);
-    await fillWegAddress(page, { street: "Protokollweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, `E2E Protokoll-Null ${stamp()}`, {
+      street: "Protokollweg",
     });
 
     // 2. Versammlung anlegen.
@@ -452,14 +449,8 @@ test.describe("versammlungen happy path", () => {
     page,
   }) => {
     // 1. WEG anlegen.
-    await page.goto("/wegs/new");
-    await page
-      .getByLabel(/Name der WEG/)
-      .fill(`E2E Protokoll-Entwurf ${stamp()}`);
-    await fillWegAddress(page, { street: "Entwurfweg" });
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createWegFixture(page, `E2E Protokoll-Entwurf ${stamp()}`, {
+      street: "Entwurfweg",
     });
 
     // 2. Versammlung anlegen.
