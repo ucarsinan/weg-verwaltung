@@ -39,6 +39,6 @@ Das Projekt ist ein Portfolio-Produkt mit starkem Sicherheitsfokus: Mandanten-Is
 
 ## Aktueller Zustand
 
-Lokal existieren Web-App, Agent-Service und Supabase-Migrationen bis `0055`.
+Lokal existieren Web-App, Agent-Service und Supabase-Migrationen bis `0056`.
 Der Cloud-Migrationsstand ist nicht automatisch belegt und muss vor produktionsnahen Aussagen direkt verifiziert werden.
 RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Datenpipeline und Eval-Gates vorhanden sind.

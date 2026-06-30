@@ -19,6 +19,14 @@ Der verbindliche Abschlussbefehl fuer Agenten ist:
 - `git diff --check`
 - Whitespace-/EOF-Check fuer relevante untracked Dateien
 
+## Lokale DB-Vertragschecks
+
+Diese Checks laufen gegen eine ephemere lokale Supabase-Testdatenbank und
+duerfen kein `--linked` verwenden:
+
+- `just test-audit-db`
+- `just test-finance-db`
+
 ## Freigabepflichtige Checks
 
 Diese Checks beruehren Cloud, Remote-DB oder externe Zustandsaenderung und laufen nur mit ausdruecklicher Freigabe:
@@ -38,7 +46,7 @@ Diese Checks beruehren Cloud, Remote-DB oder externe Zustandsaenderung und laufe
 | Beschluss-Sammlung | append-only, keine Agent-Writes |
 | Agent-Guardrails | JWT-Pflicht, suggestion-only, keine kritischen Writes |
 | Migrationen | Zweck, RLS-Auswirkung, Rollback-/Forward-Fix-Hinweis, SQL-/pgTAP-Test |
-| Finance | Lifecycle-Guards, Sollstellung, keine unkontrollierten Recalculations |
+| Finance | Lifecycle-Guards, Sollstellung, Finance-Allocation-Foundation, keine unkontrollierten Recalculations |
 | Meetings/Votes | `ownership_id` statt `person_id`/`user_id` |
 | E2E | nur nach Freigabe gegen Cloud |
 

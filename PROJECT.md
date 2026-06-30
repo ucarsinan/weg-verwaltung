@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale Codezustand gilt vor aelteren Statusnotizen: lokal existieren Supabase-Migrationen bis `0055`, eine Next.js-16-Web-App, ein FastAPI/LangGraph-Agent, E2E-Specs und Audit-/Finance-/Meeting-/Vorgangs-/Advisor-Hardening-Artefakte.
+Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale Codezustand gilt vor aelteren Statusnotizen: lokal existieren Supabase-Migrationen bis `0056`, eine Next.js-16-Web-App, ein FastAPI/LangGraph-Agent, E2E-Specs und Audit-/Finance-/Meeting-/Vorgangs-/Advisor-Hardening-Artefakte.
 
-**Lokal belegt:** Migrationen `0001-0055` liegen unter `infra/supabase/migrations`. `0045_audit_verification_repair.sql` und `0046_audit_checkpoint_owner_hardening.sql` bilden den Audit-Forward-Repair ab. `0047`/`0048` bilden Finance-Lifecycle-Hardening ab. `0049` bildet Meeting/Resolution-Hardening ab. `0050` bildet die Audit-Console-Read-API ab. `0051` repariert den Actor-Guard fuer DELETE-Trigger. `0052` legt die Vorgangszentrale-Foundation an. `0053` ergaenzt Settings-relevante Audit-Trigger. `0054` verankert Agent-Suggestions optional an Vorgaengen. `0055` haertet Advisor-gefundene EXECUTE-Grants und RLS-InitPlan-Policies.
+**Lokal belegt:** Migrationen `0001-0056` liegen unter `infra/supabase/migrations`. `0045_audit_verification_repair.sql` und `0046_audit_checkpoint_owner_hardening.sql` bilden den Audit-Forward-Repair ab. `0047`/`0048` bilden Finance-Lifecycle-Hardening ab. `0049` bildet Meeting/Resolution-Hardening ab. `0050` bildet die Audit-Console-Read-API ab. `0051` repariert den Actor-Guard fuer DELETE-Trigger. `0052` legt die Vorgangszentrale-Foundation an. `0053` ergaenzt Settings-relevante Audit-Trigger. `0054` verankert Agent-Suggestions optional an Vorgaengen. `0055` haertet Advisor-gefundene EXECUTE-Grants und RLS-InitPlan-Policies. `0056` bildet die Finance-Allocation-Foundation mit versionierten Verteilungsschluesseln, Basiswerten und Wirtschaftsplan-Positionen ab.
 
 **Nicht in diesem Audit verifiziert:** Cloud-Migrationsstand, aktuelle Cloud-E2E-Ergebnisse, GitHub-CI-Status und produktives Web-/Agent-Hosting.
 
@@ -15,7 +15,7 @@ Dieser Status konsolidiert den lokalen Stand des Track-2/3-Worktrees. Der reale 
 ## Architecture
 
 - **Audit Module (`modules/audit`)**: Exposes read-only visibility for old audit partitions and archive-file metadata. Tenant-triggered detach/drop is not an active product goal.
-- **Finanzen Module (`modules/finanzen`)**: Exposes database structures for `wirtschaftsplan` and `sollstellung`. Option B is binding: `sollstellung` rows are historical, materialized unit-month targets and are never recalculated, overwritten, or deleted because a plan, unit, or MEA value changes later.
+- **Finanzen Module (`modules/finanzen`)**: Exposes database structures for `wirtschaftsplan`, `sollstellung`, versioned allocation keys, allocation basis values, and Wirtschaftsplan positions. Option B is binding: `sollstellung` rows are historical, materialized unit-month targets and are never recalculated, overwritten, or deleted because a plan, unit, or MEA value changes later.
 - **Supabase Storage**: A private, tenant-isolated bucket `audit-archives` holds archive metadata/files only after a privileged export + manifest + HMAC-verify job exists. Destructive detach/drop remains disabled.
 - **Next.js Web App**:
   - `/audit`: UI interface for `tenant_admin` to view archivable partitions and archive metadata. Archive/detach/drop execution remains disabled.
@@ -163,7 +163,7 @@ Add an executable regression test for v2 insert + verification + 0044/0046-style
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | 1 | E2E Testing Suite | Design and build E2E Playwright tests for Tracks 2/3 | None | IN_PROGRESS |
-| 2 | Database Migrations | Implement migrations through `0055` locally | None | LOCAL - Cloud state not verified in this audit |
+| 2 | Database Migrations | Implement migrations through `0056` locally | None | LOCAL - Cloud state not verified in this audit |
 | 3 | Audit Cold-Storage UI | Read-only audit partition/archive visibility | M1, M2 | BLOCKED - destructive execution remains disabled until privileged export + manifest job exists |
 | 4 | Finanzen UI | Wirtschaftsplan and Hausgeld UI | M1, M2 | LOCAL - review pending |
 | 5 | E2E Verification | Run E2E/unit tests and verify RLS compliance | M3, M4 | PENDING - no `just e2e` in this audit |

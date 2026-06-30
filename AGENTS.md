@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand (lokal belegt, Juni 2026):** Cloud-DB-Ziel ist das lokal verlinkte Supabase-Frankfurt-Projekt, aber der Cloud-Migrationsstand wurde in diesem Audit nicht aktiv verifiziert. Lokal liegen Migrationen `0001–0055`: Dokumente/Personen/Eigentümerschaft bis `0033`, Audit-Hotfix/Forward-Repair und Least-Privilege-Hardening bis `0046`, Finance Lifecycle bis `0048`, Meeting/Resolution-Hardening in `0049`, Audit-Console-Read-API in `0050`, Actor-Guard-DELETE-Fix in `0051`, Vorgangszentrale-Foundation in `0052`, Settings-Audit-Trigger in `0053`, Agent-Suggestion-Vorgangsanker in `0054` und Advisor-Grant-/RLS-InitPlan-Hardening in `0055`. Next.js-16-Web-App und FastAPI/LangGraph-Agent sind vorhanden. RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Embedding-Datenpipeline und Eval-Gates stehen. E2E-Specs existieren, wurden in diesem Audit aber nicht gegen die Cloud ausgeführt. Produktives Hosting für Web-App und Agent ist aus dem Repo nicht belegt. Vote referenziert `ownership_id`, niemals `person_id` oder `user_id`; Co-Eigentümer zählen als eine Stimme pro Ownership.
+**Aktueller Stand (lokal belegt, Juni 2026):** Cloud-DB-Ziel ist das lokal verlinkte Supabase-Frankfurt-Projekt, aber der Cloud-Migrationsstand wurde in diesem Audit nicht aktiv verifiziert. Lokal liegen Migrationen `0001–0056`: Dokumente/Personen/Eigentümerschaft bis `0033`, Audit-Hotfix/Forward-Repair und Least-Privilege-Hardening bis `0046`, Finance Lifecycle bis `0048`, Meeting/Resolution-Hardening in `0049`, Audit-Console-Read-API in `0050`, Actor-Guard-DELETE-Fix in `0051`, Vorgangszentrale-Foundation in `0052`, Settings-Audit-Trigger in `0053`, Agent-Suggestion-Vorgangsanker in `0054`, Advisor-Grant-/RLS-InitPlan-Hardening in `0055` und Finance-Allocation-Foundation in `0056`. Next.js-16-Web-App und FastAPI/LangGraph-Agent sind vorhanden. RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Embedding-Datenpipeline und Eval-Gates stehen. E2E-Specs existieren, wurden in diesem Audit aber nicht gegen die Cloud ausgeführt. Produktives Hosting für Web-App und Agent ist aus dem Repo nicht belegt. Vote referenziert `ownership_id`, niemals `person_id` oder `user_id`; Co-Eigentümer zählen als eine Stimme pro Ownership.
 
 ## Stack
 
@@ -37,13 +37,14 @@ just test          # alle Tests (web + agent)
 just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
+just test-finance-db # lokaler pgTAP-Vertrag fuer Finance 0056, nicht Cloud
 just e2e           # Playwright/Chromium — Login-Flow gegen Cloud; nicht ohne explizite Freigabe im Audit laufen lassen
 just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
 just db-migrate    # supabase db push --workdir infra (gegen Cloud!)
 ```
 
-Kein `supabase start` / `db-reset` mehr — Projekt ist **remote-only** gegen Frankfurt. Cloud-Credentials liegen ausschließlich in lokaler Secret-Konfiguration.
+Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im Entwicklungsbetrieb **remote-only** gegen Frankfurt. Ausnahme sind explizite lokale pgTAP-Rezepte wie `just test-audit-db` und `just test-finance-db`; sie nutzen eine ephemere lokale Supabase-Testdatenbank ohne `--linked`. Cloud-Credentials liegen ausschließlich in lokaler Secret-Konfiguration.
 
 ## Konventionen
 
