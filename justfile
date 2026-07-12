@@ -39,7 +39,7 @@ test-audit-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
-    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql --local
+    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql --local
 
 # Run finance pgTAP contracts against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
@@ -47,6 +47,13 @@ test-finance-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase test db supabase/tests/0056_finance_allocation_foundation.sql --local
+
+# Run self-managed SaaS pgTAP contracts against an ephemeral local Supabase DB.
+# This intentionally never uses --linked and must not target the Frankfurt cloud.
+test-saas-db:
+    supabase db start --workdir infra
+    supabase db reset --workdir infra --local --no-seed
+    cd infra && supabase test db supabase/tests/0057_self_managed_saas_foundation.sql --local
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
