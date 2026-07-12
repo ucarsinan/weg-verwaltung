@@ -52,6 +52,8 @@ infra/supabase/.temp/
 .agents/
 .superpowers/
 docs/superpowers/
+.playwright-cli/
+output/
 
 # LLMOps / local traces
 .langfuse/
