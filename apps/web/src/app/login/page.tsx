@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
+
 import { LoginForm } from "./login-form";
 
 export const metadata = {
@@ -18,9 +20,9 @@ interface LoginPageProps {
 }
 
 const assurances = [
-  "Mandantenisolierte Sitzungen",
-  "KI-Aktionen bleiben prüfpflichtig",
-  "Audit-Trail ohne Löschpfad",
+  "Ein eigenes Konto für jeden Eigentümer",
+  "Ein geschützter Bereich für eure WEG",
+  "Mehrere Admins oder Verwalter möglich",
 ];
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -51,14 +53,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-1 text-xs font-medium text-[color:var(--color-muted-foreground)] shadow-sm">
                 <LockKeyhole className="size-3.5 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
-                Gesicherter Arbeitsplatz
+                Sicherer Online-Bereich
               </div>
               <h1 className="mt-6 text-5xl font-semibold tracking-normal text-balance">
-                Verwaltungsarbeit mit klarer Verantwortung.
+                Eure WEG. Gemeinsam organisiert.
               </h1>
               <p className="mt-5 text-lg leading-8 text-[color:var(--color-muted-foreground)]">
-                Eigentum, Beschlüsse, Dokumente und KI-Vorschläge laufen in
-                einem kontrollierten Arbeitsraum zusammen.
+                Dokumente, Vorgänge, Versammlungen und Beschlüsse an einem
+                gemeinsamen Ort – ohne Installation.
               </p>
             </div>
 
@@ -78,16 +80,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 shadow-sm">
               <ShieldCheck className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-              <p className="mt-4 text-sm font-semibold">Least Privilege</p>
+              <p className="mt-4 text-sm font-semibold">Eigene Konten</p>
               <p className="mt-1 text-xs leading-5 text-[color:var(--color-muted-foreground)]">
-                Rollen und Mandantenrechte bleiben getrennt.
+                Jeder Eigentümer erhält einen eigenen Zugang zur WEG.
               </p>
             </div>
             <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 shadow-sm">
               <Bot className="size-5 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
-              <p className="mt-4 text-sm font-semibold">Human-in-the-loop</p>
+              <p className="mt-4 text-sm font-semibold">Gemeinsam verwalten</p>
               <p className="mt-1 text-xs leading-5 text-[color:var(--color-muted-foreground)]">
-                Vorschläge werden geprüft, bevor sie wirksam werden.
+                Mehrere Eigentümer können als Admins Verantwortung übernehmen.
               </p>
             </div>
           </div>
@@ -113,7 +115,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   Anmeldung
                 </p>
                 <h2 className="mt-2 break-words text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
-                  Zugang zum Arbeitsbereich
+                  Willkommen zurück
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
                   Melden Sie sich mit Ihrem WEG-Verwaltung-Konto an.
@@ -123,11 +125,20 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <div className="mt-8">
                 <LoginForm nextPath={nextPath} />
               </div>
+
+              <div className="mt-6 border-t border-[color:var(--color-border)] pt-6">
+                <p className="text-center text-sm text-[color:var(--color-muted-foreground)]">
+                  Noch kein Konto für eure WEG?
+                </p>
+                <Button asChild variant="outline" className="mt-3 h-11 w-full">
+                  <Link href="/registrieren">30 Tage kostenlos starten</Link>
+                </Button>
+              </div>
             </div>
 
             <p className="mt-6 text-center text-xs leading-5 text-[color:var(--color-muted-foreground)]">
-              Zugriff nur für berechtigte Verwaltungsnutzer. Sicherheitsereignisse
-              werden im Audit-Trail erfasst.
+              Zugriff nur für berechtigte Eigentümer und Admins. Sicherheitsereignisse
+              werden protokolliert.
             </p>
           </div>
         </section>
