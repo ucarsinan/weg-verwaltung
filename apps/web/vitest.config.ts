@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Next.js server/client marker packages are not resolvable under Vitest.
+      "server-only": path.resolve(__dirname, "./vitest.stubs/empty.ts"),
+      "client-only": path.resolve(__dirname, "./vitest.stubs/empty.ts"),
     },
   },
   test: {
