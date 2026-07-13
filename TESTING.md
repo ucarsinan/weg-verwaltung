@@ -19,6 +19,13 @@ Der verbindliche Abschlussbefehl fuer Agenten ist:
 - `git diff --check`
 - Whitespace-/EOF-Check fuer relevante untracked Dateien
 
+## Doku-Freshness
+
+`./scripts/verify.sh` ruft zusaetzlich `scripts/check-project-reality-freshness.sh`
+auf (informativ, blockiert nie). Der Check zaehlt Produktcode-Commits seit dem
+letzten `PROJECT_REALITY.md`-Refresh und listet sie bei Ueberschreiten der
+Schwelle auf. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
+
 ## Lokale DB-Vertragschecks
 
 Diese Checks laufen gegen eine ephemere lokale Supabase-Testdatenbank und

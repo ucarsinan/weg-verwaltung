@@ -66,4 +66,11 @@ fi
 echo "-- Remote-Sicherheitscheck"
 echo "Nicht ausgefuehrt ohne Freigabe: just e2e, just db-migrate, just seed-admin, Supabase-Linked-Kommandos."
 
+echo "-- PROJECT_REALITY.md Freshness (informativ, blockiert nicht)"
+if [ -x scripts/check-project-reality-freshness.sh ]; then
+  scripts/check-project-reality-freshness.sh || true
+else
+  echo "scripts/check-project-reality-freshness.sh fehlt oder ist nicht ausfuehrbar."
+fi
+
 echo "== verify complete =="
