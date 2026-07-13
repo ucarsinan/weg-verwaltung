@@ -139,6 +139,27 @@ Wenn der volle Check nicht laufen kann, dokumentiere warum und fuehre eine klein
 
 Remote-/Cloud-nahe Checks wie `just e2e`, `just db-migrate`, `just seed-admin` und Supabase-Linked-Kommandos laufen nur mit ausdruecklicher Freigabe.
 
+## PROJECT_REALITY.md aktuell halten
+
+`PROJECT_REALITY.md` ist das massgebliche Audit-Dokument fuer den realen
+Projektstand und darf nicht hinter dem tatsaechlichen Code zurueckfallen.
+`scripts/check-project-reality-freshness.sh` prueft deterministisch (git-only,
+keine Secrets, keine Cloud-Aufrufe), wie viele Produktcode-Commits seit dem
+letzten Refresh-Commit gelandet sind, und listet sie auf. Der Check laeuft:
+
+- informativ als Teil von `./scripts/verify.sh` (blockiert nie),
+- als eigener, nicht-blockierender CI-Job `PROJECT_REALITY Freshness`
+  (`.github/workflows/project-reality-freshness.yml`) auf PRs, die
+  `apps/`, `infra/supabase/migrations/` oder `packages/` aendern.
+
+Der Check schreibt PROJECT_REALITY.md nicht automatisch neu — die inhaltliche
+Bewertung (Implemented / Partially implemented / Not verified / Next Logical
+Step) bleibt bewusst Menschen-/Agentenurteil und damit an die normalen
+Git-Freigaberegeln gebunden. Wenn der Check „STALE" meldet, ist das
+Aktualisieren von `PROJECT_REALITY.md` nach derselben Methode Teil der
+naechsten groesseren oder riskanten Aufgabe, bevor neue Breite angegangen
+wird.
+
 ## Git-Regeln
 
 Git-Aktionen sind Teil des kontrollierten Agentenprozesses, aber nicht autonom.

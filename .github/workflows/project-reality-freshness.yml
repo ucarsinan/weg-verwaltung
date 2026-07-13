@@ -1,0 +1,56 @@
+# WEG-Verwaltung — PROJECT_REALITY.md freshness check.
+# Runs when product code changes and PROJECT_REALITY.md was not touched in
+# the same PR. Non-blocking: prints a WARNING annotation, never fails the job.
+#
+# Rationale: PROJECT_REALITY.md is the project's ground-truth audit doc
+# (see AGENTS.md / PROJECT_REALITY.md itself). It has drifted behind actual
+# commits before (see docs/agent-reports/ history) — this makes that drift
+# visible on every PR instead of relying on someone remembering to check.
+# scripts/check-project-reality-freshness.sh holds the actual (git-only, no
+# secrets, no cloud calls) staleness logic; this workflow just surfaces it.
+
+name: PROJECT_REALITY Freshness
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'infra/supabase/migrations/**'
+      - 'packages/**'
+      - 'PROJECT_REALITY.md'
+      - 'scripts/check-project-reality-freshness.sh'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  freshness-check:
+    name: freshness-check (PROJECT_REALITY.md vs. product code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run freshness check
+        run: |
+          set -eu
+
+          if [ ! -x scripts/check-project-reality-freshness.sh ]; then
+            echo "::warning::scripts/check-project-reality-freshness.sh missing or not executable — skipping."
+            exit 0
+          fi
+
+          output="$(scripts/check-project-reality-freshness.sh --strict)" && status=0 || status=$?
+
+          echo "$output"
+
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::PROJECT_REALITY.md looks stale relative to recent product-code commits. See job log for the exact commit list and refresh it before the next larger task."
+          fi
+
+          # Non-blocking by design — warning-only.
+          exit 0
