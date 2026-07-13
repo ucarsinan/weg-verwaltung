@@ -45,3 +45,29 @@ describe("AppShell settings sub-navigation", () => {
     expect(activeLinks[0]).toHaveAttribute("aria-current", "page");
   });
 });
+
+describe("AppShell vorgänge sub-navigation", () => {
+  it("renders the Vorgänge sub-items and marks Inbox active, without mixing in Einstellungen items", () => {
+    mocks.pathname = "/vorgaenge/inbox";
+    render(<AppShell userEmail="admin@example.test">content</AppShell>);
+
+    for (const label of ["Übersicht", "Inbox", "Reviews"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    expect(screen.queryByText("Mitglieder & Rollen")).toBeNull();
+
+    const activeLinks = screen
+      .getAllByRole("link", { name: /Inbox/ })
+      .filter((el) => el.getAttribute("href") === "/vorgaenge/inbox");
+    expect(activeLinks.length).toBeGreaterThan(0);
+    expect(activeLinks[0]).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not render any sub-items outside a section that has a subnav", () => {
+    mocks.pathname = "/wegs";
+    render(<AppShell userEmail="admin@example.test">content</AppShell>);
+
+    expect(screen.queryByText("Inbox")).toBeNull();
+    expect(screen.queryByText("Mitglieder & Rollen")).toBeNull();
+  });
+});

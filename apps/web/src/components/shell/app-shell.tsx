@@ -14,16 +14,34 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/modules/settings/actions";
 import { SETTINGS_SUBNAV } from "@/modules/settings/settings-nav";
+import { VORGAENGE_SUBNAV } from "@/lib/vorgangszentrale/nav";
 
 type LinkHref = React.ComponentProps<typeof Link>["href"];
 
-const NAV_ITEMS = [
+interface NavSubItem {
+  label: string;
+  href: string;
+  icon: typeof Gauge;
+}
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: typeof Gauge;
+  subnav?: readonly NavSubItem[];
+}
+
+// Tabs whose sub-pages are a fixed, ID-independent set (Vorgänge, Einstellungen)
+// get a `subnav`, rendered nested under the tab while it is the active section.
+// WEGs is deliberately excluded: its sub-pages hang off a specific WEG id, so
+// they aren't a fixed sidebar target — that needs a contextual tab bar instead.
+const NAV_ITEMS: readonly NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge },
-  { label: "Vorgänge", href: "/vorgaenge", icon: BriefcaseBusiness },
+  { label: "Vorgänge", href: "/vorgaenge", icon: BriefcaseBusiness, subnav: VORGAENGE_SUBNAV },
   { label: "WEGs", href: "/wegs", icon: Building2 },
   { label: "Audit", href: "/audit", icon: ShieldCheck },
-  { label: "Einstellungen", href: "/einstellungen", icon: Settings },
-] as const;
+  { label: "Einstellungen", href: "/einstellungen", icon: Settings, subnav: SETTINGS_SUBNAV },
+];
 
 const getUserInitial = (email: string) =>
   email.trim().charAt(0).toUpperCase() || "N";
@@ -42,8 +60,9 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
       ? pathname === "/dashboard" || pathname === "/"
       : pathname === href || pathname.startsWith(href + "/");
 
-  const settingsActive =
-    pathname === "/einstellungen" || pathname.startsWith("/einstellungen/");
+  const activeSubnavItem = NAV_ITEMS.find(
+    (item) => item.subnav && isActive(item.href),
+  );
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,color-mix(in_oklch,var(--color-secondary)_58%,transparent),var(--color-background)_18rem)]">
@@ -117,12 +136,12 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
             );
           })}
         </nav>
-        {settingsActive ? (
+        {activeSubnavItem ? (
           <nav
-            aria-label="Einstellungen-Unterpunkte mobil"
+            aria-label={`${activeSubnavItem.label}-Unterpunkte mobil`}
             className="flex gap-1.5 overflow-x-auto border-t border-[color:var(--color-border)] px-3 py-2"
           >
-            {SETTINGS_SUBNAV.map((sub) => {
+            {activeSubnavItem.subnav!.map((sub) => {
               const subActive = pathname === sub.href;
               return (
                 <Link
@@ -190,9 +209,9 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
             <p className="px-3 pb-1 text-[11px] font-semibold uppercase text-[color:var(--color-muted-foreground)]">
               Navigation
             </p>
-            {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+            {NAV_ITEMS.map(({ label, href, icon: Icon, subnav }) => {
               const active = isActive(href);
-              const showSubNav = href === "/einstellungen" && settingsActive;
+              const showSubNav = Boolean(subnav) && active;
 
               return (
                 <div key={href} className="space-y-1">
@@ -226,13 +245,13 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
                     ) : null}
                   </Link>
 
-                  {showSubNav ? (
+                  {showSubNav && subnav ? (
                     <div
                       className="ml-4 space-y-0.5 border-l border-[color:var(--color-border)] pl-3"
                       role="group"
-                      aria-label="Einstellungen-Unterpunkte"
+                      aria-label={`${label}-Unterpunkte`}
                     >
-                      {SETTINGS_SUBNAV.map((sub) => {
+                      {subnav.map((sub) => {
                         const subActive = pathname === sub.href;
                         return (
                           <Link
