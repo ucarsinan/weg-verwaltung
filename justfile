@@ -39,7 +39,7 @@ test-audit-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
-    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql --local
+    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0059_tenant_audit_emitter.sql --local
 
 # Run finance pgTAP contracts against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
