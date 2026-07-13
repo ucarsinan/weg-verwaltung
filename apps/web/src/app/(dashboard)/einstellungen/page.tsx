@@ -1,8 +1,8 @@
-import { getSettingsOverviewData } from "@/modules/settings/data";
-import { SettingsOverview } from "@/modules/settings/settings-overview";
+import { redirect } from "next/navigation";
+import type { Route } from "next";
 
-export default async function SettingsPage() {
-  const data = await getSettingsOverviewData();
-
-  return <SettingsOverview data={data} />;
+// The settings landing route resolves to the first segment so the sidebar
+// sub-navigation and bookmarks always point at a concrete sub-page.
+export default function EinstellungenPage() {
+  redirect("/einstellungen/konto" as Route);
 }

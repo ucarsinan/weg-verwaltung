@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -79,7 +80,7 @@ function mapTenantMembers(
   }));
 }
 
-export async function getSettingsOverviewData(): Promise<SettingsOverviewData> {
+async function loadSettingsOverviewData(): Promise<SettingsOverviewData> {
   const supabase = await createClient();
 
   const {
@@ -188,3 +189,7 @@ export async function getSettingsOverviewData(): Promise<SettingsOverviewData> {
     loadIssues,
   };
 }
+
+// Wrapped in React cache() so the settings layout and the active sub-page in the
+// same request share a single fetch instead of querying Supabase twice.
+export const getSettingsOverviewData = cache(loadSettingsOverviewData);
