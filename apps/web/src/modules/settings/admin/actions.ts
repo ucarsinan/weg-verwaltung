@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { requireTenantAdmin, type TenantAdminContext } from "@/modules/settings/admin/guards";
 import {
   isTenantMemberRole,
   TENANT_MEMBER_ROLE_LABELS,
@@ -15,79 +15,8 @@ import {
 type TenantMemberRow = Database["public"]["Tables"]["tenant_member"]["Row"];
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
 
-interface AppMetadataClaims {
-  tenant_id?: string;
-  role?: string;
-}
-
-type TenantAdminContext =
-  | {
-      ok: true;
-      actorUserId: string;
-      tenantId: string;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
-
 const SETTINGS_PATH = "/einstellungen";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function readAppMetadata(value: unknown): AppMetadataClaims {
-  if (!value || typeof value !== "object") return {};
-
-  const record = value as Record<string, unknown>;
-  return {
-    tenant_id:
-      typeof record.tenant_id === "string" ? record.tenant_id : undefined,
-    role: typeof record.role === "string" ? record.role : undefined,
-  };
-}
-
-async function requireTenantAdmin(): Promise<TenantAdminContext> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { ok: false, message: "Sie sind nicht angemeldet." };
-  }
-
-  const { data, error } = await supabase.auth.getClaims();
-  if (error) {
-    console.error("[settings-admin] getClaims failed:", error);
-    return {
-      ok: false,
-      message: "JWT-Claims konnten nicht verifiziert werden.",
-    };
-  }
-
-  const claims = data?.claims;
-  const appMetadata = readAppMetadata(
-    claims && typeof claims === "object"
-      ? (claims as Record<string, unknown>).app_metadata
-      : undefined,
-  );
-
-  if (!appMetadata.tenant_id) {
-    return { ok: false, message: "Kein Mandant im aktuellen JWT-Claim." };
-  }
-
-  if (appMetadata.role !== "tenant_admin") {
-    return {
-      ok: false,
-      message: "Nur Mandanten-Admins dürfen Benutzer verwalten.",
-    };
-  }
-
-  return {
-    ok: true,
-    actorUserId: user.id,
-    tenantId: appMetadata.tenant_id,
-  };
-}
 
 function adminUnavailableState(): AdminUserActionState {
   return {
