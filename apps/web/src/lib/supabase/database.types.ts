@@ -28,6 +28,20 @@ export type WirtschaftsplanStatus =
   | "abgeloest"
   | "archiviert";
 
+export type VerteilungsschluesselTyp =
+  | "mea"
+  | "einheit"
+  | "flaeche"
+  | "verbrauch"
+  | "manuell"
+  | "gemischt";
+export type VerteilungsschluesselQuelle =
+  | "gesetz"
+  | "teilungserklaerung"
+  | "gemeinschaftsordnung"
+  | "beschluss"
+  | "manuell";
+
 export type BeschlussSammlungTyp =
   | "positiv_beschluss"
   | "negativ_beschluss"
@@ -290,6 +304,161 @@ export type Database = Overwrite<
                 >;
               }
             >;
+            // 0056 finance allocation foundation — not yet present in the
+            // generated snapshot (see database.types.gen.ts drift note).
+            verteilungsschluessel: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                name: string;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                name: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                name?: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            verteilungsschluessel_version: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                verteilungsschluessel_id: string;
+                typ: VerteilungsschluesselTyp;
+                quelle: VerteilungsschluesselQuelle;
+                resolution_id: string | null;
+                gueltig_ab: string;
+                gueltig_bis: string | null;
+                parameter: Json;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_id: string;
+                typ: VerteilungsschluesselTyp;
+                quelle: VerteilungsschluesselQuelle;
+                resolution_id?: string | null;
+                gueltig_ab: string;
+                gueltig_bis?: string | null;
+                parameter?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_id?: string;
+                typ?: VerteilungsschluesselTyp;
+                quelle?: VerteilungsschluesselQuelle;
+                resolution_id?: string | null;
+                gueltig_ab?: string;
+                gueltig_bis?: string | null;
+                parameter?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            verteilungsschluessel_basiswert: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                verteilungsschluessel_version_id: string;
+                unit_id: string;
+                wert: number;
+                einheit: string;
+                gueltig_ab: string;
+                gueltig_bis: string | null;
+                notiz: string | null;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id: string;
+                unit_id: string;
+                wert: number;
+                einheit: string;
+                gueltig_ab: string;
+                gueltig_bis?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id?: string;
+                unit_id?: string;
+                wert?: number;
+                einheit?: string;
+                gueltig_ab?: string;
+                gueltig_bis?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            wirtschaftsplan_position: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                wirtschaftsplan_id: string;
+                position: number;
+                kostenart: string;
+                beschreibung: string | null;
+                jahresbetrag: number;
+                verteilungsschluessel_version_id: string;
+                verteilungsschluessel_snapshot: Json;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                wirtschaftsplan_id: string;
+                position: number;
+                kostenart: string;
+                beschreibung?: string | null;
+                jahresbetrag: number;
+                verteilungsschluessel_version_id: string;
+                verteilungsschluessel_snapshot?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                wirtschaftsplan_id?: string;
+                position?: number;
+                kostenart?: string;
+                beschreibung?: string | null;
+                jahresbetrag?: number;
+                verteilungsschluessel_version_id?: string;
+                verteilungsschluessel_snapshot?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
           }
         >;
         Functions: Overwrite<

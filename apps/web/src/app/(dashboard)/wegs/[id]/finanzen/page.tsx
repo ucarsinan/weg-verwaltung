@@ -101,11 +101,18 @@ export default async function FinanzenPage({
               Finanzplanung für {weg.name}
             </p>
           </div>
-          <Button asChild className="shrink-0">
-            <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
-              Wirtschaftsplan erstellen
-            </Link>
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/wegs/${wegId}/finanzen/verteilungsschluessel` as Route}>
+                Verteilungsschlüssel
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
+                Wirtschaftsplan erstellen
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 

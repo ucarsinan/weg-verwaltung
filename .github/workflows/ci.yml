@@ -246,4 +246,5 @@ jobs:
             supabase/tests/0046_least_privilege.sql \
             supabase/tests/0055_advisor_hardening.sql \
             supabase/tests/0056_finance_allocation_foundation.sql \
+            supabase/tests/0060_wirtschaftsplan_position_allocation.sql \
             --local

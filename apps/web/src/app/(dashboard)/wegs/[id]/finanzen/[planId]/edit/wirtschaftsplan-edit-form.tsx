@@ -200,6 +200,14 @@ export function WirtschaftsplanEditForm({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {isDraft ? (
+            <Link
+              href={`/wegs/${wegId}/finanzen/${planId}/positionen`}
+              className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs font-semibold"
+            >
+              Positionen verwalten
+            </Link>
+          ) : null}
+          {isDraft ? (
             <button
               type="button"
               disabled={isLifecycleActionPending}
