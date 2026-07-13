@@ -2,7 +2,7 @@
 
 begin;
 
-select plan(18);
+select plan(27);
 
 -- ---------------------------------------------------------------------------
 -- Catalog and hardening contract
@@ -240,6 +240,234 @@ select is(
   1,
   'replacing an invitation leaves exactly one open invitation per tenant and email'
 );
+
+-- ---------------------------------------------------------------------------
+-- accept_tenant_invitation runtime contract
+-- ---------------------------------------------------------------------------
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '11111111-1111-4111-8111-111111111157',
+    'email', 'founder@example.test',
+    'role', 'authenticated',
+    'app_metadata', jsonb_build_object(
+      'tenant_id', current_setting('app.test_saas_tenant_id', true),
+      'role', 'tenant_admin'
+    )
+  )::text,
+  true
+);
+
+select lives_ok(
+  $$select public.create_tenant_invitation(
+      'newmember@example.test',
+      'eigentuemer',
+      digest('accept-success-token', 'sha256')
+    )$$,
+  'tenant_admin can create an invitation for the accept-flow success case'
+);
+
+select lives_ok(
+  $$select public.create_tenant_invitation(
+      'founder@example.test',
+      'tenant_admin',
+      digest('self-invite-token', 'sha256')
+    )$$,
+  'tenant_admin can create a self-addressed invitation for the already-a-member rejection case'
+);
+
+reset role;
+
+insert into public.tenant_invitation (
+  tenant_id, email, role, token_hash, created_by_user_id, created_at, expires_at
+) values (
+  (
+    select tenant_id from public.tenant_member
+    where user_id = '11111111-1111-4111-8111-111111111157'::uuid
+  ),
+  'expired@example.test',
+  'eigentuemer',
+  digest('expired-token', 'sha256'),
+  '11111111-1111-4111-8111-111111111157'::uuid,
+  now() - interval '10 days',
+  now() - interval '3 days'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '22222222-2222-4222-8222-222222222057',
+    'email', 'newmember@example.test',
+    'role', 'authenticated',
+    'app_metadata', '{}'::jsonb
+  )::text,
+  true
+);
+
+select lives_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('accept-success-token', 'sha256'),
+      'Erika',
+      'Musterfrau'
+    )$$,
+  'an authenticated invitee can accept a matching, open invitation'
+);
+
+reset role;
+
+select ok(
+  (
+    select count(*)::int from public.tenant_member as member
+    where member.user_id = '22222222-2222-4222-8222-222222222057'::uuid
+      and member.role = 'eigentuemer'
+      and not member.is_founding_admin
+  ) = 1
+  and (
+    select count(*)::int from public.person as person
+    where person.user_id = '22222222-2222-4222-8222-222222222057'::uuid
+      and person.vorname = 'Erika'
+      and person.nachname = 'Musterfrau'
+      and person.email = 'newmember@example.test'
+  ) = 1
+  and (
+    select accepted_at is not null
+       and accepted_by_user_id = '22222222-2222-4222-8222-222222222057'::uuid
+    from public.tenant_invitation
+    where token_hash = digest('accept-success-token', 'sha256')
+  ),
+  'acceptance atomically creates the member and person rows and marks the invitation accepted'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '33333333-3333-4333-8333-333333333057',
+    'email', 'newmember@example.test',
+    'role', 'authenticated',
+    'app_metadata', '{}'::jsonb
+  )::text,
+  true
+);
+
+select throws_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('accept-success-token', 'sha256'),
+      'Zweite',
+      'Person'
+    )$$,
+  '42501',
+  'invitation is invalid or no longer available',
+  'a second user cannot accept an already-accepted invitation'
+);
+
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '44444444-4444-4444-8444-444444444057',
+    'email', 'wrong@example.test',
+    'role', 'authenticated',
+    'app_metadata', '{}'::jsonb
+  )::text,
+  true
+);
+
+select throws_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('second-invitation-token', 'sha256'),
+      'Falsch',
+      'Adresse'
+    )$$,
+  '42501',
+  'invitation is invalid or no longer available',
+  'a user whose JWT email does not match the invitation email cannot accept it'
+);
+
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '55555555-5555-4555-8555-555555555057',
+    'email', 'invited@example.test',
+    'role', 'authenticated',
+    'app_metadata', '{}'::jsonb
+  )::text,
+  true
+);
+
+select throws_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('invitation-token', 'sha256'),
+      'Widerrufen',
+      'Person'
+    )$$,
+  '42501',
+  'invitation is invalid or no longer available',
+  'a revoked invitation cannot be accepted even with a matching email'
+);
+
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '66666666-6666-4666-8666-666666666057',
+    'email', 'expired@example.test',
+    'role', 'authenticated',
+    'app_metadata', '{}'::jsonb
+  )::text,
+  true
+);
+
+select throws_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('expired-token', 'sha256'),
+      'Abgelaufen',
+      'Person'
+    )$$,
+  '42501',
+  'invitation is invalid or no longer available',
+  'an expired invitation cannot be accepted even with a matching email'
+);
+
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '11111111-1111-4111-8111-111111111157',
+    'email', 'founder@example.test',
+    'role', 'authenticated',
+    'app_metadata', jsonb_build_object(
+      'tenant_id', current_setting('app.test_saas_tenant_id', true),
+      'role', 'tenant_admin'
+    )
+  )::text,
+  true
+);
+
+select throws_ok(
+  $$select * from public.accept_tenant_invitation(
+      digest('self-invite-token', 'sha256'),
+      'Gruender',
+      'Selbst'
+    )$$,
+  '42501',
+  'a user can only belong to one tenant in this release',
+  'a user who already has a tenant_member row cannot accept another invitation'
+);
+
+reset role;
 
 select * from finish();
 
