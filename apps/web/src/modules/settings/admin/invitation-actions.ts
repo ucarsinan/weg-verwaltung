@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEmailProvider } from "@/modules/saas/email";
+import { renderInvitationEmail } from "@/modules/saas/invitation-email";
 import { generateInvitationToken } from "@/modules/saas/invitation";
 import { requireTenantAdmin } from "@/modules/settings/admin/guards";
 import {
@@ -20,7 +22,7 @@ interface TenantInvitationRpcClient {
       p_role: string;
       p_token_hash: string;
     },
-  ): Promise<{ error: { message: string } | null }>;
+  ): Promise<{ data: string | null; error: { message: string } | null }>;
 }
 
 function invitationUrl(rawToken: string): string | null {
@@ -75,11 +77,14 @@ export async function createTenantInvitationAction(
 
   const supabase = await createClient();
   const invitationClient = supabase as unknown as TenantInvitationRpcClient;
-  const { error } = await invitationClient.rpc("create_tenant_invitation", {
-    p_email: email,
-    p_role: role,
-    p_token_hash: tokenHashBytea,
-  });
+  const { data: invitationId, error } = await invitationClient.rpc(
+    "create_tenant_invitation",
+    {
+      p_email: email,
+      p_role: role,
+      p_token_hash: tokenHashBytea,
+    },
+  );
 
   if (error) {
     console.error("[invitation-actions] create_tenant_invitation failed:", error);
@@ -90,9 +95,29 @@ export async function createTenantInvitationAction(
     };
   }
 
+  const url = invitationUrl(rawToken) ?? undefined;
+  const roleLabel = TENANT_MEMBER_ROLE_LABELS[role];
+
+  // Best-effort email: the invitation row and link already exist, so a failed
+  // or unconfigured send never fails the invitation — the link is the fallback.
+  let deliveryNote = `Einladungslink für ${email} (${roleLabel}) erstellt. Gültig 7 Tage.`;
+  if (url) {
+    const email_ = renderInvitationEmail({ invitationUrl: url, role });
+    const result = await getEmailProvider().send(
+      { to: email, subject: email_.subject, html: email_.html },
+      invitationId ? { idempotencyKey: `einladung/${invitationId}` } : undefined,
+    );
+
+    if (result.status === "sent") {
+      deliveryNote = `Einladung per E-Mail an ${email} gesendet. Der Link (unten) ist 7 Tage gültig.`;
+    } else if (result.status === "error") {
+      deliveryNote = `Link erstellt, aber der E-Mail-Versand ist fehlgeschlagen. Bitte teilen Sie den Link unten manuell.`;
+    }
+  }
+
   return {
     status: "success",
-    message: `Einladungslink für ${email} (${TENANT_MEMBER_ROLE_LABELS[role]}) erstellt. Gültig 7 Tage.`,
-    invitationUrl: invitationUrl(rawToken) ?? undefined,
+    message: deliveryNote,
+    invitationUrl: url,
   };
 }

@@ -151,8 +151,9 @@ export function AdminUserManagement({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-[color:var(--color-muted-foreground)]">
-            Erzeugt einen 7 Tage gültigen Einladungslink über die Trial-Einladungs-RPC.
-            Funktioniert auch ohne Service-Role-Konfiguration.
+            Erzeugt einen 7 Tage gültigen Einladungslink über die Trial-Einladungs-RPC
+            und versendet ihn per E-Mail (falls Resend konfiguriert ist). Funktioniert
+            auch ohne Service-Role-Konfiguration.
           </p>
           <TenantInvitationForm disabled={!isTenantAdmin} />
         </CardContent>

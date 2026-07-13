@@ -58,7 +58,8 @@ function InvitationLinkOutput({ url }: { url: string }) {
         ) : null}
       </div>
       <p className="text-xs text-[color:var(--color-muted-foreground)]">
-        Kein E-Mail-Versand — teilen Sie diesen Link manuell mit der eingeladenen Person.
+        Link als Fallback — nutzen Sie ihn, falls die E-Mail nicht ankommt oder der
+        Versand nicht konfiguriert ist.
       </p>
     </div>
   );
