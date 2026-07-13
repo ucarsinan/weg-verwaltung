@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/modules/settings/actions";
+import { SETTINGS_SUBNAV } from "@/modules/settings/settings-nav";
 
 type LinkHref = React.ComponentProps<typeof Link>["href"];
 
@@ -40,6 +41,9 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
     href === "/dashboard"
       ? pathname === "/dashboard" || pathname === "/"
       : pathname === href || pathname.startsWith(href + "/");
+
+  const settingsActive =
+    pathname === "/einstellungen" || pathname.startsWith("/einstellungen/");
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,color-mix(in_oklch,var(--color-secondary)_58%,transparent),var(--color-background)_18rem)]">
@@ -113,6 +117,32 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
             );
           })}
         </nav>
+        {settingsActive ? (
+          <nav
+            aria-label="Einstellungen-Unterpunkte mobil"
+            className="flex gap-1.5 overflow-x-auto border-t border-[color:var(--color-border)] px-3 py-2"
+          >
+            {SETTINGS_SUBNAV.map((sub) => {
+              const subActive = pathname === sub.href;
+              return (
+                <Link
+                  key={sub.href}
+                  href={sub.href as LinkHref}
+                  aria-current={subActive ? "page" : undefined}
+                  className={cn(
+                    "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+                    subActive
+                      ? "bg-[color:var(--color-secondary)] text-[color:var(--color-foreground)]"
+                      : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-secondary)]/60 hover:text-[color:var(--color-foreground)]",
+                  )}
+                >
+                  <sub.icon className="size-3.5" aria-hidden="true" />
+                  {sub.label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </header>
 
       <div className="flex min-h-screen">
@@ -162,38 +192,68 @@ export default function AppShell({ userEmail, children }: AppShellProps) {
             </p>
             {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
               const active = isActive(href);
+              const showSubNav = href === "/einstellungen" && settingsActive;
 
               return (
-                <Link
-                  key={href}
-                  href={href as LinkHref}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "group relative flex min-h-11 items-center gap-3 rounded-lg border px-3 text-sm font-medium transition-colors",
-                    active
-                      ? "border-[color:var(--color-primary)]/25 bg-[linear-gradient(135deg,var(--color-primary),color-mix(in_oklch,var(--color-primary)_82%,var(--color-foreground)))] text-[color:var(--color-primary-foreground)] shadow-sm"
-                      : "border-transparent text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-foreground)]",
-                  )}
-                >
-                  <span
+                <div key={href} className="space-y-1">
+                  <Link
+                    href={href as LinkHref}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                      "group relative flex min-h-11 items-center gap-3 rounded-lg border px-3 text-sm font-medium transition-colors",
                       active
-                        ? "bg-[color:var(--color-primary-foreground)]/15"
-                        : "bg-[color:var(--color-background)] text-[color:var(--color-muted-foreground)] group-hover:text-[color:var(--color-foreground)]",
+                        ? "border-[color:var(--color-primary)]/25 bg-[linear-gradient(135deg,var(--color-primary),color-mix(in_oklch,var(--color-primary)_82%,var(--color-foreground)))] text-[color:var(--color-primary-foreground)] shadow-sm"
+                        : "border-transparent text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-foreground)]",
                     )}
-                    aria-hidden="true"
                   >
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  {active ? (
                     <span
-                      className="size-1.5 rounded-full bg-[color:var(--color-primary-foreground)]/90"
+                      className={cn(
+                        "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                        active
+                          ? "bg-[color:var(--color-primary-foreground)]/15"
+                          : "bg-[color:var(--color-background)] text-[color:var(--color-muted-foreground)] group-hover:text-[color:var(--color-foreground)]",
+                      )}
                       aria-hidden="true"
-                    />
+                    >
+                      <Icon className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    {active ? (
+                      <span
+                        className="size-1.5 rounded-full bg-[color:var(--color-primary-foreground)]/90"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </Link>
+
+                  {showSubNav ? (
+                    <div
+                      className="ml-4 space-y-0.5 border-l border-[color:var(--color-border)] pl-3"
+                      role="group"
+                      aria-label="Einstellungen-Unterpunkte"
+                    >
+                      {SETTINGS_SUBNAV.map((sub) => {
+                        const subActive = pathname === sub.href;
+                        return (
+                          <Link
+                            key={sub.href}
+                            href={sub.href as LinkHref}
+                            aria-current={subActive ? "page" : undefined}
+                            className={cn(
+                              "flex min-h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors",
+                              subActive
+                                ? "bg-[color:var(--color-secondary)] font-medium text-[color:var(--color-foreground)]"
+                                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-secondary)]/60 hover:text-[color:var(--color-foreground)]",
+                            )}
+                          >
+                            <sub.icon className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 truncate">{sub.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   ) : null}
-                </Link>
+                </div>
               );
             })}
           </nav>
