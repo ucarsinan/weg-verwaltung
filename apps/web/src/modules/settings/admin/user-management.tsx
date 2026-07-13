@@ -1,4 +1,4 @@
-import { MailPlus, ShieldAlert, UserRound, UsersRound } from "lucide-react";
+import { Link2, MailPlus, ShieldAlert, UserRound, UsersRound } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
@@ -10,6 +10,7 @@ import {
   isTenantMemberRole,
   type TenantMemberRole,
 } from "@/modules/settings/admin/types";
+import { TenantInvitationForm } from "@/modules/settings/admin/tenant-invitation-form";
 import {
   InviteTenantUserForm,
   UpdateTenantUserRoleForm,
@@ -138,6 +139,22 @@ export function AdminUserManagement({
             </p>
           ) : null}
           <InviteTenantUserForm disabled={!actionsEnabled} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link2 aria-hidden="true" className="size-5" />
+            Einladungslink erstellen
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-[color:var(--color-muted-foreground)]">
+            Erzeugt einen 7 Tage gültigen Einladungslink über die Trial-Einladungs-RPC.
+            Funktioniert auch ohne Service-Role-Konfiguration.
+          </p>
+          <TenantInvitationForm disabled={!isTenantAdmin} />
         </CardContent>
       </Card>
 
