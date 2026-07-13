@@ -318,8 +318,10 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
     throw new Error(`PDF-Upload fehlgeschlagen: ${uploadError.message}`);
   }
 
-  // 7. SHA-256 checksum (bytea → raw Buffer for the DB column)
-  const sha256Bytes = createHash("sha256").update(pdfBuffer).digest();
+  // 7. SHA-256 checksum. PostgREST expects a bytea argument as a "\x"-prefixed
+  // hex string; a raw Buffer would be JSON-serialized as {"type":"Buffer",...}
+  // and is not valid bytea input.
+  const sha256Hex = "\\x" + createHash("sha256").update(pdfBuffer).digest("hex");
 
   // 8. Insert document row
   const { data: doc, error: docError } = await supabase
@@ -346,7 +348,7 @@ export async function signProtokoll(protocolId: string): Promise<SignResult> {
       storage_path: storagePath,
       mime_type: "application/pdf",
       file_size_bytes: pdfBuffer.length,
-      sha256: sha256Bytes,
+      sha256: sha256Hex,
       uploaded_by: user.id,
     })
     .select("id")
