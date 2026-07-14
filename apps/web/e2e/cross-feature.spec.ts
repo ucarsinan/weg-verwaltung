@@ -1,6 +1,7 @@
 import { test, expect, Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { activateWirtschaftsplan } from "./helpers/finanzen";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
@@ -117,8 +118,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(res.ok() || res.status() === 404).toBe(true);
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
+  test("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "PlanUpdate");
     await createTestUnit(page, wegId, "UnitA", "100");
     await createTestUnit(page, wegId, "UnitB", "200");
@@ -132,6 +132,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(planRes.ok()).toBe(true);
     const [plan] = (await planRes.json()) as Array<{ id: string }>;
     expect(plan?.id).toBeTruthy();
+    await activateWirtschaftsplan(page, wegId, plan.id);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plan.id}&select=betrag`,
@@ -203,13 +204,21 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     await newContext.close();
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
+  test("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "UnitMeaUpdate");
     const unitName = await createTestUnit(page, wegId, "UnitA", "100");
     await createWirtschaftsplan(page, wegId, "2032", "12000");
 
     const { token } = await getAuthToken(page);
+    const planRes = await page.request.get(
+      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2032`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(planRes.ok()).toBe(true);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    expect(plan?.id).toBeTruthy();
+    await activateWirtschaftsplan(page, wegId, plan.id);
+
     const unitRes = await page.request.get(
       `${url}/rest/v1/unit?select=id&weg_id=eq.${wegId}&bezeichnung=eq.${encodeURIComponent(unitName)}`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },

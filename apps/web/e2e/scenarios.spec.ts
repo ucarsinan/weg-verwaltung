@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { activateWirtschaftsplan } from "./helpers/finanzen";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
@@ -189,8 +190,7 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     expect(res.ok() || res.status() === 404).toBe(true);
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("scenario-correction-of-financial-plan: corrections preserve historical Sollstellungen", async ({ page }) => {
+  test("scenario-correction-of-financial-plan: corrections preserve historical Sollstellungen", async ({ page }) => {
     const tokenA = getTokenFromAuthFile("admin.json");
     const wegId = await createScenarioWeg(page, "Correction");
     await createScenarioUnit(page, wegId, "CorrectionA", "100");
@@ -210,6 +210,20 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     const plans = await planRes.json() as Array<{ id: string }>;
     expect(plans).toHaveLength(1);
 
+    // Erst die Aktivierung erzeugt die Sollstellungen — ein Entwurf ist
+    // absichtlich noch frei editierbar (docs/07-finance-lifecycle.md). Ohne
+    // diesen Schritt prueft der Test gegen einen Plan, den man aendern DARF.
+    await activateWirtschaftsplan(page, wegId, plans[0].id);
+
+    const sollRes = await page.request.get(
+      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plans[0].id}&select=id`,
+      { headers: { apikey: key, Authorization: `Bearer ${tokenA}` } },
+    );
+    expect(sollRes.ok()).toBe(true);
+    expect((await sollRes.json()) as Array<{ id: string }>).toHaveLength(24);
+
+    // Korrektur eines aktiven Plans laeuft ueber einen Nachtragsplan, niemals
+    // ueber ein direktes Update — die Historie muss unangetastet bleiben.
     const updateRes = await page.request.patch(
       `${url}/rest/v1/wirtschaftsplan?id=eq.${plans[0].id}`,
       {
