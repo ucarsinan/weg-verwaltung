@@ -110,6 +110,10 @@ export async function createTenantInvitationAction(
 
     if (result.status === "sent") {
       deliveryNote = `Einladung per E-Mail an ${email} gesendet. Der Link (unten) ist 7 Tage gültig.`;
+    } else if (result.status === "disabled") {
+      // Kein verifizierter Absender eingerichtet — das ist Konfiguration, keine
+      // Stoerung. Entsprechend nicht als Fehlschlag melden.
+      deliveryNote = `Einladungslink für ${email} (${roleLabel}) erstellt, gültig 7 Tage. Der E-Mail-Versand ist nicht eingerichtet — bitte teilen Sie den Link unten manuell.`;
     } else if (result.status === "error") {
       deliveryNote = `Link erstellt, aber der E-Mail-Versand ist fehlgeschlagen. Bitte teilen Sie den Link unten manuell.`;
     }

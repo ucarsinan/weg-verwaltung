@@ -31,8 +31,16 @@ export const disabledEmailProvider: EmailProvider = {
   },
 };
 
+// Resends eigene Test-Domain. Sie stellt ausschliesslich an die Adresse des
+// Kontoinhabers zu; jeder andere Empfaenger wird mit 403 abgelehnt. Ein
+// Fehlschlag mit diesem Absender heisst deshalb nicht "der Mailversand ist
+// kaputt", sondern "es ist kein verifizierter Absender eingerichtet" — und das
+// ist ein Konfigurations-, kein Stoerungszustand.
+const SANDBOX_SENDER_DOMAIN = "@resend.dev";
+
 export function resendEmailProvider(apiKey: string, from: string): EmailProvider {
   const resend = new Resend(apiKey);
+  const isSandboxSender = from.toLowerCase().includes(SANDBOX_SENDER_DOMAIN);
 
   return {
     async send(message, options) {
@@ -51,6 +59,7 @@ export function resendEmailProvider(apiKey: string, from: string): EmailProvider
 
         if (error || !data) {
           console.error("[email] resend send failed:", error);
+          if (isSandboxSender) return { status: "disabled" };
           return {
             status: "error",
             message: "Der E-Mail-Versand ist fehlgeschlagen.",
@@ -70,7 +79,7 @@ export function resendEmailProvider(apiKey: string, from: string): EmailProvider
   };
 }
 
-const DEV_FALLBACK_FROM = "WEG-Verwaltung <onboarding@resend.dev>";
+const DEV_FALLBACK_FROM = `WEG-Verwaltung <onboarding${SANDBOX_SENDER_DOMAIN}>`;
 
 /**
  * Resolves the active email provider from the environment. Returns the Resend
