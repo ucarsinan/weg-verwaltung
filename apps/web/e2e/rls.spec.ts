@@ -21,31 +21,47 @@ function getTokenFromAuthFile(filename: string): string {
   return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
 }
 
+// custom_access_token_hook (0002_identity.sql) injects tenant_id into
+// app_metadata on every JWT — decode it directly so isolation tests can
+// assert on real tenant_id values instead of just "the request didn't error".
+function decodeTenantId(token: string): string {
+  const payload = token.split(".")[1];
+  const json = Buffer.from(payload, "base64url").toString("utf-8");
+  const claims = JSON.parse(json) as { app_metadata?: { tenant_id?: string } };
+  const tenantId = claims.app_metadata?.tenant_id;
+  if (!tenantId) throw new Error("JWT is missing app_metadata.tenant_id");
+  return tenantId;
+}
+
 test.describe("Feature 5: RLS Security Constraints", () => {
   let tokenA: string;
   let tokenB: string;
+  let tenantAId: string;
+  let tenantBId: string;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
   test.beforeAll(() => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
+    tenantAId = decodeTenantId(tokenA);
+    tenantBId = decodeTenantId(tokenB);
   });
 
   test("rls-wp-select-isolated: Tenant A cannot read Tenant B's Wirtschaftspläne", async ({ request }) => {
-    // Querying with Tenant A's token
+    // A GET against an existing, authorized table always returns 200 with a
+    // (possibly empty) array via PostgREST — RLS filters rows, it never 404s.
     const res = await request.get(`${url}/rest/v1/wirtschaftsplan?select=*`, {
       headers: {
         apikey: key,
         Authorization: `Bearer ${tokenA}`
       }
     });
-    expect(res.ok() || res.status() === 404).toBe(true);
-    if (res.ok()) {
-      const plans = await res.json() as Array<{ tenant_id: string }>;
-      // Ensure none of the returned plans belong to Tenant B's tenant_id (if we knew Tenant B's ID)
-      // Or just verify all retrieved plans belong to Tenant A's tenant (Postgres filters out Tenant B's rows silently)
-      expect(plans.length).toBeGreaterThanOrEqual(0);
+    expect(res.ok()).toBe(true);
+    const plans = await res.json() as Array<{ tenant_id: string }>;
+    for (const plan of plans) {
+      expect(plan.tenant_id).toBe(tenantAId);
+      expect(plan.tenant_id).not.toBe(tenantBId);
     }
   });
 
@@ -75,7 +91,12 @@ test.describe("Feature 5: RLS Security Constraints", () => {
         Authorization: `Bearer ${tokenA}`
       }
     });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    expect(res.ok()).toBe(true);
+    const sollstellungen = await res.json() as Array<{ tenant_id: string }>;
+    for (const row of sollstellungen) {
+      expect(row.tenant_id).toBe(tenantAId);
+      expect(row.tenant_id).not.toBe(tenantBId);
+    }
   });
 
   test("rls-sollstellung-direct-writes-blocked: Tenant A cannot insert Tenant B's Sollstellungen", async ({ request }) => {
