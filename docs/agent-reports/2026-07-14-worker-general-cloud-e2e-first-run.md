@@ -14,6 +14,17 @@ komplette Self-Service-Pfad unbenutzbar war. Der Fehler ist behoben und im
 Browser verifiziert. Zusaetzlich wurde die Sollstellungs-Abdeckung
 wiederhergestellt, die faktisch nicht existierte, obwohl die Suite gruen meldete.
 
+In einer zweiten Runde (gleicher Tag) wurden vier weitere, vom Nutzer freigegebene
+Punkte abgearbeitet: `CardTitle` rendert jetzt als echtes `heading`; die
+Root-Cause der reihenfolgeabhaengigen E2E-Flakiness wurde identifiziert (Cloud-
+Latenz auf dem Free-Plan nach Bulk-Writes, kein Logikfehler); die zwei
+sicherheitsrelevanten Schein-Tests in `rls.spec.ts` (Tenant-Isolation) wurden
+mit echten Row-Level-Assertions gehaertet und gegen Cloud verifiziert; und zwei
+Cleanup-Skripte fuer das E2E-Datenresiduum wurden entworfen und **bewusst nicht
+ausgefuehrt**. Ein Explore-Agent hat dabei acht weitere, weniger kritische
+Schein-Test-Stellen gefunden (audit-log-Tests, `isVisible()`-Huellen) — die
+bleiben als priorisierte Folgeaufgabe dokumentiert, nicht committed.
+
 Endstand: **76 passed, 2 skipped, 0 failed** (vorher: 67 passed, 11 skipped) und
 207 Unit-Tests. `./scripts/verify.sh` laeuft mit Exit 0.
 
@@ -35,9 +46,9 @@ Zwei Dinge, die vorher niemand sehen konnte, sind jetzt sichtbar und behoben:
 
 | Reihenfolge | Schritt | Datei/Bereich | Warum? | Freigabe noetig? |
 | --- | --- | --- | --- | --- |
-| `1` | Commits pruefen und pushen | `7 Commits auf claude/saas-onboarding-e2e-test-uz0yy8` | Arbeit ist verifiziert, aber noch nicht auf dem Remote | `ja` |
-| `2` | E2E-Datenresiduum in der Cloud aufraeumen | Cloud-DB (Test-WEGs, Test-Nutzer) | Jeder Lauf legt echte Wegwerf-Zeilen an; waechst monoton | `ja` |
-| `3` | `CardTitle` als echte Ueberschrift rendern | `components/ui/card` | „Sollstellungen" ist visuell eine Ueberschrift, aber kein `heading` im A11y-Baum | `nein` |
+| `1` | Commits pruefen und pushen | `12 Commits auf claude/saas-onboarding-e2e-test-uz0yy8` | Arbeit ist verifiziert, aber noch nicht auf dem Remote | `ja` |
+| `2` | Cleanup-Skripte reviewen und Freigabe erteilen | `apps/web/scripts/cleanup-e2e-residue.sql` + `cleanup-e2e-users.mjs` (untracked) | Entworfen, ungetestet gegen Cloud, nicht ausgefuehrt — Review noetig bevor irgendetwas laeuft | `ja` |
+| `3` | Restliche 8 Schein-Test-Funde priorisieren | `rls.spec.ts` (2 weitere Stellen), `cross-feature.spec.ts`, `scenarios.spec.ts`, `finanzen.spec.ts`, `home.spec.ts` — siehe Findings-Tabelle | Kleiner als die schon gehaerteten Tenant-Isolations-Tests, aber real | `ja (Scope-Entscheidung)` |
 
 Bewusst **nicht** im Fahrplan: eine Resend-Domain fuer weg-verwaltung verifizieren.
 Entscheidung des Nutzers vom 2026-07-14 — das Projekt hat keinen Produktivbetrieb,
@@ -123,7 +134,8 @@ steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 ## Git-Status
 
 - Dateien gestaged? `ja`
-- Commit erstellt? `ja` — 6 Commits (`d1dd032`, `d6691c8`, `a076cd0`, `76a3cb8`, `ef7039e`, `e3c3035`)
+- Commit erstellt? `ja` — 12 Commits (`d1dd032`, `d6691c8`, `a076cd0`, `76a3cb8`, `ef7039e`, `e3c3035`, `5e9c726`, `d638ea0`, `a0de727`, `1ca38d8`, `2968c2b`, `3b67f3f`)
+- Untracked, bewusst nicht gestaged: `apps/web/scripts/cleanup-e2e-residue.sql`, `apps/web/scripts/cleanup-e2e-users.mjs` — Review-Vorlagen, siehe Folgeaufgaben
 - Push ausgefuehrt? `nein`
 - Wenn nein: Was fehlt fuer Commit/Push? `Freigabe des Nutzers`
 - Vorgeschlagene Stage-Dateien: siehe „Geaenderte Dateien"
@@ -151,7 +163,8 @@ steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 
 | Risiko | Bedeutung | Naechster Schritt |
 | --- | --- | --- |
-| E2E-Datenresiduum in der Cloud | Jeder Lauf legt echte WEGs, Plaene, Sollstellungen und Auth-Nutzer an; das waechst monoton | Aufraeum-Strategie festlegen (dokumentiertes Risiko, siehe `demo.spec.ts`) |
+| E2E-Datenresiduum in der Cloud | Jeder Lauf legt echte WEGs, Plaene, Sollstellungen und Auth-Nutzer an; das waechst monoton | Zwei Skripte entworfen und **nicht ausgefuehrt**, siehe Folgeaufgaben: `apps/web/scripts/cleanup-e2e-residue.sql` (Business-Tabellen) + `cleanup-e2e-users.mjs` (Auth-Nutzer, Dry-Run per Default). Beide untracked, warten auf Freigabe |
+| Beschluss-Sammlung macht Cleanup fuer manche WEGs architektonisch unmoeglich | `beschluss_sammlung_entry` ist append-only (Trigger lehnt DELETE kategorisch ab, auch fuer service_role). Jede E2E-WEG mit einer Beschlussvorlage (`versammlungen.spec.ts`) kann nie vollstaendig geloescht werden — das Cleanup-Skript erkennt das pro WEG und laesst sie unangetastet stehen | Kein Bug, akzeptiertes Residuum. Falls stoerend: nur ueber eine zukuenftige Cold-Storage-/Export-Maschinerie loesbar (bereits im Backlog von `AGENTS.md`), nicht per Loesch-Skript |
 | Einladungsmails gehen nicht raus | Resend ohne verifizierte Domain; im E2E folgenlos, in echt nicht | Domain verifizieren |
 | Wall-Clock-Artefakt bei langen Laeufen | Ein Test „dauerte" 25,4 min, weil der Rechner mitten im Lauf schlief — kein Hang | Bei langen Laeufen Schlafmodus deaktivieren |
 | Reihenfolgeabhaengige E2E-Flakiness | `finanzen.spec.ts` vor `cross-feature`/`scenarios.spec.ts` erzeugt genug Cloud-Datenresiduum, um deren `serial`-Bloecke fehlschlagen zu lassen (belegt: 3 failed in dieser Reihenfolge, 0 failed in Standardreihenfolge und isoliert) | **Root Cause identifiziert (2026-07-14, Analyse ohne erneuten Cloud-Lauf):** kein Locator-/Scoping-Fehler — `cross-finanz-and-sollstellung` filtert scharf ueber `plan.id`. Beide Fehlschlaege waren `expect(page).toHaveURL(...)`-**Timeouts** (fest codiertes `15_000ms` in Helpern wie `createTestWeg`), unmittelbar nach dem 100+-Einheiten-Bulk-Test am Ende von `finanzen.spec.ts` — auf einem **Supabase-Free-Plan-Projekt** (siehe `project_supabase_free_plan.md`), das nach Bulk-Writes plausibel Latenz aufbaut. Der dritte Fehlschlag (`finanz-delete-plan-ui`, Zeile 190) lag *vor* allen Sollstellungs-Tests im selben File und ist vermutlich unabhaengige Free-Tier-Flakiness. Nicht experimentell nachverifiziert — ein weiterer 26-Minuten-Cloud-Lauf allein zur Bestaetigung war nicht durch eine Freigabe gedeckt. Haertung: navigation-Timeouts fuer Tests nach Bulk-Writes grosszuegiger fassen, oder Cloud-lastige Bulk-Tests generell zuletzt in der Suite platzieren |
@@ -160,7 +173,7 @@ steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 
 | Prioritaet | Aufgabe | Begruendung |
 | --- | --- | --- |
-| `P2` | Aufraeum-Job fuer E2E-Testdaten in der Cloud | Residuum waechst mit jedem Lauf |
+| `P2` | Aufraeum-Skripte pruefen und Freigabe erteilen (oder ablehnen) | `apps/web/scripts/cleanup-e2e-residue.sql` (SQL, per-WEG Savepoint-Loop, kommentierte Grenzen) + `cleanup-e2e-users.mjs` (Node, Dry-Run per Default, `--execute` fuer echtes Loeschen, harter Ausschluss von `admin@admin.com`/`tenant_b@admin.com`). Beide entworfen, ungetestet gegen Cloud, nicht committed — liegen als Review-Vorlage im Arbeitsbaum |
 | `P2` | `logopaedie-simsek.de` in Resend klaeren (anderes Projekt) | Seit 4 Monaten `Pending`; dort laeuft eine echte Website, deren Mailversand vermutlich nicht funktioniert |
 | `P3` | Resend-Domain fuer weg-verwaltung verifizieren — erst beim echten Deployment | Bis dahin traegt der Einladungslink den Flow; siehe Notiz unter „Handfester Fahrplan" |
 | ~~`P3`~~ | ~~`CardTitle` als `heading` rendern~~ | Erledigt in `a0de727` — rendert jetzt als `<h3>`, 24 Verwendungsstellen, keine verschachtelten Headings gefunden, 207 Unit-/A11y-Tests weiterhin gruen |
