@@ -69,6 +69,7 @@ dieser Domain setzen.
 | `SUPPORTED` | `P3` | Die Domain `logopaedie-simsek.de` steht seit 4 Monaten auf `Pending` — DNS-Records nie fertig gesetzt | Resend-Dashboard (Screenshot des Nutzers) | Betrifft ein **anderes** Projekt: dort geht vermutlich kein Mailversand raus (z. B. Kontaktformular) | Getrennt pruefen, ob `logopaedie-simsek` Mailversand braucht | Hoeherer Realitaetsbezug als der Portfolio-Mailversand — dort laeuft eine echte Website |
 | `SUPPORTED` | `P3` | `registerAction` verwarf den Supabase-Fehler vollstaendig | `registrieren/actions.ts:53` (vorher) | Ursache eines fehlgeschlagenen Sign-ups war von aussen unsichtbar | Behoben: `code`/`status` werden geloggt, `message` bewusst nicht (enthaelt die Adresse) | Entspricht der Hauskonvention der anderen Server Actions |
 | `SUPPORTED` | `P3` | Supabase Auth lehnt `.test`-Domains beim oeffentlichen `signUp` ab (`400 email_address_invalid`), die Admin-API akzeptiert sie | Direkte Probe gegen Cloud | Registrierungs-Erfolgsfall ist im Browser nicht sinnvoll fahrbar | Behoben: Erfolgsfall als Vitest mit gemocktem Client, Browser prueft den Validierungszweig | Jeder echte Erfolg wuerde eine Bestaetigungsmail an eine fremde Domain schicken; Auth-Mailversand ist rate-limitiert |
+| `SUPPORTED` | `P3` | Die neu reaktivierten Sollstellungs-Tests (`finanzen.spec.ts`) hinterlassen genug Cloud-State, dass `cross-feature.spec.ts`/`scenarios.spec.ts` (beide `serial`) fehlschlagen, wenn `finanzen` **zuerst** laeuft | Expliziter Lauf `playwright test e2e/finanzen.spec.ts e2e/cross-feature.spec.ts e2e/scenarios.spec.ts` (abweichende Dateireihenfolge): 3 failed, 26,4 min. Isolierter Re-Lauf derselben zwei Dateien ohne vorausgehendes `finanzen`: 12/12 gruen. Voller Suite-Lauf in Standardreihenfolge (`cross-feature` alphabetisch vor `finanzen`): 76 passed, 0 failed | Kein App- oder Testlogik-Bug, aber die Suite ist reihenfolgeabhaengig fragil — ein anderer Runner/Sharding koennte das gleiche Muster wieder ausloesen | Nicht behoben, nur belegt und dokumentiert. Siehe Risiken/Folgeaufgaben | Cross-Tenant-Datenresiduum aus vorherigen Sollstellungs-Laeufen kollidiert vermutlich mit Locator-Annahmen (z. B. Zeilenzahl/Reihenfolge) in `cross-feature`/`scenarios` |
 
 ## Geaenderte Dateien
 
@@ -106,14 +107,15 @@ dieser Domain setzen.
 
 | Check | Ergebnis | Hinweis |
 | --- | --- | --- |
-| `playwright test --project=chromium` (volle Suite) | `pass` | 76 passed, 2 skipped, 0 failed |
-| `./scripts/verify.sh` | `pass` | Exit 0; Lint, Typecheck, 205 Unit-Tests, Build |
+| `playwright test --project=chromium` (volle Suite, Standardreihenfolge) | `pass` | Sauberer Lauf zur Verifikation dieses Reports: **76 passed, 2 skipped, 0 failed**, Exit 0, 3,8 min |
+| `./scripts/verify.sh` | `pass` | Exit 0; Lint, Typecheck, 207 Unit-Tests, Build |
 | `just seed-admin` (implizit via `auth.setup.ts`) | `pass` | idempotent, mit Freigabe |
+| `playwright test` mit abweichender Dateireihenfolge (`finanzen` vor `cross-feature`/`scenarios`) | `fail` dann `pass` | 3 failed bei dieser Reihenfolge (26,4 min); isolierter Re-Lauf derselben Dateien ohne vorausgehendes `finanzen`: 12/12 gruen. Siehe P3-Finding „reihenfolgeabhaengige Flakiness" |
 
 ## Git-Status
 
 - Dateien gestaged? `ja`
-- Commit erstellt? `ja` — 3 Commits
+- Commit erstellt? `ja` — 6 Commits (`d1dd032`, `d6691c8`, `a076cd0`, `76a3cb8`, `ef7039e`, `e3c3035`)
 - Push ausgefuehrt? `nein`
 - Wenn nein: Was fehlt fuer Commit/Push? `Freigabe des Nutzers`
 - Vorgeschlagene Stage-Dateien: siehe „Geaenderte Dateien"
@@ -144,6 +146,7 @@ dieser Domain setzen.
 | E2E-Datenresiduum in der Cloud | Jeder Lauf legt echte WEGs, Plaene, Sollstellungen und Auth-Nutzer an; das waechst monoton | Aufraeum-Strategie festlegen (dokumentiertes Risiko, siehe `demo.spec.ts`) |
 | Einladungsmails gehen nicht raus | Resend ohne verifizierte Domain; im E2E folgenlos, in echt nicht | Domain verifizieren |
 | Wall-Clock-Artefakt bei langen Laeufen | Ein Test „dauerte" 25,4 min, weil der Rechner mitten im Lauf schlief — kein Hang | Bei langen Laeufen Schlafmodus deaktivieren |
+| Reihenfolgeabhaengige E2E-Flakiness | `finanzen.spec.ts` vor `cross-feature`/`scenarios.spec.ts` erzeugt genug Cloud-Datenresiduum, um deren `serial`-Bloecke fehlschlagen zu lassen (belegt: 3 failed in dieser Reihenfolge, 0 failed in Standardreihenfolge und isoliert) | Root Cause lokalisieren (vermutlich Locator, der auf Zeilenzahl/Reihenfolge statt auf ein spezifisches Test-Artefakt zielt) und haerten; bis dahin: Suite nur in Standardreihenfolge laufen lassen, nicht einzelne Dateien in abweichender Reihenfolge kombinieren |
 
 ## Folgeaufgaben
 
@@ -154,3 +157,4 @@ dieser Domain setzen.
 | `P3` | Resend-Domain fuer weg-verwaltung verifizieren — erst beim echten Deployment | Bis dahin traegt der Einladungslink den Flow; siehe Notiz unter „Handfester Fahrplan" |
 | `P3` | `CardTitle` als `heading` rendern | „Sollstellungen" ist visuell Ueberschrift, aber nicht im A11y-Baum — faellt jest-axe nicht auf, weil kein Verstoss, aber Screenreader-Navigation leidet |
 | `P3` | Restliche `if (isVisible())`-Huellen in `finanzen.spec.ts` pruefen | Auch `finanz-fill-form`, `finanz-calculate-hausgeld` u. a. koennen still durchrutschen |
+| `P3` | Root Cause der reihenfolgeabhaengigen Flakiness zwischen `finanzen` und `cross-feature`/`scenarios` finden und haerten | Aktuell nur durch Dateireihenfolge verdeckt, nicht behoben — ein anderer Runner koennte es wieder ausloesen |
