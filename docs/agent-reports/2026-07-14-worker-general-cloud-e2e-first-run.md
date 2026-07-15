@@ -35,10 +35,9 @@ Zwei Dinge, die vorher niemand sehen konnte, sind jetzt sichtbar und behoben:
 
 | Reihenfolge | Schritt | Datei/Bereich | Warum? | Freigabe noetig? |
 | --- | --- | --- | --- | --- |
-| `1` | Commits pruefen und pushen | `5 Commits auf claude/saas-onboarding-e2e-test-uz0yy8` | Arbeit ist verifiziert, aber noch nicht auf dem Remote | `ja` |
-| `2` | `auth_leaked_password_protection` aktivieren | Supabase Studio, Auth → Settings | Offener Advisor-WARN aus dem Backlog, kein Code noetig | `ja (Nutzeraktion)` |
-| `3` | E2E-Datenresiduum in der Cloud aufraeumen | Cloud-DB (Test-WEGs, Test-Nutzer) | Jeder Lauf legt echte Wegwerf-Zeilen an; waechst monoton | `ja` |
-| `4` | `CardTitle` als echte Ueberschrift rendern | `components/ui/card` | „Sollstellungen" ist visuell eine Ueberschrift, aber kein `heading` im A11y-Baum | `nein` |
+| `1` | Commits pruefen und pushen | `7 Commits auf claude/saas-onboarding-e2e-test-uz0yy8` | Arbeit ist verifiziert, aber noch nicht auf dem Remote | `ja` |
+| `2` | E2E-Datenresiduum in der Cloud aufraeumen | Cloud-DB (Test-WEGs, Test-Nutzer) | Jeder Lauf legt echte Wegwerf-Zeilen an; waechst monoton | `ja` |
+| `3` | `CardTitle` als echte Ueberschrift rendern | `components/ui/card` | „Sollstellungen" ist visuell eine Ueberschrift, aber kein `heading` im A11y-Baum | `nein` |
 
 Bewusst **nicht** im Fahrplan: eine Resend-Domain fuer weg-verwaltung verifizieren.
 Entscheidung des Nutzers vom 2026-07-14 — das Projekt hat keinen Produktivbetrieb,
@@ -47,6 +46,14 @@ Fehlermeldung ist stattdessen im Code entschaerft (`ef7039e`). Sobald ein echter
 Betrieb ansteht: Domain in Resend verifizieren (Region `eu-west-1`/Irland passend
 zur DSGVO-Linie) und `EMAIL_FROM` in `apps/web/.env.local` auf einen Absender
 dieser Domain setzen.
+
+Ebenfalls bewusst **nicht** im Fahrplan: `auth_leaked_password_protection`
+aktivieren. Verifiziert am 2026-07-14 — das Projekt laeuft auf dem
+Supabase-Free-Plan, der HaveIBeenPwned-Toggle ist laut Doku erst ab Pro
+verfuegbar. Der Advisor-WARN ist damit keine offene Aufgabe, sondern eine
+Plan-Grenze; siehe `AGENTS.md`-Backlog. Bei einem spaeteren Upgrade zusaetzlich
+beachten: Seed-/E2E-Passwort `admin1` (`seed-admin.mjs`, `auth.setup.ts`)
+steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 
 ## Entscheidung fuer den Nutzer
 
@@ -70,6 +77,7 @@ dieser Domain setzen.
 | `SUPPORTED` | `P3` | `registerAction` verwarf den Supabase-Fehler vollstaendig | `registrieren/actions.ts:53` (vorher) | Ursache eines fehlgeschlagenen Sign-ups war von aussen unsichtbar | Behoben: `code`/`status` werden geloggt, `message` bewusst nicht (enthaelt die Adresse) | Entspricht der Hauskonvention der anderen Server Actions |
 | `SUPPORTED` | `P3` | Supabase Auth lehnt `.test`-Domains beim oeffentlichen `signUp` ab (`400 email_address_invalid`), die Admin-API akzeptiert sie | Direkte Probe gegen Cloud | Registrierungs-Erfolgsfall ist im Browser nicht sinnvoll fahrbar | Behoben: Erfolgsfall als Vitest mit gemocktem Client, Browser prueft den Validierungszweig | Jeder echte Erfolg wuerde eine Bestaetigungsmail an eine fremde Domain schicken; Auth-Mailversand ist rate-limitiert |
 | `SUPPORTED` | `P3` | Die neu reaktivierten Sollstellungs-Tests (`finanzen.spec.ts`) hinterlassen genug Cloud-State, dass `cross-feature.spec.ts`/`scenarios.spec.ts` (beide `serial`) fehlschlagen, wenn `finanzen` **zuerst** laeuft | Expliziter Lauf `playwright test e2e/finanzen.spec.ts e2e/cross-feature.spec.ts e2e/scenarios.spec.ts` (abweichende Dateireihenfolge): 3 failed, 26,4 min. Isolierter Re-Lauf derselben zwei Dateien ohne vorausgehendes `finanzen`: 12/12 gruen. Voller Suite-Lauf in Standardreihenfolge (`cross-feature` alphabetisch vor `finanzen`): 76 passed, 0 failed | Kein App- oder Testlogik-Bug, aber die Suite ist reihenfolgeabhaengig fragil — ein anderer Runner/Sharding koennte das gleiche Muster wieder ausloesen | Nicht behoben, nur belegt und dokumentiert. Siehe Risiken/Folgeaufgaben | Cross-Tenant-Datenresiduum aus vorherigen Sollstellungs-Laeufen kollidiert vermutlich mit Locator-Annahmen (z. B. Zeilenzahl/Reihenfolge) in `cross-feature`/`scenarios` |
+| `SUPPORTED` | `P3` | `auth_leaked_password_protection`-Advisor ist auf dem Supabase-Free-Plan nicht schliessbar | Nutzerangabe „Free-Plan" + Supabase-Doku: „Leaked password protection is available on the Pro Plan and above" | Der WARN aus dem `AGENTS.md`-Backlog wurde faelschlich als offene Nutzeraktion gefuehrt | `AGENTS.md`-Backlog-Zeile korrigiert: Plan-Grenze statt offene Aufgabe | Ohne Plan-Upgrade ist der Toggle im Dashboard nicht vorhanden — nichts, was Code oder Konfiguration loesen koennte |
 
 ## Geaenderte Dateien
 
