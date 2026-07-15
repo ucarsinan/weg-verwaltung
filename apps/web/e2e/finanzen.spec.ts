@@ -32,7 +32,12 @@ async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.getByLabel(/Name der WEG/).fill(name);
   await fillWegAddress(page, { street: "Finanzweg" });
   await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  // 30s, not the usual 15s: on the Free-plan Cloud project, later tests in
+  // this same file's bulk-write section can leave Cloud under enough load
+  // that a subsequent 15s navigation budget is too tight (see
+  // docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md,
+  // "reihenfolgeabhaengige Flakiness").
+  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
   const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
   if (!match) throw new Error("Could not extract WEG ID from URL");
   return match[1];

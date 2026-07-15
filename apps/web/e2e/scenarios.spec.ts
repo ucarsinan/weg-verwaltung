@@ -28,7 +28,12 @@ async function createScenarioWeg(page: Page, label: string): Promise<string> {
   await page.getByLabel(/Name der WEG/).fill(`Scenario ${label} ${Date.now()}`);
   await fillWegAddress(page, { street: "Szenarioweg" });
   await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  // 30s, not the usual 15s: on the Free-plan Cloud project, this navigation
+  // can land right after finanzen.spec.ts's 100+-unit bulk-write test when
+  // files run in a non-standard order, and Cloud latency has been observed
+  // to blow a 15s budget there (see docs/agent-reports/2026-07-14-worker-
+  // general-cloud-e2e-first-run.md, "reihenfolgeabhaengige Flakiness").
+  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
 
   const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
   if (!match) throw new Error("Could not extract WEG ID from URL");
