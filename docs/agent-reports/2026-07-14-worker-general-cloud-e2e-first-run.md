@@ -21,9 +21,19 @@ Latenz auf dem Free-Plan nach Bulk-Writes, kein Logikfehler); die zwei
 sicherheitsrelevanten Schein-Tests in `rls.spec.ts` (Tenant-Isolation) wurden
 mit echten Row-Level-Assertions gehaertet und gegen Cloud verifiziert; und zwei
 Cleanup-Skripte fuer das E2E-Datenresiduum wurden entworfen und **bewusst nicht
-ausgefuehrt**. Ein Explore-Agent hat dabei acht weitere, weniger kritische
-Schein-Test-Stellen gefunden (audit-log-Tests, `isVisible()`-Huellen) — die
-bleiben als priorisierte Folgeaufgabe dokumentiert, nicht committed.
+ausgefuehrt**. Ein Explore-Agent hat dabei acht weitere Schein-Test-Stellen
+gefunden (audit-log-Tests, `isVisible()`-Huellen).
+
+In einer dritten Runde (gleicher Tag, zwei parallele Subagenten fuer
+`cross-feature`/`scenarios`/`home` bzw. `finanzen.spec.ts`) wurden alle acht
+verbleibenden Schein-Tests sowie die letzten zwei `rls.spec.ts`-Tautologien
+gehaertet — Letztere brauchten eine echte Tenant-B-Zielzeile, da ein Patch/
+Delete gegen eine erfundene UUID nie zwischen „RLS blockiert" und „Zeile gab's
+nie" unterscheiden konnte. Dabei kam ein Nebenfund ans Licht: der `CardTitle`-
+A11y-Fix aus Runde 2 hatte einen Locator in `finanz-view-page` mehrdeutig
+gemacht (Strict-Mode-Kollision mit der neuen `<h3>`-Kartenueberschrift), was in
+`finanzen.spec.ts`s `serial`-Modus 19 weitere Tests gar nicht mehr laufen liess
+— auch das ist behoben und einzeln sowie im vollen Suite-Lauf verifiziert.
 
 Endstand: **76 passed, 2 skipped, 0 failed** (vorher: 67 passed, 11 skipped) und
 207 Unit-Tests. `./scripts/verify.sh` laeuft mit Exit 0.
@@ -48,7 +58,7 @@ Zwei Dinge, die vorher niemand sehen konnte, sind jetzt sichtbar und behoben:
 | --- | --- | --- | --- | --- |
 | `1` | Commits pruefen und pushen | `12 Commits auf claude/saas-onboarding-e2e-test-uz0yy8` | Arbeit ist verifiziert, aber noch nicht auf dem Remote | `ja` |
 | `2` | Cleanup-Skripte reviewen und Freigabe erteilen | `apps/web/scripts/cleanup-e2e-residue.sql` + `cleanup-e2e-users.mjs` (untracked) | Entworfen, ungetestet gegen Cloud, nicht ausgefuehrt — Review noetig bevor irgendetwas laeuft | `ja` |
-| `3` | Restliche 8 Schein-Test-Funde priorisieren | `rls.spec.ts` (2 weitere Stellen), `cross-feature.spec.ts`, `scenarios.spec.ts`, `finanzen.spec.ts`, `home.spec.ts` — siehe Findings-Tabelle | Kleiner als die schon gehaerteten Tenant-Isolations-Tests, aber real | `ja (Scope-Entscheidung)` |
+| ~~`3`~~ | ~~Restliche 8 Schein-Test-Funde priorisieren~~ | `rls.spec.ts`, `cross-feature.spec.ts`, `scenarios.spec.ts`, `finanzen.spec.ts`, `home.spec.ts` | Erledigt in `7fde366`/`166a962`, siehe Findings-Tabelle | erledigt |
 
 Bewusst **nicht** im Fahrplan: eine Resend-Domain fuer weg-verwaltung verifizieren.
 Entscheidung des Nutzers vom 2026-07-14 — das Projekt hat keinen Produktivbetrieb,
@@ -134,8 +144,8 @@ steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 ## Git-Status
 
 - Dateien gestaged? `ja`
-- Commit erstellt? `ja` — 12 Commits (`d1dd032`, `d6691c8`, `a076cd0`, `76a3cb8`, `ef7039e`, `e3c3035`, `5e9c726`, `d638ea0`, `a0de727`, `1ca38d8`, `2968c2b`, `3b67f3f`)
-- Untracked, bewusst nicht gestaged: `apps/web/scripts/cleanup-e2e-residue.sql`, `apps/web/scripts/cleanup-e2e-users.mjs` — Review-Vorlagen, siehe Folgeaufgaben
+- Commit erstellt? `ja` — 15 Commits (`d1dd032`, `d6691c8`, `a076cd0`, `76a3cb8`, `ef7039e`, `e3c3035`, `5e9c726`, `d638ea0`, `a0de727`, `1ca38d8`, `2968c2b`, `3b67f3f`, `7fde366`, `594cde2`, `166a962`)
+- Untracked, bewusst nicht gestaged: `apps/web/scripts/cleanup-e2e-users.mjs` — Review-Vorlage fuer Auth-Nutzer-Cleanup (Dry-Run per Default), wartet auf gesonderte Freigabe. `cleanup-e2e-residue.sql` ist in `7fde366` bereits committed (das SQL-Skript selbst wird dabei nur committed, nicht ausgefuehrt — Ausfuehrung bleibt manuelle Nutzeraktion)
 - Push ausgefuehrt? `nein`
 - Wenn nein: Was fehlt fuer Commit/Push? `Freigabe des Nutzers`
 - Vorgeschlagene Stage-Dateien: siehe „Geaenderte Dateien"
@@ -179,9 +189,10 @@ steht mit Sicherheit in der HIBP-Liste und muesste vorher ersetzt werden.
 | ~~`P3`~~ | ~~`CardTitle` als `heading` rendern~~ | Erledigt in `a0de727` — rendert jetzt als `<h3>`, 24 Verwendungsstellen, keine verschachtelten Headings gefunden, 207 Unit-/A11y-Tests weiterhin gruen |
 | `P3` | Root Cause der reihenfolgeabhaengigen Flakiness — Timeout-Haertung umsetzen | Hypothese dokumentiert (siehe Risiken-Tabelle), aber nicht implementiert: `createTestWeg`/vergleichbare Helper brauchen grosszuegigere Timeouts oder Bulk-Tests muessen ans Dateiende |
 | ~~`P1`~~ | ~~`rls.spec.ts:43`/`:78` pruefen nichts Konkretes~~ | Erledigt in `2968c2b` — `tenant_id` wird direkt aus `app_metadata` im JWT dekodiert (Claim aus `0002_identity.sql`), beide Tests assertieren jetzt, dass jede zurueckgegebene Zeile zu Tenant A gehoert und keine zu Tenant B. `ok()\|\|404`-Hedge entfernt (PostgREST liefert bei leerem, autorisiertem Result immer 200, nie 404). Verifiziert gegen Cloud: 12/12 gruen |
-| `P2` | `cross-feature.spec.ts:110` (`cross-audit-and-finanz`) und `scenarios.spec.ts:181` (`scenario-audit-trail-of-financial-actions`) — beide erstellen keinen Plan und pruefen keinen Audit-Log-Inhalt, nur `ok()\|\|404` | Test-Namen versprechen eine Audit-Pruefung, die nie stattfindet |
-| `P2` | Weitere `if (isVisible())`-Huellen um echte Assertions: `finanzen.spec.ts` (`sollstellung-round-off` L486, `finanz-calculate-hausgeld` L133, `finanz-fill-form` L123, `finanz-wp-invalid-year` L393, `finanz-wp-negative-gesamtkosten` L409, `finanz-wp-unaligned-mea` L443, `finanz-wp-large-costs` L454, `sollstellung-multiple-units` L568), `scenarios.spec.ts` (`scenario-year-end-closing-and-archive` L77 doppelt verschachtelt, `scenario-new-weg-onboarding` L116 versteckt die Hausgeld-Betragspruefung), `home.spec.ts` (`login link routes to /login` L21) | Jede dieser Pruefungen kann bei fehlendem/kaputtem Feld stillschweigend gruen bleiben statt zu scheitern |
-| `P3` | `rls.spec.ts` L133, L172, `cross-feature.spec.ts` L182-183 — weitere `ok()\|\|404`-Tautologien ohne Row-Level-Pruefung | Gleiche Schwaeche wie oben, geringere Kritikalitaet |
+| ~~`P2`~~ | ~~`cross-audit-and-finanz`/`scenario-audit-trail-of-financial-actions` pruefen keinen Audit-Log-Inhalt~~ | Erledigt in `166a962` — beide legen jetzt real einen Wirtschaftsplan an und assertieren einen passenden `insert`-Eintrag in `audit_event` fuer dessen `entity_id` (Trigger `wirtschaftsplan_audit_emit`, `0036_wirtschaftsplan_hausgeld.sql`) |
+| ~~`P2`~~ | ~~Weitere `if (isVisible())`-Huellen~~ | Erledigt in `166a962` — alle 8 Stellen in `finanzen.spec.ts`, beide `scenarios.spec.ts`-Faelle und `home.spec.ts` assertieren Sichtbarkeit jetzt unbedingt |
+| ~~`P3`~~ | ~~`rls.spec.ts` L133/L172, `cross-feature.spec.ts` L182-183 — weitere `ok()\|\|404`-Tautologien~~ | Erledigt in `7fde366` (rls.spec.ts, inkl. echter Tenant-B-Zielzeile fuer die Update-/Delete-Isolationstests) und `166a962` (cross-rls-and-sollstellung) |
+| ~~`P2`~~ (Nebenfund) | ~~CardTitle-Fix (`a0de727`) liess `finanz-view-page` in Strict-Mode-Kollision laufen~~ | Erledigt in `166a962` — Locator auf `exact: true` verengt. War in `serial`-Mode Ursache dafuer, dass 19 weitere `finanzen.spec.ts`-Tests gar nicht liefen (nicht: fehlschlugen) |
 
 Vollstaendige Fund-Liste (Datei, Zeile, Testname, Empfehlung) per Explore-Agent
 am 2026-07-14 erhoben; obige Zeilen sind die priorisierte Zusammenfassung.
