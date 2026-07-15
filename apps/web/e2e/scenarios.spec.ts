@@ -89,28 +89,28 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
       page.getByRole("button", { name: "Archivieren" }),
     ).toHaveCount(0);
 
-    // 2. Onboard / create Wirtschaftsplan for next year
+    // 2. Onboard / create Wirtschaftsplan for next year. Unconditional steps
+    // with explicit toBeVisible() checks — a missing button/field must fail
+    // the test loudly, not silently skip the whole onboarding flow.
     await page.goto("/wegs");
     const newWegBtn = page.locator('a[href="/wegs/new"]').first();
-    if (await newWegBtn.isVisible()) {
-      await newWegBtn.click();
-      const wegName = `E2E Scenario Year End ${Date.now()}`;
-      await page.getByLabel(/Name der WEG/).fill(wegName);
-      await fillWegAddress(page, { street: "Jahresabschlussweg" });
-      await page.getByRole("button", { name: /Speichern/ }).click();
-      await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await expect(newWegBtn).toBeVisible();
+    await newWegBtn.click();
+    const wegName = `E2E Scenario Year End ${Date.now()}`;
+    await page.getByLabel(/Name der WEG/).fill(wegName);
+    await fillWegAddress(page, { street: "Jahresabschlussweg" });
+    await page.getByRole("button", { name: /Speichern/ }).click();
+    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
-      const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
-      await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
-      const costsInput = page.getByLabel(/gesamtkosten/i);
-      if (await costsInput.isVisible()) {
-        await page.getByLabel(/jahr/i).fill("2026");
-        await page.getByLabel(/bezeichnung/i).fill("Plan 2026");
-        await costsInput.fill("24000");
-        await page.getByRole("button", { name: /speichern/i }).click();
-        await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
-      }
-    }
+    const wegId = page.url().match(/\/wegs\/([0-9a-f-]{36})/)![1];
+    await page.goto(`/wegs/${wegId}/finanzen/new`);
+    const costsInput = page.getByLabel(/gesamtkosten/i);
+    await expect(costsInput).toBeVisible();
+    await page.getByLabel(/jahr/i).fill("2026");
+    await page.getByLabel(/bezeichnung/i).fill("Plan 2026");
+    await costsInput.fill("24000");
+    await page.getByRole("button", { name: /speichern/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
   });
 
   test("scenario-new-weg-onboarding: onboarding a new WEG with units, allocating MEAs, creating a new plan and verifying Hausgeld/Sollstellung", async ({ page }) => {
@@ -139,22 +139,23 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.getByRole("button", { name: /Speichern/ }).click();
     await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
 
-    // 4. Create Wirtschaftsplan
-    await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
+    // 4. Create Wirtschaftsplan. Unconditional — wrapping the Hausgeld
+    // assertions in isVisible() would silently skip verifying the
+    // calculated amounts if the field ever went missing.
+    await page.goto(`/wegs/${wegId}/finanzen/new`);
     const costsInput = page.getByLabel(/gesamtkosten/i);
-    if (await costsInput.isVisible()) {
-      await page.getByLabel(/jahr/i).fill("2026");
-      await page.getByLabel(/bezeichnung/i).fill("First Plan");
-      await costsInput.fill("12000");
+    await expect(costsInput).toBeVisible();
+    await page.getByLabel(/jahr/i).fill("2026");
+    await page.getByLabel(/bezeichnung/i).fill("First Plan");
+    await costsInput.fill("12000");
 
-      // Verify calculations: Apt 1 -> 400/1000 * 12000 = 4800 / 12 = 400€
-      // Apt 2 -> 600/1000 * 12000 = 7200 / 12 = 600€
-      await expect(page.getByText("400,00")).toBeVisible();
-      await expect(page.getByText("600,00")).toBeVisible();
+    // Verify calculations: Apt 1 -> 400/1000 * 12000 = 4800 / 12 = 400€
+    // Apt 2 -> 600/1000 * 12000 = 7200 / 12 = 600€
+    await expect(page.getByText("400,00")).toBeVisible();
+    await expect(page.getByText("600,00")).toBeVisible();
 
-      await page.getByRole("button", { name: /speichern/i }).click();
-      await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
-    }
+    await page.getByRole("button", { name: /speichern/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
   });
 
   test("scenario-multi-tenant-simultaneous-billing: Tenant A and Tenant B concurrently perform operations verifying separation", async ({ browser }) => {
@@ -180,14 +181,35 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
 
   test("scenario-audit-trail-of-financial-actions: financial plan modifications create correct audit logs", async ({ page }) => {
     const tokenA = getTokenFromAuthFile("admin.json");
-    // Directly check DB table 'audit_event' for financial-related activities
-    const res = await page.request.get(`${url}/rest/v1/audit_event?select=id&entity_typ=eq.wirtschaftsplan&limit=1`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${tokenA}`
-      }
-    });
-    expect(res.ok() || res.status() === 404).toBe(true);
+
+    // Perform a real financial mutation, then prove the audit trigger
+    // (wirtschaftsplan_audit_emit, 0036_wirtschaftsplan_hausgeld.sql) logged
+    // it — querying audit_event unfiltered by entity_id and accepting 404 as
+    // a pass proved nothing about which plan's actions were recorded.
+    const wegId = await createScenarioWeg(page, "AuditTrail");
+    await createScenarioPlan(page, wegId, "2038", "Scenario Audit Plan", "9000");
+
+    const planRes = await page.request.get(
+      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2038`,
+      { headers: { apikey: key, Authorization: `Bearer ${tokenA}` } },
+    );
+    expect(planRes.ok()).toBe(true);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    expect(plan?.id).toBeTruthy();
+
+    const res = await page.request.get(
+      `${url}/rest/v1/audit_event?select=id,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${plan.id}`,
+      {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${tokenA}`
+        }
+      },
+    );
+    expect(res.ok()).toBe(true);
+    const events = (await res.json()) as Array<{ id: string; action: string }>;
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.some((e) => e.action === "insert")).toBe(true);
   });
 
   test("scenario-correction-of-financial-plan: corrections preserve historical Sollstellungen", async ({ page }) => {

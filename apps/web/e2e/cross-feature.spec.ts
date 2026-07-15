@@ -23,6 +23,18 @@ function getTokenFromAuthFile(filename: string): string {
   return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
 }
 
+// custom_access_token_hook (0002_identity.sql) injects tenant_id into
+// app_metadata on every JWT — decode it directly so isolation tests can
+// assert on real tenant_id values instead of just "the request didn't error".
+function decodeTenantId(token: string): string {
+  const payload = token.split(".")[1];
+  const json = Buffer.from(payload, "base64url").toString("utf-8");
+  const claims = JSON.parse(json) as { app_metadata?: { tenant_id?: string } };
+  const tenantId = claims.app_metadata?.tenant_id;
+  if (!tenantId) throw new Error("JWT is missing app_metadata.tenant_id");
+  return tenantId;
+}
+
 async function getAuthToken(page: Page) {
   const cookies = await page.context().cookies();
   const sbCookie = cookies.find(
@@ -99,23 +111,49 @@ async function createWirtschaftsplan(
 test.describe("Tier 3: Cross-Feature Interactions", () => {
   let tokenA: string;
   let tokenB: string;
+  let tenantAId: string;
+  let tenantBId: string;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
   test.beforeAll(() => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
+    tenantAId = decodeTenantId(tokenA);
+    tenantBId = decodeTenantId(tokenB);
   });
 
   test("cross-audit-and-finanz: creating a Wirtschaftsplan generates audit events", async ({ page }) => {
-    // Create a plan via UI/API and verify audit_event table gets a log entry
-    const res = await page.request.get(`${url}/rest/v1/audit_event?select=*&limit=5`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${tokenA}`
-      }
-    });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    // Actually create a Wirtschaftsplan, then prove the audit trigger
+    // (wirtschaftsplan_audit_emit, 0036_wirtschaftsplan_hausgeld.sql) logged
+    // it — querying audit_event unfiltered and accepting 404 as a pass
+    // proved nothing about audit content.
+    const wegId = await createTestWeg(page, "AuditFinanz");
+    await createWirtschaftsplan(page, wegId, "2040", "6000");
+
+    const { token } = await getAuthToken(page);
+    const planRes = await page.request.get(
+      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2040`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(planRes.ok()).toBe(true);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    expect(plan?.id).toBeTruthy();
+
+    const auditRes = await page.request.get(
+      `${url}/rest/v1/audit_event?select=id,entity_typ,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${plan.id}`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(auditRes.ok()).toBe(true);
+    const events = (await auditRes.json()) as Array<{
+      id: string;
+      entity_typ: string;
+      action: string;
+    }>;
+    expect(events.length).toBeGreaterThan(0);
+    expect(
+      events.some((e) => e.entity_typ === "wirtschaftsplan" && e.action === "insert"),
+    ).toBe(true);
   });
 
   test("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
@@ -171,16 +209,29 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
   });
 
   test("cross-rls-and-sollstellung: tenant isolation blocks cross-tenant access to Sollstellung entries", async ({ request }) => {
-    // Tenant A queries Sollstellungen
+    // A GET against an existing, authorized table always returns 200 with a
+    // (possibly empty) array via PostgREST — RLS filters rows, it never
+    // 404s. The ok()||404 hedge accepted any outcome and never checked
+    // whether rows actually stayed scoped to their own tenant.
     const resA = await request.get(`${url}/rest/v1/sollstellung?select=*`, {
       headers: { apikey: key, Authorization: `Bearer ${tokenA}` }
     });
-    // Tenant B queries Sollstellungen
     const resB = await request.get(`${url}/rest/v1/sollstellung?select=*`, {
       headers: { apikey: key, Authorization: `Bearer ${tokenB}` }
     });
-    expect(resA.ok() || resA.status() === 404).toBe(true);
-    expect(resB.ok() || resB.status() === 404).toBe(true);
+    expect(resA.ok()).toBe(true);
+    expect(resB.ok()).toBe(true);
+
+    const rowsA = (await resA.json()) as Array<{ tenant_id: string }>;
+    const rowsB = (await resB.json()) as Array<{ tenant_id: string }>;
+    for (const row of rowsA) {
+      expect(row.tenant_id).toBe(tenantAId);
+      expect(row.tenant_id).not.toBe(tenantBId);
+    }
+    for (const row of rowsB) {
+      expect(row.tenant_id).toBe(tenantBId);
+      expect(row.tenant_id).not.toBe(tenantAId);
+    }
   });
 
   test("cross-audit-ui-and-rls: non-admin users do not see admin audit tabs", async ({ page }) => {

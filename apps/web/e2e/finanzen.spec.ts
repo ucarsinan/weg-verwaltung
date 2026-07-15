@@ -110,7 +110,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
 
   test("finanz-view-page: /wegs/[id]/finanzen page and creation form are accessible", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen`);
-    await expect(page.getByRole("heading", { name: /wirtschaftspläne/i })).toBeVisible({ timeout: 5000 });
+    // exact: true — the page title "Wirtschaftspläne" and the card title
+    // "Erstellte Wirtschaftspläne" both render as headings (CardTitle is a
+    // real <h3> since a0de727); a substring match hits both and violates
+    // Playwright's strict mode.
+    await expect(
+      page.getByRole("heading", { name: "Wirtschaftspläne", exact: true }),
+    ).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole("link", { name: /wirtschaftsplan erstellen/i })).toBeVisible();
   });
 
@@ -120,27 +126,25 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const descInput = page.getByLabel(/bezeichnung/i);
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await yearInput.isVisible()) {
-      await yearInput.fill("2026");
-      await descInput.fill("Wirtschaftsplan 2026");
-      await costsInput.fill("12000");
-      await expect(yearInput).toHaveValue("2026");
-      await expect(descInput).toHaveValue("Wirtschaftsplan 2026");
-      await expect(costsInput).toHaveValue("12000");
-    }
+    await expect(yearInput).toBeVisible();
+    await yearInput.fill("2026");
+    await descInput.fill("Wirtschaftsplan 2026");
+    await costsInput.fill("12000");
+    await expect(yearInput).toHaveValue("2026");
+    await expect(descInput).toHaveValue("Wirtschaftsplan 2026");
+    await expect(costsInput).toHaveValue("12000");
   });
 
   test("finanz-calculate-hausgeld: UI dynamically calculates monthly Hausgeld based on MEA", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("12000");
-      // Unit A has 100/1000 MEA -> 10% of 12000 = 1200 / 12 months = 100€
-      // Unit B has 200/1000 MEA -> 20% of 12000 = 2400 / 12 months = 200€
-      await expect(page.getByText("100,00")).toBeVisible();
-      await expect(page.getByText("200,00")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("12000");
+    // Unit A has 100/1000 MEA -> 10% of 12000 = 1200 / 12 months = 100€
+    // Unit B has 200/1000 MEA -> 20% of 12000 = 2400 / 12 months = 200€
+    await expect(page.getByText("100,00")).toBeVisible();
+    await expect(page.getByText("200,00")).toBeVisible();
   });
 
   test("finanz-submit-plan: saving creates plan and redirects", async ({ page }) => {
@@ -390,15 +394,14 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const yearInput = page.getByLabel(/jahr/i);
     const submitBtn = page.getByRole("button", { name: /speichern/i });
 
-    if (await yearInput.isVisible()) {
-      await yearInput.fill("-2026");
-      await submitBtn.click();
-      await expect(page.locator("#jahr-error")).toBeVisible();
+    await expect(yearInput).toBeVisible();
+    await yearInput.fill("-2026");
+    await submitBtn.click();
+    await expect(page.locator("#jahr-error")).toBeVisible();
 
-      await yearInput.fill("9999");
-      await submitBtn.click();
-      await expect(page.locator("#jahr-error")).toBeVisible();
-    }
+    await yearInput.fill("9999");
+    await submitBtn.click();
+    await expect(page.locator("#jahr-error")).toBeVisible();
   });
 
   test("finanz-wp-negative-gesamtkosten: validation error for zero or negative annual costs", async ({ page }) => {
@@ -406,15 +409,14 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const costsInput = page.getByLabel(/gesamtkosten/i);
     const submitBtn = page.getByRole("button", { name: /speichern/i });
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("-1000");
-      await submitBtn.click();
-      await expect(page.locator("#gesamtkosten-error")).toBeVisible();
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("-1000");
+    await submitBtn.click();
+    await expect(page.locator("#gesamtkosten-error")).toBeVisible();
 
-      await costsInput.fill("0");
-      await submitBtn.click();
-      await expect(page.locator("#gesamtkosten-error")).toBeVisible();
-    }
+    await costsInput.fill("0");
+    await submitBtn.click();
+    await expect(page.locator("#gesamtkosten-error")).toBeVisible();
   });
 
   // Current Unit creation requires positive MEA values; zero-MEA units are not representable via UI.
@@ -440,25 +442,23 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${localWegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("12000");
-      // 30% of 12000 = 3600 / 12 = 300€
-      await expect(page.getByText("300,00")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("12000");
+    // 30% of 12000 = 3600 / 12 = 300€
+    await expect(page.getByText("300,00")).toBeVisible();
   });
 
   test("finanz-wp-large-costs: overflow and decimal precision handling for very large annual costs", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      // Very large amount: 999999999.99
-      await costsInput.fill("999999999.99");
-      await page.getByLabel(/jahr/i).fill("2027");
-      await page.getByLabel(/bezeichnung/i).fill("Large Cost Plan");
-      await page.getByRole("button", { name: /speichern/i }).click();
-      await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
-    }
+    await expect(costsInput).toBeVisible();
+    // Very large amount: 999999999.99
+    await costsInput.fill("999999999.99");
+    await page.getByLabel(/jahr/i).fill("2027");
+    await page.getByLabel(/bezeichnung/i).fill("Large Cost Plan");
+    await page.getByRole("button", { name: /speichern/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
   });
 
   test("sollstellung-partial-year: generates all 12 months even if plan is created mid-year", async ({ page }) => {
@@ -495,13 +495,12 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${localWegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("1000");
-      // 1000 * (333 / 1000) / 12 = 27.75
-      // 1000 * (334 / 1000) / 12 = 27.83
-      await expect(page.getByText("27,75")).toHaveCount(2);
-      await expect(page.getByText("27,83")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("1000");
+    // 1000 * (333 / 1000) / 12 = 27.75
+    // 1000 * (334 / 1000) / 12 = 27.83
+    await expect(page.getByText("27,75")).toHaveCount(2);
+    await expect(page.getByText("27,83")).toBeVisible();
   });
 
   // Current Unit creation requires positive MEA values; missing-MEA units are not representable via UI.
@@ -565,14 +564,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await page.getByLabel(/jahr/i).fill("2028");
-      await page.getByLabel(/bezeichnung/i).fill("Bulk Plan");
-      await costsInput.fill("24000");
-      // Double check click and wait for redirect
-      const submitBtn = page.getByRole("button", { name: /speichern/i });
-      await submitBtn.click();
-      await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`), { timeout: 30_000 });
-    }
+    await expect(costsInput).toBeVisible();
+    await page.getByLabel(/jahr/i).fill("2028");
+    await page.getByLabel(/bezeichnung/i).fill("Bulk Plan");
+    await costsInput.fill("24000");
+    // Double check click and wait for redirect
+    const submitBtn = page.getByRole("button", { name: /speichern/i });
+    await submitBtn.click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`), { timeout: 30_000 });
   });
 });

@@ -21,9 +21,10 @@ test.describe("home page", () => {
   test("login link routes to /login", async ({ page }) => {
     await page.goto("/");
     const loginLink = page.getByRole("link", { name: /anmelden|login/i }).first();
-    if (await loginLink.isVisible()) {
-      await loginLink.click();
-      await expect(page).toHaveURL(/\/login/);
-    }
+    // Unconditional: a missing/hidden login link must fail the test loudly,
+    // not silently skip the navigation assertion.
+    await expect(loginLink).toBeVisible();
+    await loginLink.click();
+    await expect(page).toHaveURL(/\/login/);
   });
 });
