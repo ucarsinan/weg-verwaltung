@@ -1,8 +1,17 @@
 -- Cleanup for E2E-generated Cloud residue (weg-verwaltung, Cloud Frankfurt).
 --
--- DESIGNED, NOT EXECUTED. This file was written for review after the
+-- DESIGNED, NOT EXECUTED (against raw SQL — the equivalent logic below WAS
+-- executed via PostgREST/service_role as cleanup-e2e-residue.mjs on
+-- 2026-07-15, with user approval; see that file's header for the real
+-- results). This .sql file was written first, for review, after the
 -- 2026-07-14 Cloud E2E session (see docs/agent-reports/2026-07-14-worker-
--- general-cloud-e2e-first-run.md). No agent has run this against Cloud.
+-- general-cloud-e2e-first-run.md). If you run THIS file directly in Supabase
+-- Studio's SQL Editor (as the table owner/superuser), it can go further than
+-- the .mjs version could: table-owner access bypasses GRANT/REVOKE (so
+-- `sollstellung`/`verteilungsschluessel` become deletable), but NOT the
+-- trigger-based protections on `vote` (post-festgestellt), `unit` (posted
+-- Sollstellungen), and `beschluss_sammlung_entry` (append-only) — those
+-- reject the operation unconditionally regardless of role.
 -- Review every section before running any of it, ideally in a single Supabase
 -- Studio SQL Editor session so COMMIT/ROLLBACK is your call at the end.
 --
@@ -38,6 +47,23 @@
 --    the tables above. Rows will become orphaned references after cleanup,
 --    which is consistent with audit_event being designed to outlive the
 --    business rows it describes.
+--
+-- 4. Discovered only by actually running this (via the .mjs REST version,
+--    since service_role has no owner-bypass): `sollstellung` and
+--    `verteilungsschluessel` have DELETE (and INSERT/UPDATE) revoked from
+--    EVERY role, including service_role, via
+--    0040_lock_down_sollstellung_writes.sql — a deliberate finance-history
+--    immutability measure. `unit` rejects deletion via a CHECK/trigger once
+--    it has posted Sollstellungen. `vote` rejects deletion via a trigger once
+--    its resolution has been festgestellt (the same Vote/Resolution/
+--    BeschlussSammlungEntry/Protocol immutability invariant from AGENTS.md as
+--    #2 above, just enforced on a different table). Any WEG whose E2E path
+--    activated a Wirtschaftsplan, posted Sollstellungen, or festgestellt a
+--    resolution is therefore ALSO permanently stuck — via service_role. A
+--    session connected as the table owner (Supabase Studio's SQL Editor)
+--    bypasses the GRANT/REVOKE on sollstellung/verteilungsschluessel, but
+--    NOT the trigger-based unit/vote/beschluss_sammlung_entry protections,
+--    which apply unconditionally regardless of role.
 --
 -- ============================================================================
 -- STRATEGY
@@ -165,22 +191,34 @@ begin
       delete from public.vorgang
         where tenant_id = weg_row.tenant_id and weg_id = weg_row.id;
 
-      -- meeting's children — order matters if any of these reference each
-      -- other; adjust if a specific child still blocks the meeting delete.
+      -- vote has NO meeting_id column — it hangs off resolution_id (and
+      -- ownership_id, per "vote references ownership_id, never person_id").
+      -- Must be deleted before resolution (vote_resolution_fk, restrict),
+      -- which in turn blocks ownership (vote_ownership_fk) if left in place.
+      -- This is also the expected wall in practice: a trigger rejects
+      -- deleting a vote once its resolution has been festgestellt
+      -- ("Votes cannot be inserted, changed, or deleted after the
+      -- resolution has been festgestellt") — the same immutability
+      -- invariant as beschluss_sammlung_entry, enforced on a sibling table.
       delete from public.vote vo
-        using public.meeting m
+        using public.resolution r, public.meeting m
         where vo.tenant_id = weg_row.tenant_id
-          and vo.meeting_id = m.id and m.weg_id = weg_row.id;
+          and vo.resolution_id = r.id
+          and r.meeting_id = m.id and m.weg_id = weg_row.id;
 
       delete from public.resolution r
         using public.meeting m
         where r.tenant_id = weg_row.tenant_id
           and r.meeting_id = m.id and m.weg_id = weg_row.id;
 
-      delete from public.top t
+      -- The TOP (Tagesordnungspunkt) table is actually named `agenda_item`,
+      -- not `top` (confirmed via 0004_versammlung.sql). It cascades
+      -- automatically on meeting deletion (on delete cascade) — this
+      -- explicit delete is optional, kept only for clarity/logging.
+      delete from public.agenda_item ai
         using public.meeting m
-        where t.tenant_id = weg_row.tenant_id
-          and t.meeting_id = m.id and m.weg_id = weg_row.id;
+        where ai.tenant_id = weg_row.tenant_id
+          and ai.meeting_id = m.id and m.weg_id = weg_row.id;
 
       delete from public.protocol p
         using public.meeting m
@@ -188,7 +226,8 @@ begin
           and p.meeting_id = m.id and m.weg_id = weg_row.id;
 
       -- This is the expected wall: fails with 23503 if any meeting under
-      -- this WEG has a beschluss_sammlung_entry (append-only, undeletable).
+      -- this WEG has a beschluss_sammlung_entry (append-only, undeletable),
+      -- or transitively if a vote above the resolution couldn't be removed.
       delete from public.meeting
         where tenant_id = weg_row.tenant_id and weg_id = weg_row.id;
 
