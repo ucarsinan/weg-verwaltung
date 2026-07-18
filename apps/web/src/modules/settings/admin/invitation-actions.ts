@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmailProvider } from "@/modules/saas/email";
 import { renderInvitationEmail } from "@/modules/saas/invitation-email";
 import { generateInvitationToken } from "@/modules/saas/invitation";
-import { requireTenantAdmin } from "@/modules/settings/admin/guards";
+import { requireTenantAdmin } from "@/modules/identity";
 import {
   isTenantInvitationRole,
   TENANT_MEMBER_ROLE_LABELS,

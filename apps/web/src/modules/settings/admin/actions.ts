@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import { requireTenantAdmin, type TenantAdminContext } from "@/modules/settings/admin/guards";
+import { requireTenantAdmin, type TenantAdminContext } from "@/modules/identity";
 import {
   isTenantMemberRole,
   TENANT_MEMBER_ROLE_LABELS,

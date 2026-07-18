@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
+import { getTenantClaims } from "@/modules/identity";
 
 import { acceptInvitationAction, signUpForInvitationAction } from "./actions";
 import { AcceptInvitationForm, InvitationSignUpForm } from "./invitation-forms";
@@ -61,10 +62,7 @@ export default async function EinladungPage({ params }: EinladungPageProps) {
     );
   }
 
-  const { data } = await supabase.auth.getClaims();
-  const appMetadata = (
-    data?.claims as { app_metadata?: { tenant_id?: string } } | undefined
-  )?.app_metadata;
+  const { claims } = await getTenantClaims(supabase);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl items-center px-6 py-12">
@@ -74,7 +72,7 @@ export default async function EinladungPage({ params }: EinladungPageProps) {
         </p>
         <h1 className="mt-2 text-3xl font-semibold">Einladung annehmen.</h1>
         <div className="mt-8">
-          {appMetadata?.tenant_id ? (
+          {claims.tenantId ? (
             <AlreadyMemberNotice />
           ) : (
             <AcceptInvitationForm action={acceptAction} />

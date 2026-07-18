@@ -20,16 +20,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { LifecycleBadge } from "@/components/ui/status-badge";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-
-// Hook-injected claims live in the JWT, not in auth.users.raw_app_meta_data.
-// getUser() returns the persistent row -> tenant_id/role would be missing.
-// getClaims() verifies + decodes the access_token, so the Custom Access Token
-// Hook output (docs/02 §2.4) is visible. Never read user_metadata for
-// authorisation: that surface is client-mutable.
-interface AppMetadata {
-  tenant_id?: string;
-  role?: string;
-}
+import { readTenantClaims } from "@/modules/identity";
 
 type MeetingRow = Database["public"]["Tables"]["meeting"]["Row"];
 
@@ -108,11 +99,10 @@ export default async function DashboardPage() {
     );
   }
 
-  const claims = data?.claims;
-  const email = (claims?.email as string | undefined) ?? "nicht verfügbar";
-  const appMetadata = (claims?.app_metadata as AppMetadata | undefined) ?? {};
-  const tenantId = appMetadata.tenant_id ?? "nicht verfügbar";
-  const role = appMetadata.role ?? "nicht verfügbar";
+  const claims = readTenantClaims(data?.claims);
+  const email = claims.email ?? "nicht verfügbar";
+  const tenantId = claims.tenantId ?? "nicht verfügbar";
+  const role = claims.role ?? "nicht verfügbar";
   const recentMeetings = recentMeetingsResult.data ?? [];
   const wegCount = wegCountResult.count ?? 0;
   const openMeetingCount = openMeetingsCountResult.count ?? 0;

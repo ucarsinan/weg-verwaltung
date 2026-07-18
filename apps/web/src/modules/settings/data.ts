@@ -3,21 +3,11 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { getTenantClaims } from "@/modules/identity";
 
 type PersonRow = Database["public"]["Tables"]["person"]["Row"];
 type TenantRow = Database["public"]["Tables"]["tenant"]["Row"];
 type TenantMemberRow = Database["public"]["Tables"]["tenant_member"]["Row"];
-
-interface AppMetadataClaims {
-  tenant_id?: string;
-  role?: string;
-}
-
-interface JwtClaims {
-  email?: unknown;
-  phone?: unknown;
-  app_metadata?: unknown;
-}
 
 export interface SettingsTenantMember {
   id: string;
@@ -43,22 +33,6 @@ export interface SettingsOverviewData {
   tenantMembers: SettingsTenantMember[];
   isTenantAdmin: boolean;
   loadIssues: string[];
-}
-
-function readAppMetadata(value: unknown): AppMetadataClaims {
-  if (!value || typeof value !== "object") return {};
-
-  const record = value as Record<string, unknown>;
-  return {
-    tenant_id:
-      typeof record.tenant_id === "string" ? record.tenant_id : undefined,
-    role: typeof record.role === "string" ? record.role : undefined,
-  };
-}
-
-function readClaims(value: unknown): JwtClaims {
-  if (!value || typeof value !== "object") return {};
-  return value as JwtClaims;
 }
 
 function mapTenantMembers(
@@ -89,12 +63,9 @@ async function loadSettingsOverviewData(): Promise<SettingsOverviewData> {
 
   if (!user) redirect("/login");
 
-  const { data: claimsData, error: claimsError } =
-    await supabase.auth.getClaims();
-  const claims = readClaims(claimsData?.claims);
-  const appMetadata = readAppMetadata(claims.app_metadata);
-  const tenantId = appMetadata.tenant_id ?? null;
-  const role = appMetadata.role ?? null;
+  const { claims, error: claimsError } = await getTenantClaims(supabase);
+  const tenantId = claims.tenantId;
+  const role = claims.role;
   const isTenantAdmin = role === "tenant_admin";
   const loadIssues: string[] = [];
 
@@ -168,8 +139,8 @@ async function loadSettingsOverviewData(): Promise<SettingsOverviewData> {
     loadIssues.push("Personendaten zur Rollenliste konnten nicht geladen werden.");
   }
 
-  const jwtEmail = typeof claims.email === "string" ? claims.email : null;
-  const phone = typeof claims.phone === "string" ? claims.phone : null;
+  const jwtEmail = claims.email;
+  const phone = claims.phone;
 
   return {
     account: {
