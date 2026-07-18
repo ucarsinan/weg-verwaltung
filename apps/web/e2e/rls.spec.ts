@@ -1,37 +1,11 @@
 import { test, expect } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
+import {
+  decodeTenantIdFromJwt,
+  getTokenFromAuthFile,
+} from "./helpers/fixtures";
 
 test.describe.configure({ mode: "serial" });
 
-function getTokenFromAuthFile(filename: string): string {
-  const filePath = path.resolve(process.cwd(), "playwright", ".auth", filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found at ${filePath}`);
-  }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const cookie = data.cookies.find((c: { name: string; value: string }) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
-
-  if (!cookie) throw new Error(`Supabase auth cookie not found in ${filename}`);
-  let val = decodeURIComponent(cookie.value);
-  if (val.startsWith("base64-")) {
-    val = Buffer.from(val.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(val);
-  return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
-}
-
-// custom_access_token_hook (0002_identity.sql) injects tenant_id into
-// app_metadata on every JWT — decode it directly so isolation tests can
-// assert on real tenant_id values instead of just "the request didn't error".
-function decodeTenantId(token: string): string {
-  const payload = token.split(".")[1];
-  const json = Buffer.from(payload, "base64url").toString("utf-8");
-  const claims = JSON.parse(json) as { app_metadata?: { tenant_id?: string } };
-  const tenantId = claims.app_metadata?.tenant_id;
-  if (!tenantId) throw new Error("JWT is missing app_metadata.tenant_id");
-  return tenantId;
-}
 
 test.describe("Feature 5: RLS Security Constraints", () => {
   let tokenA: string;
@@ -53,8 +27,8 @@ test.describe("Feature 5: RLS Security Constraints", () => {
   test.beforeAll(async ({ request }) => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
-    tenantAId = decodeTenantId(tokenA);
-    tenantBId = decodeTenantId(tokenB);
+    tenantAId = decodeTenantIdFromJwt(tokenA);
+    tenantBId = decodeTenantIdFromJwt(tokenB);
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";

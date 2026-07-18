@@ -1,61 +1,13 @@
 import { test, expect, Page } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
 import { activateWirtschaftsplan } from "./helpers/finanzen";
+import {
+  decodeTenantIdFromJwt,
+  getSupabaseRequestContext,
+  getTokenFromAuthFile,
+} from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-function getTokenFromAuthFile(filename: string): string {
-  const filePath = path.resolve(process.cwd(), "playwright", ".auth", filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found at ${filePath}`);
-  }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const cookie = data.cookies.find((c: { name: string; value: string }) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
-
-  if (!cookie) throw new Error(`Supabase auth cookie not found in ${filename}`);
-  let val = decodeURIComponent(cookie.value);
-  if (val.startsWith("base64-")) {
-    val = Buffer.from(val.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(val);
-  return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
-}
-
-// custom_access_token_hook (0002_identity.sql) injects tenant_id into
-// app_metadata on every JWT — decode it directly so isolation tests can
-// assert on real tenant_id values instead of just "the request didn't error".
-function decodeTenantId(token: string): string {
-  const payload = token.split(".")[1];
-  const json = Buffer.from(payload, "base64url").toString("utf-8");
-  const claims = JSON.parse(json) as { app_metadata?: { tenant_id?: string } };
-  const tenantId = claims.app_metadata?.tenant_id;
-  if (!tenantId) throw new Error("JWT is missing app_metadata.tenant_id");
-  return tenantId;
-}
-
-async function getAuthToken(page: Page) {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
-  );
-  if (!sbCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-  let cookieValue = decodeURIComponent(sbCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(cookieValue);
-  const token: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return { token, url, key };
-}
 
 async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
@@ -124,8 +76,8 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
   test.beforeAll(() => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
-    tenantAId = decodeTenantId(tokenA);
-    tenantBId = decodeTenantId(tokenB);
+    tenantAId = decodeTenantIdFromJwt(tokenA);
+    tenantBId = decodeTenantIdFromJwt(tokenB);
   });
 
   test("cross-audit-and-finanz: creating a Wirtschaftsplan generates audit events", async ({ page }) => {
@@ -136,7 +88,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     const wegId = await createTestWeg(page, "AuditFinanz");
     await createWirtschaftsplan(page, wegId, "2040", "6000");
 
-    const { token } = await getAuthToken(page);
+    const { token } = await getSupabaseRequestContext(page);
     const planRes = await page.request.get(
       `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2040`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -167,7 +119,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     await createTestUnit(page, wegId, "UnitB", "200");
     await createWirtschaftsplan(page, wegId, "2031", "12000");
 
-    const { token } = await getAuthToken(page);
+    const { token } = await getSupabaseRequestContext(page);
     const planRes = await page.request.get(
       `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2031`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -265,7 +217,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     const unitName = await createTestUnit(page, wegId, "UnitA", "100");
     await createWirtschaftsplan(page, wegId, "2032", "12000");
 
-    const { token } = await getAuthToken(page);
+    const { token } = await getSupabaseRequestContext(page);
     const planRes = await page.request.get(
       `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2032`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },

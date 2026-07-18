@@ -1,30 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 import { activateWirtschaftsplan } from "./helpers/finanzen";
+import { getSupabaseRequestContext } from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-async function getAuthToken(page: Page) {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
-  );
-  if (!sbCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-  let cookieValue = decodeURIComponent(sbCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(cookieValue);
-  const token: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return { token, url, key };
-}
 
 async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
@@ -66,7 +45,7 @@ async function getPlanIdByWegAndYear(
   wegId: string,
   jahr: string,
 ): Promise<string> {
-  const { token, url, key } = await getAuthToken(page);
+  const { token, url, key } = await getSupabaseRequestContext(page);
   const planRes = await page.request.get(
     `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.${jahr}`,
     { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -235,7 +214,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   // --- Feature 4: Sollstellung Generation ---
 
   test("sollstellung-generate-on-activate: activating creates 12 monthly entries for each unit", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Generate");
     await createTestUnit(page, localWegId, "GenA", "100", "1000");
     await createTestUnit(page, localWegId, "GenB", "200", "1000");
@@ -259,7 +238,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-verify-amounts: entry amounts match monthly calculated Hausgeld formula", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Amounts");
     await createTestUnit(page, localWegId, "AmountA", "100", "1000");
     await createTestUnit(page, localWegId, "AmountB", "200", "1000");
@@ -287,7 +266,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-view-details: monthly Sollstellungen are displayed in unit details", async ({ page }) => {
     // Eigene WEG statt der geteilten `wegId`: der Test haengt sonst davon ab,
     // dass ein anderer Test vorher zufaellig einen aktivierten Plan angelegt hat.
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Details");
     const unitName = await createTestUnit(page, localWegId, "Details", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -322,7 +301,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-no-duplicates: generator is idempotent for existing Sollstellungen", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Idempotent");
     await createTestUnit(page, localWegId, "IdempotentA", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -365,7 +344,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-history-preserved: deleting a posted plan is blocked", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "DeleteBlocked");
     await createTestUnit(page, localWegId, "DeleteBlocked", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -467,7 +446,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-partial-year: generates all 12 months even if plan is created mid-year", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "PartialYear");
     await createTestUnit(page, localWegId, "Partial", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -527,7 +506,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-overlapping-years: adjacent years generate independent Sollstellung entries", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "AdjacentYears");
     await createTestUnit(page, localWegId, "Adjacent", "100", "1000");
     const firstPlanId = await createTestWirtschaftsplan(

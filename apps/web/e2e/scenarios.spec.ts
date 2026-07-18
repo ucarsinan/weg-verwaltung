@@ -1,27 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
 import { activateWirtschaftsplan } from "./helpers/finanzen";
+import { getTokenFromAuthFile } from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-function getTokenFromAuthFile(filename: string): string {
-  const filePath = path.resolve(process.cwd(), "playwright", ".auth", filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found at ${filePath}`);
-  }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const cookie = data.cookies.find((c: { name: string; value: string }) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
-
-  if (!cookie) throw new Error(`Supabase auth cookie not found in ${filename}`);
-  let val = decodeURIComponent(cookie.value);
-  if (val.startsWith("base64-")) {
-    val = Buffer.from(val.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(val);
-  return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
-}
 
 async function createScenarioWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
