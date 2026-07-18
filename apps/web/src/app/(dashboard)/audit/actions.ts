@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getTenantClaims } from "@/modules/identity";
 
 export type AuditActorType = "user" | "agent" | "system";
 export type AuditIntegrityState =
@@ -95,11 +96,6 @@ export interface RevealPayloadResult {
   error?: string;
 }
 
-interface AppMetadata {
-  tenant_id?: string;
-  role?: string;
-}
-
 const PARTITION_NAME_RE = /^audit_event_\d{4}_\d{2}$/;
 const ARCHIVE_FILE_RE = /^audit_event_\d{4}_\d{2}\.csv$/;
 const DEFAULT_FEED_LIMIT = 50;
@@ -168,16 +164,6 @@ function isAuditIntegrityApiUnavailable(error: unknown): boolean {
     text.includes("audit_integrity_check") ||
     text.includes("audit_chain_repair_checkpoint")
   );
-}
-
-function readAppMetadata(value: unknown): AppMetadata {
-  if (!value || typeof value !== "object") return {};
-  const record = value as Record<string, unknown>;
-  return {
-    tenant_id:
-      typeof record.tenant_id === "string" ? record.tenant_id : undefined,
-    role: typeof record.role === "string" ? record.role : undefined,
-  };
 }
 
 function readMetadata(value: unknown): ArchivedFile["metadata"] {
@@ -312,24 +298,13 @@ async function getAuthContext() {
     throw new Error("Nicht angemeldet.");
   }
 
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  const appMetadata = readAppMetadata(claims?.app_metadata);
+  const { claims } = await getTenantClaims(supabase);
 
   return {
     user,
-    tenantId: appMetadata.tenant_id,
-    role: appMetadata.role,
+    tenantId: claims.tenantId ?? undefined,
+    role: claims.role ?? undefined,
     supabase,
-  };
-}
-
-function rpcClient(supabase: Awaited<ReturnType<typeof createClient>>) {
-  return supabase as unknown as {
-    rpc: (
-      fn: string,
-      args?: Record<string, unknown>,
-    ) => Promise<{ data: unknown; error: unknown }>;
   };
 }
 
@@ -339,7 +314,9 @@ export async function getAuditFeedAction(
   try {
     const { supabase } = await getAuthContext();
     const limit = normalizeLimit(filters.limit);
-    const { data, error } = await rpcClient(supabase).rpc("audit_event_feed", {
+    // RPC-Signaturen kommen aus dem Overwrite-Layer in database.types.ts
+    // (Migration 0050) — kein any-Cast mehr nötig.
+    const { data, error } = await supabase.rpc("audit_event_feed", {
       p_from: normalizeTimestamp(filters.from),
       p_to: normalizeTimestamp(filters.to),
       p_actor_type: isAuditActorType(filters.actorType)
@@ -401,13 +378,10 @@ export async function revealAuditPayloadAction(
       return { error: "Nicht autorisiert." };
     }
 
-    const { data, error } = await rpcClient(supabase).rpc(
-      "audit_reveal_event_payload",
-      {
-        p_event_id: eventId,
-        p_created_at: createdAt,
-      },
-    );
+    const { data, error } = await supabase.rpc("audit_reveal_event_payload", {
+      p_event_id: eventId,
+      p_created_at: createdAt,
+    });
 
     if (error) {
       console.warn(
@@ -433,9 +407,7 @@ export async function getIntegrityStatusAction(): Promise<AuditIntegrityResult> 
       return { status: null, error: "Nicht autorisiert." };
     }
 
-    const { data, error } = await rpcClient(supabase).rpc(
-      "audit_integrity_status",
-    );
+    const { data, error } = await supabase.rpc("audit_integrity_status");
     if (error) {
       if (isAuditIntegrityApiUnavailable(error)) {
         return {
@@ -481,7 +453,7 @@ export async function verifyAuditIntegrityAction(): Promise<AuditIntegrityResult
       return { status: null, error: "Nicht autorisiert." };
     }
 
-    const { data, error } = await rpcClient(supabase).rpc("audit_verify_chain");
+    const { data, error } = await supabase.rpc("audit_verify_chain");
     if (error) {
       if (isAuditIntegrityApiUnavailable(error)) {
         return {
