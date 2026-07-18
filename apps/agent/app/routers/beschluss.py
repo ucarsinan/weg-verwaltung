@@ -17,11 +17,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.auth import AuthContext, get_auth
 from app.graphs.base import build_thread_id
-from app.graphs.beschluss import beschluss_graph
+from app.graphs.beschluss import BestimmtheitsBefund, beschluss_graph
 from app.guardrails import validate_agent_input
 from app.schemas import BeschlussRequest
 
@@ -30,9 +30,14 @@ router = APIRouter(tags=["agent"])
 
 
 class BeschlussCheckResponse(BaseModel):
-    """Router response — the structured Befund + the thread_id for trace links."""
+    """Router response — the structured Befund + the thread_id for trace links.
 
-    befund: dict[str, Any]
+    ``befund`` ist bewusst das Graph-Modell selbst: der OpenAPI-Kontrakt
+    (``just codegen`` → shared-types) trägt damit die volle Payload-Form,
+    und Drift zwischen Graph und apps/web wird zum Compile-Fehler.
+    """
+
+    befund: BestimmtheitsBefund
     thread_id: str
 
 
@@ -97,9 +102,12 @@ async def post_beschluss(
             detail="Beschluss-Graph lieferte keinen Befund.",
         )
     befund = suggestions[0].get("befund")
-    if not isinstance(befund, dict):
+    try:
+        befund_model = BestimmtheitsBefund.model_validate(befund)
+    except ValidationError as exc:
+        logger.error("beschluss graph returned malformed befund: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Beschluss-Graph lieferte unerwartete Befund-Form.",
-        )
-    return BeschlussCheckResponse(befund=befund, thread_id=thread_id)
+        ) from exc
+    return BeschlussCheckResponse(befund=befund_model, thread_id=thread_id)
