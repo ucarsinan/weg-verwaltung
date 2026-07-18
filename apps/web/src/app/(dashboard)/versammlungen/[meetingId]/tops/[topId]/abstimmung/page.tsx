@@ -8,6 +8,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 type ResolutionRow = Database["public"]["Tables"]["resolution"]["Row"];
+import { buildAbstimmungState, evaluateMajority } from "@/modules/versammlung";
 import { castVote, feststellenResolution } from "./actions";
 import { FeststellenForm } from "./feststellen-form";
 
@@ -150,20 +151,16 @@ export default async function AbstimmungPage({ params }: PageProps) {
     .eq("resolution_id", resolution.id)
     .maybeSingle();
 
-  const voteMap = new Map<string, string>(
-    (votes ?? []).map((v) => [v.ownership_id, v.wert]),
-  );
-
   const ownershipList = ownerships ?? [];
   const isFestgestellt = resolution.festgestellt_am !== null;
 
-  const jaCount = Array.from(voteMap.values()).filter((v) => v === "ja").length;
-  const neinCount = Array.from(voteMap.values()).filter(
-    (v) => v === "nein",
-  ).length;
-  const enthaltungCount = Array.from(voteMap.values()).filter(
-    (v) => v === "enthaltung",
-  ).length;
+  // Tally + Anzeige-Map kommen aus dem Versammlungs-Modul; die konstitutive
+  // Feststellung bleibt der RPC `feststellen_resolution` in `feststellenResolution`.
+  const { voteByOwnership: voteMap, tally } = buildAbstimmungState(votes ?? [], {
+    totalEligible: ownershipList.length,
+  });
+  const majorityPreview =
+    voteMap.size > 0 ? evaluateMajority(tally, resolution.mehrheits_typ) : null;
 
   const boundCastVote = castVote.bind(null, resolution.id, meetingId, topId);
 
@@ -202,15 +199,23 @@ export default async function AbstimmungPage({ params }: PageProps) {
         </div>
         <div className="flex gap-4 text-xs">
           <span className="text-green-600 dark:text-green-400">
-            Ja: {jaCount}
+            Ja: {tally.ja}
           </span>
           <span className="text-red-600 dark:text-red-400">
-            Nein: {neinCount}
+            Nein: {tally.nein}
           </span>
           <span className="text-[var(--color-muted-foreground)]">
-            Enthalten: {enthaltungCount}
+            Enthalten: {tally.enthaltung}
           </span>
         </div>
+        {!isFestgestellt && majorityPreview && (
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            Vorschau (unverbindlich): {majorityPreview.reasoning}
+            {majorityPreview.fallback_applied
+              ? " Datenlage unvollständig — bitte vor der Feststellung manuell prüfen."
+              : ""}
+          </p>
+        )}
       </div>
 
       {/* Vote progress */}
