@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { createClient } from "@/lib/supabase/server";
+import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
 
 export interface WirtschaftsplanEditFormState {
   errors?: {
@@ -62,6 +63,13 @@ function mapLifecycleError(code?: string): string {
   return "Aktion konnte nicht ausgeführt werden. Bitte erneut versuchen.";
 }
 
+interface WirtschaftsplanEditInput {
+  jahr: number;
+  bezeichnung: string;
+  gesamtkosten: number;
+  wirksamAbMonat: number | null;
+}
+
 export async function updateWirtschaftsplanAction(
   wegId: string,
   planId: string,
@@ -74,101 +82,126 @@ export async function updateWirtschaftsplanAction(
     };
   }
 
-  const jahrRaw = String(formData.get("jahr") ?? "").trim();
-  const bezeichnung = String(formData.get("bezeichnung") ?? "").trim();
-  const gesamtkostenRaw = String(formData.get("gesamtkosten") ?? "").trim();
-  const wirksamAbMonatRaw = String(
-    formData.get("wirksam_ab_monat") ?? "",
-  ).trim();
+  return runFormAction<WirtschaftsplanEditInput, WirtschaftsplanEditFormState>(
+    {
+      scope: "updateWirtschaftsplanAction",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: (data) => {
+        const jahrRaw = String(data.get("jahr") ?? "").trim();
+        const bezeichnung = String(data.get("bezeichnung") ?? "").trim();
+        const gesamtkostenRaw = String(data.get("gesamtkosten") ?? "").trim();
+        const wirksamAbMonatRaw = String(
+          data.get("wirksam_ab_monat") ?? "",
+        ).trim();
 
-  const errors: WirtschaftsplanEditFormState["errors"] = {};
+        const errors: WirtschaftsplanEditFormState["errors"] = {};
 
-  const jahr = Number.parseInt(jahrRaw, 10);
-  if (!jahrRaw || !Number.isInteger(jahr) || jahr < 1900 || jahr > 2100) {
-    errors.jahr = ["Bitte ein gültiges Jahr zwischen 1900 und 2100 angeben."];
-  }
+        const jahr = Number.parseInt(jahrRaw, 10);
+        if (!jahrRaw || !Number.isInteger(jahr) || jahr < 1900 || jahr > 2100) {
+          errors.jahr = ["Bitte ein gültiges Jahr zwischen 1900 und 2100 angeben."];
+        }
 
-  if (bezeichnung.length === 0) {
-    errors.bezeichnung = ["Bitte eine Bezeichnung angeben."];
-  } else if (bezeichnung.length > 200) {
-    errors.bezeichnung = ["Bezeichnung darf höchstens 200 Zeichen lang sein."];
-  }
+        if (bezeichnung.length === 0) {
+          errors.bezeichnung = ["Bitte eine Bezeichnung angeben."];
+        } else if (bezeichnung.length > 200) {
+          errors.bezeichnung = [
+            "Bezeichnung darf höchstens 200 Zeichen lang sein.",
+          ];
+        }
 
-  const gesamtkosten = parsePositiveAmount(gesamtkostenRaw);
-  if (gesamtkosten === null) {
-    errors.gesamtkosten = ["Die Gesamtkosten müssen größer als 0 sein."];
-  }
+        const gesamtkosten = parsePositiveAmount(gesamtkostenRaw);
+        if (gesamtkosten === null) {
+          errors.gesamtkosten = ["Die Gesamtkosten müssen größer als 0 sein."];
+        }
 
-  const wirksamAbMonat = parseOptionalMonth(wirksamAbMonatRaw);
-  if (wirksamAbMonat === "invalid") {
-    errors.wirksam_ab_monat = [
-      "Der Wirksamkeitsmonat muss zwischen 1 und 12 liegen.",
-    ];
-  }
+        const wirksamAbMonat = parseOptionalMonth(wirksamAbMonatRaw);
+        if (wirksamAbMonat === "invalid") {
+          errors.wirksam_ab_monat = [
+            "Der Wirksamkeitsmonat muss zwischen 1 und 12 liegen.",
+          ];
+        }
 
-  if (Object.keys(errors).length > 0) {
-    return { errors };
-  }
+        if (Object.keys(errors).length > 0) {
+          return { errors: { errors } };
+        }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("wirtschaftsplan")
-    .update({
-      jahr,
-      bezeichnung,
-      gesamtkosten: gesamtkosten ?? 0,
-      wirksam_ab_monat: wirksamAbMonat,
-    })
-    .eq("id", planId)
-    .eq("weg_id", wegId)
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("[updateWirtschaftsplanAction] update failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-
-    if (error.code === "23505") {
-      return {
-        errors: {
-          jahr: [
-            "Für dieses Jahr ist bereits ein anderer Wirtschaftsplan aktiv.",
-          ],
-        },
-      };
-    }
-
-    if (error.code === "PGRST116") {
-      return {
-        errors: {
-          _form: ["Wirtschaftsplan wurde nicht gefunden."],
-        },
-      };
-    }
-
-    if (error.code === "23514") {
-      return {
-        errors: {
-          _form: [
-            "Bestehende Sollstellungen sind historische Forderungen. Bitte legen Sie für Änderungen einen Nachtrag oder eine Korrektur an.",
-          ],
-        },
-      };
-    }
-
-    return {
-      errors: {
-        _form: [
-          "Wirtschaftsplan konnte nicht aktualisiert werden. Bitte erneut versuchen.",
-        ],
+        return {
+          input: {
+            jahr,
+            bezeichnung,
+            gesamtkosten: gesamtkosten ?? 0,
+            wirksamAbMonat: wirksamAbMonat === "invalid" ? null : wirksamAbMonat,
+          },
+        };
       },
-    };
-  }
+      execute: async ({ supabase }, input) => {
+        const { error } = await supabase
+          .from("wirtschaftsplan")
+          .update({
+            jahr: input.jahr,
+            bezeichnung: input.bezeichnung,
+            gesamtkosten: input.gesamtkosten,
+            wirksam_ab_monat: input.wirksamAbMonat,
+          })
+          .eq("id", planId)
+          .eq("weg_id", wegId)
+          .select("id")
+          .single();
 
-  revalidatePath(`/wegs/${wegId}/finanzen`);
-  redirect(`/wegs/${wegId}/finanzen`);
+        if (error) {
+          logPostgrestError("updateWirtschaftsplanAction", error);
+
+          if (error.code === "23505") {
+            return {
+              errors: {
+                errors: {
+                  jahr: [
+                    "Für dieses Jahr ist bereits ein anderer Wirtschaftsplan aktiv.",
+                  ],
+                },
+              },
+            };
+          }
+
+          if (error.code === "PGRST116") {
+            return {
+              errors: {
+                errors: { _form: ["Wirtschaftsplan wurde nicht gefunden."] },
+              },
+            };
+          }
+
+          if (error.code === "23514") {
+            return {
+              errors: {
+                errors: {
+                  _form: [
+                    "Bestehende Sollstellungen sind historische Forderungen. Bitte legen Sie für Änderungen einen Nachtrag oder eine Korrektur an.",
+                  ],
+                },
+              },
+            };
+          }
+
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "Wirtschaftsplan konnte nicht aktualisiert werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
+
+        return {
+          revalidate: [`/wegs/${wegId}/finanzen`],
+          redirectTo: `/wegs/${wegId}/finanzen`,
+        };
+      },
+    },
+    formData,
+  );
 }
 
 export async function deleteWirtschaftsplanAction(

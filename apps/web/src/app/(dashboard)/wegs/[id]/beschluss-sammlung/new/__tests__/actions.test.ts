@@ -12,10 +12,14 @@ vi.mock("next/cache", () => ({
 const mockInsert = vi.fn();
 const mockFrom = vi.fn(() => ({ insert: mockInsert }));
 const mockGetUser = vi.fn();
+const mockGetClaims = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ from: mockFrom, auth: { getUser: mockGetUser } })
+    Promise.resolve({
+      from: mockFrom,
+      auth: { getUser: mockGetUser, getClaims: mockGetClaims },
+    })
   ),
 }));
 
@@ -26,6 +30,12 @@ describe("createBeschlussSammlungEntry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-uuid-1" } } });
+    mockGetClaims.mockResolvedValue({
+      data: {
+        claims: { app_metadata: { tenant_id: "tenant-1", role: "verwalter" } },
+      },
+      error: null,
+    });
     mockInsert.mockResolvedValue({ error: null });
   });
 

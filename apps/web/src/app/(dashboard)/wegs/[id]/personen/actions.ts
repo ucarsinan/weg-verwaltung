@@ -1,8 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
 
 export interface PersonFormState {
   errors?: {
@@ -25,15 +23,17 @@ export interface FormState {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface PersonValues {
+  vorname: string;
+  nachname: string;
+  email: string | null;
+  telefon: string | null;
+  anschrift: string | null;
+  user_id: string | null;
+}
+
 function validatePersonInputs(formData: FormData): {
-  values: {
-    vorname: string;
-    nachname: string;
-    email: string | null;
-    telefon: string | null;
-    anschrift: string | null;
-    user_id: string | null;
-  };
+  values: PersonValues;
   errors: PersonFormState["errors"];
 } {
   const vorname = String(formData.get("vorname") ?? "").trim();
@@ -86,6 +86,18 @@ function validatePersonInputs(formData: FormData): {
   };
 }
 
+function parsePersonForm(
+  formData: FormData,
+):
+  | { input: PersonValues }
+  | { errors: PersonFormState } {
+  const { values, errors } = validatePersonInputs(formData);
+  if (errors && Object.keys(errors).length > 0) {
+    return { errors: { errors } };
+  }
+  return { input: values };
+}
+
 export async function createPerson(
   wegId: string,
   _prevState: PersonFormState,
@@ -95,29 +107,35 @@ export async function createPerson(
     return { errors: { _form: ["Ungültige WEG-ID. Bitte Seite neu laden."] } };
   }
 
-  const { values, errors } = validatePersonInputs(formData);
+  return runFormAction<PersonValues, PersonFormState>(
+    {
+      scope: "createPerson",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: parsePersonForm,
+      execute: async ({ supabase }, values) => {
+        const { error } = await supabase.from("person").insert(values);
 
-  if (errors && Object.keys(errors).length > 0) {
-    return { errors };
-  }
+        if (error) {
+          logPostgrestError("createPerson", error);
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "Person konnte nicht angelegt werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("person").insert(values);
-
-  if (error) {
-    console.error("[createPerson] insert failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-    return {
-      errors: {
-        _form: ["Person konnte nicht angelegt werden. Bitte erneut versuchen."],
+        return {
+          revalidate: [`/wegs/${wegId}`],
+          redirectTo: `/wegs/${wegId}`,
+        };
       },
-    };
-  }
-
-  revalidatePath(`/wegs/${wegId}`);
-  redirect(`/wegs/${wegId}`);
+    },
+    formData,
+  );
 }
 
 export async function updatePerson(
@@ -130,32 +148,38 @@ export async function updatePerson(
     return { errors: { _form: ["Ungültige IDs. Bitte Seite neu laden."] } };
   }
 
-  const { values, errors } = validatePersonInputs(formData);
+  return runFormAction<PersonValues, PersonFormState>(
+    {
+      scope: "updatePerson",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: parsePersonForm,
+      execute: async ({ supabase }, values) => {
+        const { error } = await supabase
+          .from("person")
+          .update(values)
+          .eq("id", personId);
 
-  if (errors && Object.keys(errors).length > 0) {
-    return { errors };
-  }
+        if (error) {
+          logPostgrestError("updatePerson", error);
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "Person konnte nicht aktualisiert werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("person")
-    .update(values)
-    .eq("id", personId);
-
-  if (error) {
-    console.error("[updatePerson] update failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-    return {
-      errors: {
-        _form: ["Person konnte nicht aktualisiert werden. Bitte erneut versuchen."],
+        return {
+          revalidate: [`/wegs/${wegId}`],
+          redirectTo: `/wegs/${wegId}`,
+        };
       },
-    };
-  }
-
-  revalidatePath(`/wegs/${wegId}`);
-  redirect(`/wegs/${wegId}`);
+    },
+    formData,
+  );
 }
 
 export async function deletePerson(
@@ -166,33 +190,44 @@ export async function deletePerson(
     return { errors: { _form: ["Ungültige IDs. Bitte Seite neu laden."] } };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("person")
-    .delete()
-    .eq("id", personId);
+  return runFormAction<Record<string, never>, FormState>(
+    {
+      scope: "deletePerson",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: () => ({ input: {} }),
+      execute: async ({ supabase }) => {
+        const { error } = await supabase
+          .from("person")
+          .delete()
+          .eq("id", personId);
 
-  if (error) {
-    if (error.code === "23503") {
-      return {
-        errors: {
-          _form: [
-            "Die Person konnte nicht gelöscht werden, da sie noch als Eigentümer oder Co-Eigentümer eingetragen ist.",
-          ],
-        },
-      };
-    }
-    console.error("[deletePerson] delete failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-    return {
-      errors: {
-        _form: ["Die Person konnte nicht gelöscht werden. Bitte erneut versuchen."],
+        if (error) {
+          if (error.code === "23503") {
+            return {
+              errors: {
+                errors: {
+                  _form: [
+                    "Die Person konnte nicht gelöscht werden, da sie noch als Eigentümer oder Co-Eigentümer eingetragen ist.",
+                  ],
+                },
+              },
+            };
+          }
+          logPostgrestError("deletePerson", error);
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "Die Person konnte nicht gelöscht werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
+
+        return { revalidate: [`/wegs/${wegId}`], state: {} };
       },
-    };
-  }
-
-  revalidatePath(`/wegs/${wegId}`);
-  return {};
+    },
+    new FormData(),
+  );
 }

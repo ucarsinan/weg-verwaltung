@@ -13,9 +13,20 @@ const mockDelete = vi.fn();
 const mockEq = vi.fn();
 const mockFrom = vi.fn();
 
+// action-kernel guard: jede Form-Action prüft jetzt den Tenant-Kontext.
+const mockAuth = {
+  getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+  getClaims: vi.fn().mockResolvedValue({
+    data: {
+      claims: { app_metadata: { tenant_id: "tenant-1", role: "verwalter" } },
+    },
+    error: null,
+  }),
+};
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ from: mockFrom })
+    Promise.resolve({ from: mockFrom, auth: mockAuth })
   ),
 }));
 
