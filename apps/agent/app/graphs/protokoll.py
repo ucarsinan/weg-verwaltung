@@ -31,6 +31,11 @@ from pydantic import BaseModel, Field
 
 from app.graphs.base import AgentState
 from app.llm.anthropic_client import get_instructor_client
+from app.tools.runtime import (
+    get_jwt,
+    get_supabase_from_config,
+    tool_runtime_from_config,
+)
 from app.tools.versammlung_tools import MeetingFullContext, get_meeting_full_context
 
 logger = logging.getLogger(__name__)
@@ -138,8 +143,7 @@ async def assemble_context_node(
     """Fetch meeting aggregate from Supabase via get_meeting_full_context tool."""
 
     meeting_id = state.get("meeting_id") or ""
-    configurable: dict[str, Any] = getattr(config, "configurable", {}) or {}
-    jwt: str | None = configurable.get("jwt")
+    jwt = get_jwt(config)
 
     if not jwt or not meeting_id:
         logger.warning("assemble_context_node: no JWT or meeting_id — degrading to empty context")
@@ -151,9 +155,7 @@ async def assemble_context_node(
             termin_von=None,
         )
     else:
-        from types import SimpleNamespace
-
-        runtime = SimpleNamespace(config={"configurable": {"jwt": jwt}})
+        runtime = tool_runtime_from_config(config)
         try:
             ctx = await get_meeting_full_context.coroutine(  # type: ignore[attr-defined]
                 meeting_id=meeting_id,
@@ -220,20 +222,10 @@ async def persist_node(
     edited_draft: str = payload.get("edited_draft", payload.get("draft", ""))
     meeting_id = state.get("meeting_id") or ""
 
-    configurable = getattr(config, "configurable", {}) or {}
-    jwt: str | None = configurable.get("jwt")
+    jwt = get_jwt(config)
 
     if jwt and meeting_id and edited_draft:
-        from supabase import create_client
-        from supabase.client import ClientOptions
-        from app.config import get_settings
-
-        settings = get_settings()
-        sb = create_client(
-            settings.SUPABASE_URL,
-            settings.SUPABASE_ANON_KEY,
-            ClientOptions(headers={"Authorization": f"Bearer {jwt}"}),
-        )
+        sb = get_supabase_from_config(config)
         try:
             result: Any = (
                 sb.table("protocol")

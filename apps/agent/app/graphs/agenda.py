@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
@@ -31,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from app.graphs.base import AgentState
 from app.llm.anthropic_client import get_instructor_client
+from app.tools.runtime import get_jwt, tool_runtime_from_config
 from app.tools.versammlung_tools import list_previous_protokolle_for_weg
 
 logger = logging.getLogger(__name__)
@@ -126,21 +126,13 @@ async def retrieve_context_node(
         logger.warning("retrieve_context_node: no weg_id in state — skipping tool call")
         return {"suggestions": [{"type": "retrieved_protokolle", "data": []}]}
 
-    # Build a ToolRuntime proxy carrying the JWT from the graph config.
-    # This mirrors what LangGraph's ToolNode does internally (§ 4.3):
-    #   runtime.config["configurable"]["jwt"] → get_supabase(runtime) → RLS-scoped client.
-    configurable: dict[str, Any] = {}
-    if config and isinstance(config, dict):
-        configurable = config.get("configurable", {})
-
-    jwt: str | None = configurable.get("jwt")
-    if not jwt:
+    if not get_jwt(config):
         logger.warning(
             "retrieve_context_node: JWT missing in config — degrading to empty retrieval"
         )
         return {"suggestions": [{"type": "retrieved_protokolle", "data": []}]}
 
-    runtime = SimpleNamespace(config={"configurable": {"jwt": jwt}})
+    runtime = tool_runtime_from_config(config)
 
     try:
         results = await list_previous_protokolle_for_weg.coroutine(  # type: ignore[attr-defined]

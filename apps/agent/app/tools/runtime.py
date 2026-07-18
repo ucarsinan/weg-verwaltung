@@ -17,7 +17,8 @@ Contract:
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Literal, TypeVar, cast
 
@@ -70,6 +71,63 @@ def get_scope(fn: Callable[..., Any]) -> SideEffectScope | None:
     """Read the scope a tool was tagged with, or ``None`` if untagged."""
 
     return cast("SideEffectScope | None", getattr(fn, "__side_effect_scope__", None))
+
+
+def read_configurable(config: Any) -> dict[str, Any]:
+    """Extract the ``configurable`` mapping from a graph-node config.
+
+    Single owner for this parsing: ``RunnableConfig`` is a TypedDict, so at
+    runtime LangGraph hands nodes a plain dict — attribute access
+    (``getattr(config, "configurable")``) silently returns nothing there.
+    Test doubles sometimes use attribute-style objects instead. This helper
+    accepts both shapes; graphs must not re-implement it.
+    """
+
+    if config is None:
+        return {}
+    if isinstance(config, Mapping):
+        value = config.get("configurable") or {}
+    else:
+        value = getattr(config, "configurable", {}) or {}
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def get_jwt(config: Any) -> str | None:
+    """Read the per-invoke user JWT from a graph-node config (§ 4.2)."""
+
+    jwt = read_configurable(config).get("jwt")
+    return jwt if isinstance(jwt, str) and jwt else None
+
+
+@dataclass
+class GraphToolRuntime:
+    """Minimal ``ToolRuntime`` stand-in for tool calls made from graph nodes.
+
+    Graph nodes receive a ``RunnableConfig``; tools expect a runtime object
+    whose ``config["configurable"]["jwt"]`` carries the JWT (see
+    ``get_supabase``). This mirrors what LangGraph's ToolNode builds
+    internally — graphs use ``tool_runtime_from_config`` instead of
+    hand-rolling ``SimpleNamespace`` shims.
+    """
+
+    config: dict[str, Any]
+
+
+def tool_runtime_from_config(config: Any) -> GraphToolRuntime:
+    """Bridge a graph-node config to the tool-runtime seam."""
+
+    return GraphToolRuntime(config={"configurable": read_configurable(config)})
+
+
+def get_supabase_from_config(config: Any) -> Client:
+    """JWT-scoped Supabase client for graph nodes that write directly.
+
+    Same seam as ``get_supabase`` — nodes must not build their own
+    ``create_client`` inline (actor_type handling, § 4.3, has exactly one
+    home here).
+    """
+
+    return get_supabase(tool_runtime_from_config(config))
 
 
 def get_supabase(runtime: Any) -> Client:
