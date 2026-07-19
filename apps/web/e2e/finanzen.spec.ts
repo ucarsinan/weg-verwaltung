@@ -1,36 +1,37 @@
 import { test, expect, Page } from "@playwright/test";
 import { activateWirtschaftsplan } from "./helpers/finanzen";
-import { getSupabaseRequestContext } from "./helpers/fixtures";
-import { fillWegAddress } from "./helpers/weg";
+import {
+  activateWirtschaftsplanFixture,
+  createUnitFixture,
+  createWirtschaftsplanFixture,
+  getSupabaseRequestContext,
+} from "./helpers/fixtures";
+import { createWegFixture } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
 
+// Setup über den REST-Seam (helpers/fixtures.ts) — die WEG-/Einheiten-
+// Anlage-Formulare sind Testgegenstand von wegs.spec.ts, nicht dieses Files.
 async function createTestWeg(page: Page, label: string): Promise<string> {
-  await page.goto("/wegs/new");
-  const name = `E2E Finz ${label} ${Date.now()}`;
-  await page.getByLabel(/Name der WEG/).fill(name);
-  await fillWegAddress(page, { street: "Finanzweg" });
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  // 30s, not the usual 15s: on the Free-plan Cloud project, later tests in
-  // this same file's bulk-write section can leave Cloud under enough load
-  // that a subsequent 15s navigation budget is too tight (see
-  // docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md,
-  // "reihenfolgeabhaengige Flakiness").
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
-  const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
-  if (!match) throw new Error("Could not extract WEG ID from URL");
-  return match[1];
+  return createWegFixture(page, `E2E Finz ${label} ${Date.now()}`, {
+    street: "Finanzweg",
+  });
 }
 
-async function createTestUnit(page: Page, wegId: string, label: string, zaehler = "100", nenner = "1000") {
-  await page.goto(`/wegs/${wegId}/einheiten/new`);
-  const unitBezeichnung = `Whg ${label} ${Date.now()}`;
-  await page.getByLabel(/Bezeichnung/).fill(unitBezeichnung);
-  await page.getByLabel("Zähler").fill(zaehler);
-  await page.getByLabel("Nenner").fill(nenner);
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
-  return unitBezeichnung;
+async function createTestUnit(
+  page: Page,
+  wegId: string,
+  label: string,
+  zaehler = "100",
+  nenner = "1000",
+): Promise<{ id: string; bezeichnung: string }> {
+  const bezeichnung = `Whg ${label} ${Date.now()}`;
+  const id = await createUnitFixture(page, wegId, {
+    bezeichnung,
+    meaZaehler: Number(zaehler),
+    meaNenner: Number(nenner),
+  });
+  return { id, bezeichnung };
 }
 
 function getWirtschaftsplanRow(page: Page, jahr: string, bezeichnung: string) {
@@ -179,13 +180,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const localWegId = await createTestWeg(page, "DeletePlan");
     await createTestUnit(page, localWegId, "DeletePlan", "100", "1000");
 
-    await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2035",
-      "Wirtschaftsplan Delete UI",
-      "12000",
-    );
+    await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2035,
+      bezeichnung: "Wirtschaftsplan Delete UI",
+      gesamtkosten: 12000,
+    });
+    await page.goto(`/wegs/${localWegId}/finanzen`);
 
     const planRow = getWirtschaftsplanRow(
       page,
@@ -218,13 +219,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const localWegId = await createTestWeg(page, "Generate");
     await createTestUnit(page, localWegId, "GenA", "100", "1000");
     await createTestUnit(page, localWegId, "GenB", "200", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2040",
-      "Wirtschaftsplan Generate",
-      "12000",
-    );
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2040,
+      bezeichnung: "Wirtschaftsplan Generate",
+      gesamtkosten: 12000,
+    });
+    // Aktivierung bewusst über das UI — sie ist hier der Testgegenstand.
     await activateWirtschaftsplan(page, localWegId, planId);
 
     const res = await page.request.get(
@@ -242,14 +243,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const localWegId = await createTestWeg(page, "Amounts");
     await createTestUnit(page, localWegId, "AmountA", "100", "1000");
     await createTestUnit(page, localWegId, "AmountB", "200", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2041",
-      "Wirtschaftsplan Amounts",
-      "12000",
-    );
-    await activateWirtschaftsplan(page, localWegId, planId);
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2041,
+      bezeichnung: "Wirtschaftsplan Amounts",
+      gesamtkosten: 12000,
+    });
+    await activateWirtschaftsplanFixture(page, planId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=betrag`,
@@ -266,25 +266,15 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-view-details: monthly Sollstellungen are displayed in unit details", async ({ page }) => {
     // Eigene WEG statt der geteilten `wegId`: der Test haengt sonst davon ab,
     // dass ein anderer Test vorher zufaellig einen aktivierten Plan angelegt hat.
-    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Details");
-    const unitName = await createTestUnit(page, localWegId, "Details", "100", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2039",
-      "Wirtschaftsplan Details",
-      "12000",
-    );
-    await activateWirtschaftsplan(page, localWegId, planId);
-
-    const unitRes = await page.request.get(
-      `${url}/rest/v1/unit?select=id&weg_id=eq.${localWegId}&bezeichnung=eq.${encodeURIComponent(unitName)}`,
-      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
-    );
-    expect(unitRes.ok()).toBe(true);
-    const [unit] = (await unitRes.json()) as Array<{ id: string }>;
-    expect(unit?.id).toBeTruthy();
+    const unit = await createTestUnit(page, localWegId, "Details", "100", "1000");
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2039,
+      bezeichnung: "Wirtschaftsplan Details",
+      gesamtkosten: 12000,
+    });
+    await activateWirtschaftsplanFixture(page, planId);
 
     // Die Sollstellungen stehen auf der Eigentuemerschafts-Seite der Einheit.
     // Der Einheiten-Link auf der WEG-Seite fuehrt dagegen ins Bearbeiten-Formular
@@ -304,14 +294,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Idempotent");
     await createTestUnit(page, localWegId, "IdempotentA", "100", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2042",
-      "Wirtschaftsplan Idempotent",
-      "12000",
-    );
-    await activateWirtschaftsplan(page, localWegId, planId);
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2042,
+      bezeichnung: "Wirtschaftsplan Idempotent",
+      gesamtkosten: 12000,
+    });
+    await activateWirtschaftsplanFixture(page, planId);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id&order=id.asc`,
@@ -347,14 +336,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "DeleteBlocked");
     await createTestUnit(page, localWegId, "DeleteBlocked", "100", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2036",
-      "Wirtschaftsplan Delete Blocked",
-      "12000",
-    );
-    await activateWirtschaftsplan(page, localWegId, planId);
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2036,
+      bezeichnung: "Wirtschaftsplan Delete Blocked",
+      gesamtkosten: 12000,
+    });
+    await activateWirtschaftsplanFixture(page, planId);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id`,
@@ -449,14 +437,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "PartialYear");
     await createTestUnit(page, localWegId, "Partial", "100", "1000");
-    const planId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2043",
-      "Wirtschaftsplan Partial Year",
-      "12000",
-    );
-    await activateWirtschaftsplan(page, localWegId, planId);
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2043,
+      bezeichnung: "Wirtschaftsplan Partial Year",
+      gesamtkosten: 12000,
+    });
+    await activateWirtschaftsplanFixture(page, planId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=monat`,
@@ -509,22 +496,20 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "AdjacentYears");
     await createTestUnit(page, localWegId, "Adjacent", "100", "1000");
-    const firstPlanId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2044",
-      "Wirtschaftsplan Adjacent 2044",
-      "12000",
-    );
-    const secondPlanId = await createTestWirtschaftsplan(
-      page,
-      localWegId,
-      "2045",
-      "Wirtschaftsplan Adjacent 2045",
-      "24000",
-    );
-    await activateWirtschaftsplan(page, localWegId, firstPlanId);
-    await activateWirtschaftsplan(page, localWegId, secondPlanId);
+    const firstPlanId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2044,
+      bezeichnung: "Wirtschaftsplan Adjacent 2044",
+      gesamtkosten: 12000,
+    });
+    const secondPlanId = await createWirtschaftsplanFixture(page, {
+      wegId: localWegId,
+      jahr: 2045,
+      bezeichnung: "Wirtschaftsplan Adjacent 2045",
+      gesamtkosten: 24000,
+    });
+    await activateWirtschaftsplanFixture(page, firstPlanId);
+    await activateWirtschaftsplanFixture(page, secondPlanId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=in.(${firstPlanId},${secondPlanId})&select=wirtschaftsplan_id,betrag`,

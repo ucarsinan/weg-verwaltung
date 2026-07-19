@@ -1,61 +1,13 @@
-import { test, expect, type Page } from "@playwright/test";
-import { activateWirtschaftsplan } from "./helpers/finanzen";
-import { getTokenFromAuthFile } from "./helpers/fixtures";
-import { fillWegAddress } from "./helpers/weg";
+import { test, expect } from "@playwright/test";
+import {
+  activateWirtschaftsplanFixture,
+  createUnitFixture,
+  createWirtschaftsplanFixture,
+  getTokenFromAuthFile,
+} from "./helpers/fixtures";
+import { createWegFixture, fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-async function createScenarioWeg(page: Page, label: string): Promise<string> {
-  await page.goto("/wegs/new");
-  await page.getByLabel(/Name der WEG/).fill(`Scenario ${label} ${Date.now()}`);
-  await fillWegAddress(page, { street: "Szenarioweg" });
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  // 30s, not the usual 15s: on the Free-plan Cloud project, this navigation
-  // can land right after finanzen.spec.ts's 100+-unit bulk-write test when
-  // files run in a non-standard order, and Cloud latency has been observed
-  // to blow a 15s budget there (see docs/agent-reports/2026-07-14-worker-
-  // general-cloud-e2e-first-run.md, "reihenfolgeabhaengige Flakiness").
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
-
-  const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
-  if (!match) throw new Error("Could not extract WEG ID from URL");
-  return match[1];
-}
-
-async function createScenarioUnit(
-  page: Page,
-  wegId: string,
-  label: string,
-  zaehler: string,
-  nenner = "1000",
-) {
-  await page.goto(`/wegs/${wegId}/einheiten/new`);
-  await page.getByLabel(/Bezeichnung/).fill(`Scenario ${label} ${Date.now()}`);
-  await page.getByLabel("Zähler").fill(zaehler);
-  await page.getByLabel("Nenner").fill(nenner);
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), {
-    timeout: 15_000,
-  });
-}
-
-async function createScenarioPlan(
-  page: Page,
-  wegId: string,
-  jahr: string,
-  bezeichnung: string,
-  gesamtkosten: string,
-) {
-  await page.goto(`/wegs/${wegId}/finanzen/new`);
-  await page.getByLabel(/jahr/i).fill(jahr);
-  await page.getByLabel(/bezeichnung/i).fill(bezeichnung);
-  await page.getByLabel(/gesamtkosten/i).fill(gesamtkosten);
-  await page.getByRole("button", { name: /speichern/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen$`), {
-    timeout: 15_000,
-  });
-  await expect(page.getByText(bezeichnung)).toBeVisible();
-}
 
 test.describe("Tier 4: Real-World Application Scenarios", () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
@@ -169,23 +121,25 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
   test("scenario-audit-trail-of-financial-actions: financial plan modifications create correct audit logs", async ({ page }) => {
     const tokenA = getTokenFromAuthFile("admin.json");
 
-    // Perform a real financial mutation, then prove the audit trigger
+    // Perform a real financial mutation (REST-Seam-Fixture — der DB-Trigger
+    // feuert unabhängig vom Eingabekanal), then prove the audit trigger
     // (wirtschaftsplan_audit_emit, 0036_wirtschaftsplan_hausgeld.sql) logged
     // it — querying audit_event unfiltered by entity_id and accepting 404 as
     // a pass proved nothing about which plan's actions were recorded.
-    const wegId = await createScenarioWeg(page, "AuditTrail");
-    await createScenarioPlan(page, wegId, "2038", "Scenario Audit Plan", "9000");
-
-    const planRes = await page.request.get(
-      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2038`,
-      { headers: { apikey: key, Authorization: `Bearer ${tokenA}` } },
+    const wegId = await createWegFixture(
+      page,
+      `Scenario AuditTrail ${Date.now()}`,
+      { street: "Szenarioweg" },
     );
-    expect(planRes.ok()).toBe(true);
-    const [plan] = (await planRes.json()) as Array<{ id: string }>;
-    expect(plan?.id).toBeTruthy();
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId,
+      jahr: 2038,
+      bezeichnung: "Scenario Audit Plan",
+      gesamtkosten: 9000,
+    });
 
     const res = await page.request.get(
-      `${url}/rest/v1/audit_event?select=id,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${plan.id}`,
+      `${url}/rest/v1/audit_event?select=id,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${planId}`,
       {
         headers: {
           apikey: key,
@@ -201,31 +155,33 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
 
   test("scenario-correction-of-financial-plan: corrections preserve historical Sollstellungen", async ({ page }) => {
     const tokenA = getTokenFromAuthFile("admin.json");
-    const wegId = await createScenarioWeg(page, "Correction");
-    await createScenarioUnit(page, wegId, "CorrectionA", "100");
-    await createScenarioUnit(page, wegId, "CorrectionB", "200");
-    await createScenarioPlan(
+    const wegId = await createWegFixture(
       page,
-      wegId,
-      "2037",
-      "Scenario Correction Plan",
-      "12000",
+      `Scenario Correction ${Date.now()}`,
+      { street: "Szenarioweg" },
     );
-
-    const planRes = await page.request.get(`${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2037`, {
-      headers: { apikey: key, Authorization: `Bearer ${tokenA}` }
+    await createUnitFixture(page, wegId, {
+      bezeichnung: `Scenario CorrectionA ${Date.now()}`,
+      meaZaehler: 100,
     });
-    expect(planRes.ok()).toBe(true);
-    const plans = await planRes.json() as Array<{ id: string }>;
-    expect(plans).toHaveLength(1);
+    await createUnitFixture(page, wegId, {
+      bezeichnung: `Scenario CorrectionB ${Date.now()}`,
+      meaZaehler: 200,
+    });
+    const planId = await createWirtschaftsplanFixture(page, {
+      wegId,
+      jahr: 2037,
+      bezeichnung: "Scenario Correction Plan",
+      gesamtkosten: 12000,
+    });
 
     // Erst die Aktivierung erzeugt die Sollstellungen — ein Entwurf ist
     // absichtlich noch frei editierbar (docs/07-finance-lifecycle.md). Ohne
     // diesen Schritt prueft der Test gegen einen Plan, den man aendern DARF.
-    await activateWirtschaftsplan(page, wegId, plans[0].id);
+    await activateWirtschaftsplanFixture(page, planId);
 
     const sollRes = await page.request.get(
-      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plans[0].id}&select=id`,
+      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id`,
       { headers: { apikey: key, Authorization: `Bearer ${tokenA}` } },
     );
     expect(sollRes.ok()).toBe(true);
@@ -234,7 +190,7 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     // Korrektur eines aktiven Plans laeuft ueber einen Nachtragsplan, niemals
     // ueber ein direktes Update — die Historie muss unangetastet bleiben.
     const updateRes = await page.request.patch(
-      `${url}/rest/v1/wirtschaftsplan?id=eq.${plans[0].id}`,
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${planId}`,
       {
         data: { gesamtkosten: 18000 },
         headers: {

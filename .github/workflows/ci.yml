@@ -104,6 +104,59 @@ jobs:
         run: uv run pytest -q
 
   # --------------------------------------------------------------------------
+  # packages/shared-types — codegen drift gate.
+  # Re-runs `just codegen` (OpenAPI export straight from the FastAPI app —
+  # no running server, no secrets) and fails when the committed generated
+  # sources in packages/shared-types lag behind the agent contract.
+  # --------------------------------------------------------------------------
+  codegen-drift:
+    name: codegen-drift (agent OpenAPI ⇄ shared-types)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Pinned to root package.json `packageManager` field.
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Setup just
+        uses: extractions/setup-just@v2
+
+      - name: Regenerate shared-types from the agent contract
+        run: just codegen
+
+      - name: Fail on drift
+        run: |
+          if [ -n "$(git status --porcelain packages/shared-types)" ]; then
+            echo "::error::packages/shared-types is stale — run 'just codegen' locally and commit the result."
+            git status --porcelain packages/shared-types
+            git diff -- packages/shared-types
+            exit 1
+          fi
+          echo "OK — shared-types match the agent OpenAPI contract."
+
+  # --------------------------------------------------------------------------
   # infra/supabase/migrations — lightweight shell linter.
   # Validates:
   #   1. Every .sql file starts with `-- WEG-Verwaltung migration NNNN:` header.

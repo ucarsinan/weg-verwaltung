@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+import {
+  createOwnershipFixture,
+  createPersonFixture,
+  createUnitFixture,
+} from "./helpers/fixtures";
 import { createWegFixture, fillWegAddress } from "./helpers/weg";
 
 // CRUD smoke for the WEG-Stammdaten path against the linked Cloud Frankfurt
@@ -150,28 +155,21 @@ test.describe("wegs CRUD", () => {
   });
 
   test("cannot delete a Wohneinheit with active ownership", async ({ page }) => {
-    // 1. Create a WEG
+    // 1.–3. WEG, Einheit und aktiver Eigentümer als Fixtures — Testgegenstand
+    //    ist die Lösch-Sperre; die Anlage-Flows decken der CRUD-Test hier
+    //    bzw. personen.spec.ts ab.
     const wegNameVal = wegName("Unit-Delete-Fail");
     const wegId = await createWegFixture(page, wegNameVal);
-
-    // 2. Create a Wohneinheit
     const unitBezeichnung = `Whg ${Date.now()}`;
-    await page.goto(`/wegs/${wegId}/einheiten/new`);
-    await page.getByLabel(/Bezeichnung/).fill(unitBezeichnung);
-    await page.getByLabel("Zähler").fill("75");
-    await page.getByLabel("Nenner").fill("1000");
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), { timeout: 15_000 });
-
-    // 3. Create an Owner for the Unit
-    await page.getByRole("link", { name: `Eigentümer von ${unitBezeichnung} anzeigen` }).click();
-    await expect(page).toHaveURL(/\/eigentuemerschaft$/);
-    await page.getByRole("link", { name: /Eigentümer hinzufügen/ }).first().click();
-    const ownerNachname = `Owner-${Date.now()}`;
-    await page.getByLabel(/Vorname/).fill("Max");
-    await page.getByLabel(/Nachname/).fill(ownerNachname);
-    await page.getByRole("button", { name: /Eigentümer speichern/ }).click();
-    await expect(page).toHaveURL(/\/eigentuemerschaft$/, { timeout: 15_000 });
+    const unitId = await createUnitFixture(page, wegId, {
+      bezeichnung: unitBezeichnung,
+      meaZaehler: 75,
+    });
+    const personId = await createPersonFixture(page, {
+      vorname: "Max",
+      nachname: `Owner-${Date.now()}`,
+    });
+    await createOwnershipFixture(page, { wegId, unitId, personId });
 
     // 4. Try to delete the Unit
     await page.goto(`/wegs/${wegId}`);

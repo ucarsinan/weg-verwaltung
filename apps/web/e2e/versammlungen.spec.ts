@@ -1,6 +1,15 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { getAccessToken, setMeetingStatus } from "./helpers/fixtures";
+import {
+  createMeetingFixture,
+  createOwnershipFixture,
+  createPersonFixture,
+  createProtocolFixture,
+  createResolutionFixture,
+  createTopFixture,
+  createUnitFixture,
+  setMeetingStatus,
+} from "./helpers/fixtures";
 import { createWegFixture } from "./helpers/weg";
 
 // Versammlungs-Happy-Path gegen Cloud Frankfurt. Läuft als geseedeter
@@ -136,29 +145,18 @@ test.describe("versammlungen happy path", () => {
   test("Einladung versenden — Status entwurf → eingeladen wenn Frist OK", async ({
     page,
   }) => {
-    // 1. WEG anlegen.
-    await createWegFixture(page, `E2E Einladung ${stamp()}`, {
+    // 1.–2. WEG + Versammlung mit Termin in 30 Tagen als Fixtures — § 24
+    //    Abs. 4 WEG-Frist (21 Tage) sicher eingehalten. Testgegenstand ist
+    //    der Einladungs-Versand, nicht das Anlage-Formular (versammlungen
+    //    Happy-Path-Test deckt das ab).
+    const wegId = await createWegFixture(page, `E2E Einladung ${stamp()}`, {
       street: "Einladungsweg",
     });
-
-    // 2. Versammlungs-Anlage mit Termin in 30 Tagen — § 24 Abs. 4 WEG-Frist
-    //    (21 Tage) sicher eingehalten.
-    const newMeetingHref = await page
-      .getByRole("link", { name: /Neue Versammlung anlegen/ })
-      .getAttribute("href");
-    await page.goto(newMeetingHref!);
-
-    const terminVon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 16);
-    const meetingTitel = `Einladungs-ETV ${stamp()}`;
-    await page.getByLabel(/Titel/).fill(meetingTitel);
-    await page.getByLabel(/Termin von/).fill(terminVon);
-    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
-
-    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const meetingId = await createMeetingFixture(page, wegId, {
+      titel: `Einladungs-ETV ${stamp()}`,
+      terminVon: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     });
+    await page.goto(`/versammlungen/${meetingId}`);
 
     // 3. Vor Versand: Status "Entwurf" + Einladungs-Card sichtbar.
     await expect(page.locator("dl").getByText("Entwurf")).toBeVisible();
@@ -187,28 +185,18 @@ test.describe("versammlungen happy path", () => {
   test("Beschlussvorlage anlegen — Abstimmung zeigt Vorlage + Feststellungs-Gate", async ({
     page,
   }) => {
-    // 1. WEG + Versammlung + TOP — Setup für den Beschluss-Pfad.
-    await createWegFixture(page, `E2E Beschluss ${stamp()}`, {
+    // 1. WEG + Versammlung + TOP als Fixtures — Setup für den Beschluss-Pfad;
+    //    die Anlage-Formulare selbst deckt der Happy-Path-Test ab.
+    const wegId = await createWegFixture(page, `E2E Beschluss ${stamp()}`, {
       street: "Beschlussweg",
     });
-
-    const newMeetingHref = await page
-      .getByRole("link", { name: /Neue Versammlung anlegen/ })
-      .getAttribute("href");
-    await page.goto(newMeetingHref!);
-    await page.getByLabel(/Titel/).fill(`Beschluss-ETV ${stamp()}`);
-    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
-    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const meetingId = await createMeetingFixture(page, wegId, {
+      titel: `Beschluss-ETV ${stamp()}`,
     });
-
-    await page
-      .getByRole("link", { name: /Ersten TOP anlegen|TOP anlegen/ })
-      .first()
-      .click();
-    const topTitel = `Beschluss-Test TOP ${stamp()}`;
-    await page.getByLabel(/Titel/).fill(topTitel);
-    await page.getByRole("button", { name: /TOP anlegen/ }).click();
+    const topId = await createTopFixture(page, meetingId, {
+      titel: `Beschluss-Test TOP ${stamp()}`,
+    });
+    await page.goto(`/versammlungen/${meetingId}/tops/${topId}`);
     await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
     // 2. Abstimmung — anfangs "Keine Beschlussvorlage".
@@ -251,83 +239,52 @@ test.describe("versammlungen happy path", () => {
   test("Voller Vote-Pfad: Einheit + Eigentümer + Vote + Feststellung → Beschluss-Sammlung-Eintrag", async ({
     page,
   }) => {
-    // 1. WEG anlegen.
+    // 1.–8. Vorbedingungen komplett über den REST-Seam: WEG, Einheit,
+    //    Eigentümer (Person + Ownership), laufende Versammlung, TOP und
+    //    Beschlussvorlage. Testgegenstand ist der Stimm- und
+    //    Feststellungs-Pfad im UI; die Anlage-Formulare decken der
+    //    Happy-Path-Test hier bzw. wegs.spec.ts/personen.spec.ts ab.
     const wegId = await createWegFixture(page, `E2E Vote ${stamp()}`, {
       street: "Voteweg",
     });
-
-    // 2. Erste Einheit anlegen — Direkt-Navigation für stabile Erst-Compile-
-    //    Zeiten auf Next 16 dev statt Link-Click.
-    await page.goto(`/wegs/${wegId}/einheiten/new`);
-    await expect(page).toHaveURL(/\/einheiten\/new$/);
-    await page.getByLabel(/Bezeichnung/).fill(`Whg ${stamp()}`);
-    await page.getByLabel("Zähler").fill("100");
-    await page.getByLabel("Nenner").fill("1000");
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
-
-    // 3. Eigentümerschaft öffnen über den frisch erstellten Einheit-Listeneintrag.
-    //    Der Link hat aria-label="Eigentümer von <Bezeichnung> anzeigen", das
-    //    den accessible name überschreibt — entsprechend matchen.
-    await page
-      .getByRole("link", { name: /Eigentümer von .* anzeigen/ })
-      .click();
-    await expect(page).toHaveURL(/\/eigentuemerschaft$/);
-
-    // 4. Eigentümer anlegen.
-    await page
-      .getByRole("link", { name: /Eigentümer hinzufügen/ })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/eigentuemerschaft\/new$/);
-    await page.getByLabel(/Vorname/).fill("Max");
-    await page.getByLabel(/Nachname/).fill(`Tester ${stamp()}`);
-    // Einzug-Datum defaultet auf heute.
-    await page
-      .getByRole("button", { name: /Eigentümer speichern/ })
-      .click();
-    await expect(page).toHaveURL(/\/eigentuemerschaft$/, { timeout: 15_000 });
-
-    // 5. Versammlung anlegen.
-    await page.goto(`/wegs/${wegId}/versammlungen/new`);
-    const meetingTitel = `Vote-ETV ${stamp()}`;
-    const terminVon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 16);
-    await page.getByLabel(/Titel/).fill(meetingTitel);
-    await page.getByLabel(/Termin von/).fill(terminVon);
-    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
-    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const unitId = await createUnitFixture(page, wegId, {
+      bezeichnung: `Whg ${stamp()}`,
     });
-    const meetingId = page.url().match(/\/versammlungen\/([0-9a-f-]{36})/)![1];
+    const personId = await createPersonFixture(page, {
+      vorname: "Max",
+      nachname: `Tester ${stamp()}`,
+    });
+    await createOwnershipFixture(page, { wegId, unitId, personId });
+
+    const meetingId = await createMeetingFixture(page, wegId, {
+      titel: `Vote-ETV ${stamp()}`,
+      terminVon: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
     await setMeetingStatus(page, meetingId, "laufend");
 
-    // 6. TOP anlegen.
-    await page.goto(`/versammlungen/${meetingId}/tops/new`);
-    await page.getByLabel(/Titel/).fill(`Vote-TOP ${stamp()}`);
-    await page.getByRole("button", { name: /TOP anlegen/ }).click();
-    await expect(page).toHaveURL(/\/tops\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const topId = await createTopFixture(page, meetingId, {
+      titel: `Vote-TOP ${stamp()}`,
+    });
+    const beschlussText = `Vote-Test-Beschluss ${stamp()}: WP wird verabschiedet.`;
+    await createResolutionFixture(page, {
+      meetingId,
+      agendaItemId: topId,
+      text: beschlussText,
+      mehrheitsTyp: "einfach",
+      stimmprinzip: "kopf",
+    });
 
-    // 7. Abstimmung öffnen (Button asChild Link).
+    // Abstimmung über den gerenderten Link der TOP-Seite öffnen — der Href
+    // bleibt die Quelle der Wahrheit für die Route.
+    await page.goto(`/versammlungen/${meetingId}/tops/${topId}`);
     const abstimmungHref = await page
       .getByRole("link", { name: /Zur Abstimmung/ })
       .getAttribute("href");
     await page.goto(abstimmungHref!);
     await expect(page).toHaveURL(/\/abstimmung$/);
 
-    // 8. Beschlussvorlage anlegen.
-    await page
-      .getByRole("link", { name: /Beschlussvorlage anlegen/ })
-      .click();
-    const beschlussText = `Vote-Test-Beschluss ${stamp()}: WP wird verabschiedet.`;
-    await page.getByLabel(/Beschlusstext/).fill(beschlussText);
-    await page.getByLabel(/Mehrheitstyp/).selectOption("einfach");
-    await page.getByLabel(/Stimmprinzip/).selectOption("kopf");
-    await page.getByRole("button", { name: /Beschluss anlegen/ }).click();
-    await expect(page).toHaveURL(/\/abstimmung$/, { timeout: 15_000 });
-
-    // 9. Eigentümer sichtbar in Stimm-Liste.
+    // 9. Beschlussvorlage + Eigentümer sichtbar in Stimm-Liste.
+    await expect(page.getByText(beschlussText)).toBeVisible();
     await expect(page.getByText("Max")).toBeVisible();
     await expect(page.getByText(/0 von 1 Stimmen abgegeben/)).toBeVisible();
 
@@ -372,23 +329,14 @@ test.describe("versammlungen happy path", () => {
   }) => {
     test.setTimeout(90_000);
 
-    // 1. WEG anlegen.
-    await createWegFixture(page, `E2E Protokoll-Null ${stamp()}`, {
+    // 1.–2. WEG + Versammlung als Fixtures — Testgegenstand ist das
+    //    serverseitige Protokoll-Gate, nicht die Anlage-Formulare.
+    const wegId = await createWegFixture(page, `E2E Protokoll-Null ${stamp()}`, {
       street: "Protokollweg",
     });
-
-    // 2. Versammlung anlegen.
-    const newMeetingHref = await page
-      .getByRole("link", { name: /Neue Versammlung anlegen/ })
-      .getAttribute("href");
-    await page.goto(newMeetingHref!);
-    await page.getByLabel(/Titel/).fill(`Protokoll-ETV ${stamp()}`);
-    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
-    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const meetingId = await createMeetingFixture(page, wegId, {
+      titel: `Protokoll-ETV ${stamp()}`,
     });
-    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
-    expect(meetingId).toBeTruthy();
 
     // 3. Direktaufruf vor Ende: Protokoll ist serverseitig gesperrt.
     await gotoDomReady(page, `/versammlungen/${meetingId}/protokoll`);
@@ -398,7 +346,7 @@ test.describe("versammlungen happy path", () => {
     ).not.toBeVisible();
 
     // 4. Nach beendetem Meeting ist der Review erreichbar.
-    await setMeetingStatus(page, meetingId!, "beendet");
+    await setMeetingStatus(page, meetingId, "beendet");
     await gotoDomReady(page, `/versammlungen/${meetingId}`);
     const protokollHref = await page
       .getByRole("link", { name: /^Protokoll$/ })
@@ -424,54 +372,19 @@ test.describe("versammlungen happy path", () => {
   test("Protokoll ki_entwurf — Unterzeichnen-Button sichtbar", async ({
     page,
   }) => {
-    // 1. WEG anlegen.
-    await createWegFixture(page, `E2E Protokoll-Entwurf ${stamp()}`, {
+    // 1.–2. WEG + beendete Versammlung als Fixtures.
+    const wegId = await createWegFixture(page, `E2E Protokoll-Entwurf ${stamp()}`, {
       street: "Entwurfweg",
     });
-
-    // 2. Versammlung anlegen.
-    const newMeetingHref = await page
-      .getByRole("link", { name: /Neue Versammlung anlegen/ })
-      .getAttribute("href");
-    await page.goto(newMeetingHref!);
-    await page.getByLabel(/Titel/).fill(`Entwurf-ETV ${stamp()}`);
-    await page.getByRole("button", { name: /Versammlung anlegen/ }).click();
-    await expect(page).toHaveURL(/\/versammlungen\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const meetingId = await createMeetingFixture(page, wegId, {
+      titel: `Entwurf-ETV ${stamp()}`,
     });
-    const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
-    expect(meetingId).toBeTruthy();
-    await setMeetingStatus(page, meetingId!, "beendet");
+    await setMeetingStatus(page, meetingId, "beendet");
 
-    // 3. Protokoll-Row mit status='ki_entwurf' direkt via Supabase REST API
-    //    seeden — Agent läuft nicht im E2E-Kontext, daher kein Click auf
-    //    "Protokoll generieren". Supabase-Session-Cookie enthält das JWT.
-    const accessToken = await getAccessToken(page);
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    expect(supabaseUrl).toBeTruthy();
-    expect(supabaseKey).toBeTruthy();
-
-    const insertRes = await page.request.post(
-      `${supabaseUrl}/rest/v1/protocol`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-        },
-        data: {
-          meeting_id: meetingId,
-          status: "ki_entwurf",
-          text: "# Test Protokoll\n\n## Entwurf\n\nDieser Entwurf wurde vom KI-System generiert.",
-          generierungs_quelle: "ki",
-          // tenant_id wird via RLS aus dem JWT gesetzt — nicht mitsenden.
-        },
-      },
-    );
-    expect(insertRes.ok()).toBeTruthy();
+    // 3. Protokoll-Row mit status='ki_entwurf' als Fixture seeden — der
+    //    Agent läuft nicht im E2E-Kontext, daher kein Click auf
+    //    "Protokoll generieren".
+    await createProtocolFixture(page, { meetingId });
 
     // 4. Protokoll-Seite direkt aufrufen.
     await page.goto(`/versammlungen/${meetingId}/protokoll`);

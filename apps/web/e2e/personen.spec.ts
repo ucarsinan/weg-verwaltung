@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createPersonFixture, createUnitFixture } from "./helpers/fixtures";
 import { createWegFixture } from "./helpers/weg";
 
 // Personen-CRUD + Eigentümerschaft E2E gegen Cloud Frankfurt.
@@ -48,21 +49,20 @@ test.describe("personen CRUD", () => {
   test("Person bearbeiten — Änderungen sind nach Redirect sichtbar", async ({
     page,
   }) => {
-    // 1. WEG + Person als Fixture anlegen.
+    // 1.–2. WEG + Person als Fixtures anlegen — das Anlage-Formular deckt
+    //    der erste Test ab; Testgegenstand hier ist der Edit-Flow.
+    //    `person` ist tenant-scoped (WEG-Seite listet ohne WEG-Filter),
+    //    die REST-Fixture erscheint also nach dem Reload in der Karte.
     const wegLabel = `E2E Person-Edit ${stamp()}`;
-    await createWegFixture(page, wegLabel, {
+    const wegId = await createWegFixture(page, wegLabel, {
       street: "Editweg",
     });
-
-    // 2. Person anlegen.
     const nachnameAlt = `Altmann-${stamp()}`;
-    await page.getByRole("link", { name: /Person anlegen/ }).first().click();
-    await page.getByLabel(/Vorname/).fill("Bernd");
-    await page.getByLabel(/Nachname/).fill(nachnameAlt);
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createPersonFixture(page, {
+      vorname: "Bernd",
+      nachname: nachnameAlt,
     });
+    await page.goto(`/wegs/${wegId}`);
 
     // 3. "Bearbeiten"-Link für die angelegte Person klicken.
     //    aria-label="<Vorname> <Nachname> bearbeiten" — genaues Match nötig.
@@ -122,27 +122,18 @@ test.describe("eigentümerschaft", () => {
     // Bereits durch den Vote-Pfad in versammlungen.spec.ts abgedeckt (Steps 1–4).
     // Dieser Test verifiziert den Flow isoliert ohne Versammlung.
 
-    // 1. WEG anlegen.
+    // 1.–2. WEG + Einheit als Fixtures — das Einheiten-Formular deckt
+    //    wegs.spec.ts ab; Testgegenstand hier ist die Eigentümer-Anlage.
     const wegId = await createWegFixture(page, `E2E Eigentümer ${stamp()}`, {
       street: "Eigentümerweg",
     });
-
-    // 2. Einheit anlegen.
-    await page.goto(`/wegs/${wegId}/einheiten/new`);
-    await page.getByLabel(/Bezeichnung/).fill(`Whg. ${stamp()}`);
-    await page.getByLabel("Zähler").fill("250");
-    await page.getByLabel("Nenner").fill("1000");
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    const unitId = await createUnitFixture(page, wegId, {
+      bezeichnung: `Whg. ${stamp()}`,
+      meaZaehler: 250,
     });
 
     // 3. Eigentümerschaft öffnen.
-    const eigentuemerLink = page.getByRole("link", {
-      name: /Eigentümer von .* anzeigen/,
-    });
-    const eigentuemerHref = await eigentuemerLink.getAttribute("href");
-    await page.goto(eigentuemerHref!);
+    await page.goto(`/wegs/${wegId}/einheiten/${unitId}/eigentuemerschaft`);
     await expect(page).toHaveURL(/\/eigentuemerschaft$/);
 
     // 4. "Kein aktiver Eigentümer" — Empty-State sichtbar.
@@ -174,36 +165,22 @@ test.describe("eigentümerschaft", () => {
   test("Co-Eigentümer via Checkbox — beide Namen erscheinen in der aktiven Eigentümerliste", async ({
     page,
   }) => {
-    // 1. WEG anlegen.
+    // 1.–3. WEG, Co-Person und Einheit als Fixtures — Testgegenstand ist
+    //    die Co-Eigentümer-Auswahl per Checkbox, nicht die Anlage-Formulare.
+    //    `person` ist tenant-scoped, die Fixture-Person erscheint also in
+    //    der Checkbox-Liste des Eigentümerschaft-Formulars.
     const wegId = await createWegFixture(page, `E2E Co-Eigentümer ${stamp()}`, {
       street: "Mitbesitzweg",
     });
-
-    // 2. Erste Person anlegen (wird als Co-Eigentümer per Checkbox ausgewählt).
-    await page.goto(`/wegs/${wegId}/personen/new`);
     const co1 = `CoOwner1-${stamp()}`;
-    await page.getByLabel(/Vorname/).fill("Dieter");
-    await page.getByLabel(/Nachname/).fill(co1);
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
-    });
-
-    // 3. Einheit anlegen.
-    await page.goto(`/wegs/${wegId}/einheiten/new`);
-    await page.getByLabel(/Bezeichnung/).fill(`Co-Whg. ${stamp()}`);
-    await page.getByLabel("Zähler").fill("300");
-    await page.getByLabel("Nenner").fill("1000");
-    await page.getByRole("button", { name: /Speichern/ }).click();
-    await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, {
-      timeout: 15_000,
+    await createPersonFixture(page, { vorname: "Dieter", nachname: co1 });
+    const unitId = await createUnitFixture(page, wegId, {
+      bezeichnung: `Co-Whg. ${stamp()}`,
+      meaZaehler: 300,
     });
 
     // 4. Eigentümerschaft öffnen.
-    const eigentuemerHref = await page
-      .getByRole("link", { name: /Eigentümer von .* anzeigen/ })
-      .getAttribute("href");
-    await page.goto(eigentuemerHref!);
+    await page.goto(`/wegs/${wegId}/einheiten/${unitId}/eigentuemerschaft`);
     await expect(page).toHaveURL(/\/eigentuemerschaft$/);
 
     // 5. Neuen Eigentümerschaft-Eintrag anlegen: bestehende Person per Checkbox

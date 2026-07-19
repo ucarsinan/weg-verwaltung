@@ -300,3 +300,77 @@ export async function setMeetingStatus(
 ): Promise<void> {
   await patchRows(page, "meeting", `id=eq.${meetingId}`, { status });
 }
+
+/**
+ * Protokoll-Row direkt seeden — der Agent läuft nicht im E2E-Kontext,
+ * daher kein Klick auf "Protokoll generieren". tenant_id setzt RLS aus
+ * dem JWT; nicht mitsenden.
+ */
+export async function createProtocolFixture(
+  page: Page,
+  input: {
+    meetingId: string;
+    status?: "ki_entwurf" | "unterzeichnet";
+    text?: string;
+  },
+): Promise<void> {
+  await insertRow(page, "protocol", {
+    meeting_id: input.meetingId,
+    status: input.status ?? "ki_entwurf",
+    text:
+      input.text ??
+      "# Test Protokoll\n\n## Entwurf\n\nDieser Entwurf wurde vom KI-System generiert.",
+    generierungs_quelle: "ki",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Domänen-Fixtures (Finanz-Kette)
+// ---------------------------------------------------------------------------
+
+export async function createWirtschaftsplanFixture(
+  page: Page,
+  input: {
+    wegId: string;
+    jahr: number;
+    bezeichnung?: string;
+    gesamtkosten: number;
+  },
+): Promise<string> {
+  const { id } = await insertRow(page, "wirtschaftsplan", {
+    weg_id: input.wegId,
+    jahr: input.jahr,
+    bezeichnung: input.bezeichnung ?? `Wirtschaftsplan ${input.jahr}`,
+    gesamtkosten: input.gesamtkosten,
+  });
+  return id;
+}
+
+/**
+ * Aktivierung über dieselbe RPC, die auch die Server Action ruft
+ * (`activate_wirtschaftsplan`, docs/07-finance-lifecycle.md) — erst sie
+ * erzeugt Sollstellungen. Für Tests, deren Gegenstand die Aktivierung
+ * selbst ist, stattdessen helpers/finanzen.ts (UI-Pfad) verwenden.
+ */
+export async function activateWirtschaftsplanFixture(
+  page: Page,
+  planId: string,
+): Promise<void> {
+  const ctx = await getSupabaseRequestContext(page);
+
+  const response = await page.request.post(
+    `${ctx.url}/rest/v1/rpc/activate_wirtschaftsplan`,
+    {
+      headers: {
+        apikey: ctx.key,
+        Authorization: `Bearer ${ctx.token}`,
+        "Content-Type": "application/json",
+      },
+      data: { p_wirtschaftsplan_id: planId },
+    },
+  );
+  expect(
+    response.ok(),
+    `activate_wirtschaftsplan(${planId}) failed: ${response.status()}`,
+  ).toBe(true);
+}

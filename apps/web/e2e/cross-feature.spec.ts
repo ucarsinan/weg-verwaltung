@@ -1,29 +1,23 @@
 import { test, expect, Page } from "@playwright/test";
-import { activateWirtschaftsplan } from "./helpers/finanzen";
 import {
+  activateWirtschaftsplanFixture,
+  createUnitFixture,
+  createWirtschaftsplanFixture,
   decodeTenantIdFromJwt,
   getSupabaseRequestContext,
   getTokenFromAuthFile,
 } from "./helpers/fixtures";
-import { fillWegAddress } from "./helpers/weg";
+import { createWegFixture } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
 
+// Setup über den REST-Seam (helpers/fixtures.ts) — die Anlage-Formulare
+// sind Testgegenstand von wegs.spec.ts/finanzen.spec.ts, nicht dieses Files.
 async function createTestWeg(page: Page, label: string): Promise<string> {
-  await page.goto("/wegs/new");
-  await page.getByLabel(/Name der WEG/).fill(`Cross ${label} ${Date.now()}`);
-  await fillWegAddress(page, { street: "Crossweg", city: "Teststadt" });
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  // 30s, not the usual 15s: on the Free-plan Cloud project, this navigation
-  // can land right after finanzen.spec.ts's 100+-unit bulk-write test when
-  // files run in a non-standard order, and Cloud latency has been observed
-  // to blow a 15s budget there (see docs/agent-reports/2026-07-14-worker-
-  // general-cloud-e2e-first-run.md, "reihenfolgeabhaengige Flakiness").
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
-
-  const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
-  if (!match) throw new Error("Could not extract WEG ID from URL");
-  return match[1];
+  return createWegFixture(page, `Cross ${label} ${Date.now()}`, {
+    street: "Crossweg",
+    city: "Teststadt",
+  });
 }
 
 async function createTestUnit(
@@ -33,36 +27,25 @@ async function createTestUnit(
   zaehler: string,
   nenner = "1000",
 ): Promise<string> {
-  const bezeichnung = `Cross ${label} ${Date.now()}`;
-
-  await page.goto(`/wegs/${wegId}/einheiten/new`);
-  await page.getByLabel(/Bezeichnung/).fill(bezeichnung);
-  await page.getByLabel("Zähler").fill(zaehler);
-  await page.getByLabel("Nenner").fill(nenner);
-  await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}$`), {
-    timeout: 15_000,
+  return createUnitFixture(page, wegId, {
+    bezeichnung: `Cross ${label} ${Date.now()}`,
+    meaZaehler: Number(zaehler),
+    meaNenner: Number(nenner),
   });
-
-  return bezeichnung;
 }
 
 async function createWirtschaftsplan(
   page: Page,
   wegId: string,
-  jahr: string,
-  gesamtkosten: string,
-): Promise<void> {
-  const bezeichnung = `Cross Plan ${jahr}`;
-  await page.goto(`/wegs/${wegId}/finanzen/new`);
-  await page.getByLabel(/jahr/i).fill(jahr);
-  await page.getByLabel(/bezeichnung/i).fill(bezeichnung);
-  await page.getByLabel(/gesamtkosten/i).fill(gesamtkosten);
-  await page.getByRole("button", { name: /speichern/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen$`), {
-    timeout: 15_000,
+  jahr: number,
+  gesamtkosten: number,
+): Promise<string> {
+  return createWirtschaftsplanFixture(page, {
+    wegId,
+    jahr,
+    bezeichnung: `Cross Plan ${jahr}`,
+    gesamtkosten,
   });
-  await expect(page.getByText(bezeichnung)).toBeVisible();
 }
 
 test.describe("Tier 3: Cross-Feature Interactions", () => {
@@ -86,19 +69,11 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     // it — querying audit_event unfiltered and accepting 404 as a pass
     // proved nothing about audit content.
     const wegId = await createTestWeg(page, "AuditFinanz");
-    await createWirtschaftsplan(page, wegId, "2040", "6000");
+    const planId = await createWirtschaftsplan(page, wegId, 2040, 6000);
 
     const { token } = await getSupabaseRequestContext(page);
-    const planRes = await page.request.get(
-      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2040`,
-      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
-    );
-    expect(planRes.ok()).toBe(true);
-    const [plan] = (await planRes.json()) as Array<{ id: string }>;
-    expect(plan?.id).toBeTruthy();
-
     const auditRes = await page.request.get(
-      `${url}/rest/v1/audit_event?select=id,entity_typ,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${plan.id}`,
+      `${url}/rest/v1/audit_event?select=id,entity_typ,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${planId}`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
     expect(auditRes.ok()).toBe(true);
@@ -117,20 +92,13 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     const wegId = await createTestWeg(page, "PlanUpdate");
     await createTestUnit(page, wegId, "UnitA", "100");
     await createTestUnit(page, wegId, "UnitB", "200");
-    await createWirtschaftsplan(page, wegId, "2031", "12000");
+    const planId = await createWirtschaftsplan(page, wegId, 2031, 12000);
 
     const { token } = await getSupabaseRequestContext(page);
-    const planRes = await page.request.get(
-      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2031`,
-      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
-    );
-    expect(planRes.ok()).toBe(true);
-    const [plan] = (await planRes.json()) as Array<{ id: string }>;
-    expect(plan?.id).toBeTruthy();
-    await activateWirtschaftsplan(page, wegId, plan.id);
+    await activateWirtschaftsplanFixture(page, planId);
 
     const beforeRes = await page.request.get(
-      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plan.id}&select=betrag`,
+      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=betrag`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
     expect(beforeRes.ok()).toBe(true);
@@ -142,7 +110,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(beforeAmounts).toContain(200);
 
     const updateRes = await page.request.patch(
-      `${url}/rest/v1/wirtschaftsplan?id=eq.${plan.id}`,
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${planId}`,
       {
         data: { gesamtkosten: 24000 },
         headers: {
@@ -155,7 +123,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(updateRes.status()).toBeGreaterThanOrEqual(400);
 
     const afterRes = await page.request.get(
-      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plan.id}&select=betrag`,
+      `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=betrag`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
     expect(afterRes.ok()).toBe(true);
@@ -214,29 +182,14 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
 
   test("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "UnitMeaUpdate");
-    const unitName = await createTestUnit(page, wegId, "UnitA", "100");
-    await createWirtschaftsplan(page, wegId, "2032", "12000");
+    const unitId = await createTestUnit(page, wegId, "UnitA", "100");
+    const planId = await createWirtschaftsplan(page, wegId, 2032, 12000);
 
     const { token } = await getSupabaseRequestContext(page);
-    const planRes = await page.request.get(
-      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2032`,
-      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
-    );
-    expect(planRes.ok()).toBe(true);
-    const [plan] = (await planRes.json()) as Array<{ id: string }>;
-    expect(plan?.id).toBeTruthy();
-    await activateWirtschaftsplan(page, wegId, plan.id);
-
-    const unitRes = await page.request.get(
-      `${url}/rest/v1/unit?select=id&weg_id=eq.${wegId}&bezeichnung=eq.${encodeURIComponent(unitName)}`,
-      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
-    );
-    expect(unitRes.ok()).toBe(true);
-    const [unit] = (await unitRes.json()) as Array<{ id: string }>;
-    expect(unit?.id).toBeTruthy();
+    await activateWirtschaftsplanFixture(page, planId);
 
     const beforeRes = await page.request.get(
-      `${url}/rest/v1/sollstellung?unit_id=eq.${unit.id}&select=betrag`,
+      `${url}/rest/v1/sollstellung?unit_id=eq.${unitId}&select=betrag`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
     expect(beforeRes.ok()).toBe(true);
@@ -247,7 +200,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(beforeAmounts.every((amount) => amount === 100)).toBe(true);
 
     const updateRes = await page.request.patch(
-      `${url}/rest/v1/unit?id=eq.${unit.id}`,
+      `${url}/rest/v1/unit?id=eq.${unitId}`,
       {
         data: { mea_zaehler: 150 },
         headers: {
@@ -260,7 +213,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(updateRes.status()).toBeGreaterThanOrEqual(400);
 
     const afterRes = await page.request.get(
-      `${url}/rest/v1/sollstellung?unit_id=eq.${unit.id}&select=betrag`,
+      `${url}/rest/v1/sollstellung?unit_id=eq.${unitId}&select=betrag`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
     expect(afterRes.ok()).toBe(true);
