@@ -35,7 +35,11 @@ class ProtokollSummary(BaseModel):
     id: str = Field(description="UUID of the protocol row.")
     meeting_id: str = Field(description="FK to the meeting aggregate (§ Section 1).")
     status: str = Field(
-        description="Lifecycle state: ki_entwurf | verwalter_revision | unterzeichnet.",
+        description=(
+            "Lifecycle state (canonical set per migration 0032, mirrored in "
+            "apps/web modules/versammlung/protokoll-status.ts): "
+            "awaiting_review | ki_entwurf | verwalter_revision | unterzeichnet."
+        ),
     )
     text_excerpt: str = Field(
         description="First 500 chars of the protocol text — enough to spot recurring TOPs.",

@@ -1,54 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { setMeetingStatus } from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
-import type { Page } from "@playwright/test";
 
 // Kern-Demo-Workflow für die WEG-Verwaltung (Screencast & Dokumentation).
 // Läuft als geseedeter Tenant-Admin.
 test.describe.configure({ mode: "serial" });
 
 const stamp = () => Date.now().toString().slice(-4);
-
-async function updateMeetingStatus(
-  page: Page,
-  meetingId: string,
-  status: "laufend" | "beendet",
-): Promise<void> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  expect(supabaseUrl).toBeTruthy();
-  expect(supabaseKey).toBeTruthy();
-
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"),
-  );
-  expect(sbCookie).toBeTruthy();
-
-  let cookieValue = decodeURIComponent(sbCookie!.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-
-  const tokenData = JSON.parse(cookieValue);
-  const accessToken: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-  expect(accessToken).toBeTruthy();
-
-  const updateRes = await page.request.patch(
-    `${supabaseUrl}/rest/v1/meeting?id=eq.${meetingId}`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      data: { status },
-    },
-  );
-  expect(updateRes.ok()).toBeTruthy();
-}
 
 test("Demonstration des WEG-Verwaltung Kernworkflows", async ({ page }) => {
   test.setTimeout(120_000);
@@ -162,7 +120,7 @@ test("Demonstration des WEG-Verwaltung Kernworkflows", async ({ page }) => {
 
   // Versammlungsstatus über API auf "laufend" schalten
   console.log("→ Versammlung wird gestartet...");
-  await updateMeetingStatus(page, meetingId, "laufend");
+  await setMeetingStatus(page, meetingId, "laufend");
   await page.goto(meetingUrl);
   await page.waitForTimeout(delayTime);
 

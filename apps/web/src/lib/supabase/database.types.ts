@@ -317,6 +317,74 @@ export type Database = Overwrite<
                 typ: BeschlussSammlungTyp;
               }[];
             };
+            // Audit-Console-Read-API (Migration 0050) — Signaturen manuell
+            // nachgetragen, weil database.types.gen.ts diese RPCs noch nicht
+            // kennt (Regenerieren erfordert einen Cloud-Zugriff).
+            audit_event_feed: {
+              Args: {
+                p_from?: string | null;
+                p_to?: string | null;
+                p_actor_type?: string | null;
+                p_entity_typ?: string | null;
+                p_action?: string | null;
+                p_query?: string | null;
+                p_flag?: string | null;
+                p_cursor_created_at?: string | null;
+                p_cursor_seq?: number | null;
+                p_limit?: number;
+              };
+              Returns: {
+                id: string;
+                seq: number;
+                created_at: string;
+                actor_type: string | null;
+                actor_user_id: string | null;
+                db_role: string | null;
+                entity_typ: string | null;
+                entity_id: string | null;
+                action: string | null;
+                summary: string | null;
+                entity_label: string | null;
+                actor_label: string | null;
+                risk_flags: string[] | null;
+                payload_masked: Json | null;
+                can_reveal_payload: boolean;
+              }[];
+            };
+            audit_reveal_event_payload: {
+              Args: { p_event_id: string; p_created_at: string };
+              Returns: Json;
+            };
+            audit_integrity_status: {
+              Args: Record<PropertyKey, never>;
+              Returns: {
+                id: string;
+                status: string;
+                checked_at: string | null;
+                checked_by: string | null;
+                seq_from: number | null;
+                seq_to: number | null;
+                rows_checked: number;
+                checkpoint: Json | null;
+                first_failure: Json | null;
+                error_message: string | null;
+              }[];
+            };
+            audit_verify_chain: {
+              Args: Record<PropertyKey, never>;
+              Returns: {
+                id: string;
+                status: string;
+                checked_at: string | null;
+                checked_by: string | null;
+                seq_from: number | null;
+                seq_to: number | null;
+                rows_checked: number;
+                checkpoint: Json | null;
+                first_failure: Json | null;
+                error_message: string | null;
+              }[];
+            };
           }
         >;
       }

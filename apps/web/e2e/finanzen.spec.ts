@@ -1,29 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
+import { activateWirtschaftsplan } from "./helpers/finanzen";
+import { getSupabaseRequestContext } from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-async function getAuthToken(page: Page) {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
-  );
-  if (!sbCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-  let cookieValue = decodeURIComponent(sbCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(cookieValue);
-  const token: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return { token, url, key };
-}
 
 async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
@@ -31,7 +11,12 @@ async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.getByLabel(/Name der WEG/).fill(name);
   await fillWegAddress(page, { street: "Finanzweg" });
   await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  // 30s, not the usual 15s: on the Free-plan Cloud project, later tests in
+  // this same file's bulk-write section can leave Cloud under enough load
+  // that a subsequent 15s navigation budget is too tight (see
+  // docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md,
+  // "reihenfolgeabhaengige Flakiness").
+  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
   const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
   if (!match) throw new Error("Could not extract WEG ID from URL");
   return match[1];
@@ -60,7 +45,7 @@ async function getPlanIdByWegAndYear(
   wegId: string,
   jahr: string,
 ): Promise<string> {
-  const { token, url, key } = await getAuthToken(page);
+  const { token, url, key } = await getSupabaseRequestContext(page);
   const planRes = await page.request.get(
     `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.${jahr}`,
     { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -109,7 +94,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
 
   test("finanz-view-page: /wegs/[id]/finanzen page and creation form are accessible", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen`);
-    await expect(page.getByRole("heading", { name: /wirtschaftspläne/i })).toBeVisible({ timeout: 5000 });
+    // exact: true — the page title "Wirtschaftspläne" and the card title
+    // "Erstellte Wirtschaftspläne" both render as headings (CardTitle is a
+    // real <h3> since a0de727); a substring match hits both and violates
+    // Playwright's strict mode.
+    await expect(
+      page.getByRole("heading", { name: "Wirtschaftspläne", exact: true }),
+    ).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole("link", { name: /wirtschaftsplan erstellen/i })).toBeVisible();
   });
 
@@ -119,27 +110,25 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const descInput = page.getByLabel(/bezeichnung/i);
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await yearInput.isVisible()) {
-      await yearInput.fill("2026");
-      await descInput.fill("Wirtschaftsplan 2026");
-      await costsInput.fill("12000");
-      await expect(yearInput).toHaveValue("2026");
-      await expect(descInput).toHaveValue("Wirtschaftsplan 2026");
-      await expect(costsInput).toHaveValue("12000");
-    }
+    await expect(yearInput).toBeVisible();
+    await yearInput.fill("2026");
+    await descInput.fill("Wirtschaftsplan 2026");
+    await costsInput.fill("12000");
+    await expect(yearInput).toHaveValue("2026");
+    await expect(descInput).toHaveValue("Wirtschaftsplan 2026");
+    await expect(costsInput).toHaveValue("12000");
   });
 
   test("finanz-calculate-hausgeld: UI dynamically calculates monthly Hausgeld based on MEA", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("12000");
-      // Unit A has 100/1000 MEA -> 10% of 12000 = 1200 / 12 months = 100€
-      // Unit B has 200/1000 MEA -> 20% of 12000 = 2400 / 12 months = 200€
-      await expect(page.getByText("100,00")).toBeVisible();
-      await expect(page.getByText("200,00")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("12000");
+    // Unit A has 100/1000 MEA -> 10% of 12000 = 1200 / 12 months = 100€
+    // Unit B has 200/1000 MEA -> 20% of 12000 = 2400 / 12 months = 200€
+    await expect(page.getByText("100,00")).toBeVisible();
+    await expect(page.getByText("200,00")).toBeVisible();
   });
 
   test("finanz-submit-plan: saving creates plan and redirects", async ({ page }) => {
@@ -224,9 +213,8 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
 
   // --- Feature 4: Sollstellung Generation ---
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("sollstellung-generate-on-save: automatically creates 12 monthly entries for each unit", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+  test("sollstellung-generate-on-activate: activating creates 12 monthly entries for each unit", async ({ page }) => {
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Generate");
     await createTestUnit(page, localWegId, "GenA", "100", "1000");
     await createTestUnit(page, localWegId, "GenB", "200", "1000");
@@ -237,6 +225,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Generate",
       "12000",
     );
+    await activateWirtschaftsplan(page, localWegId, planId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=unit_id,monat,betrag`,
@@ -248,9 +237,8 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     expect(new Set(data.map((row) => row.monat))).toEqual(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("sollstellung-verify-amounts: entry amounts match monthly calculated Hausgeld formula", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+  test("sollstellung-verify-amounts: entry amounts match monthly calculated Hausgeld formula", async ({ page }) => {
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Amounts");
     await createTestUnit(page, localWegId, "AmountA", "100", "1000");
     await createTestUnit(page, localWegId, "AmountB", "200", "1000");
@@ -261,6 +249,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Amounts",
       "12000",
     );
+    await activateWirtschaftsplan(page, localWegId, planId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=betrag`,
@@ -274,21 +263,45 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     expect(amounts.filter((amount) => amount === 200)).toHaveLength(12);
   });
 
-  // Requires migration 0039 on the remote Cloud DB.
-  test.skip("sollstellung-view-details: monthly Sollstellungen are displayed in unit details", async ({ page }) => {
-    // Navigate to unit list or unit details page
-    await page.goto(`/wegs/${wegId}`);
-    const unitLink = page.getByRole("link", { name: /whg a/i }).first();
-    if (await unitLink.isVisible()) {
-      await unitLink.click();
-      await expect(page.getByText("Sollstellungen")).toBeVisible();
-      await expect(page.getByText("100,00")).toBeVisible();
-    }
+  test("sollstellung-view-details: monthly Sollstellungen are displayed in unit details", async ({ page }) => {
+    // Eigene WEG statt der geteilten `wegId`: der Test haengt sonst davon ab,
+    // dass ein anderer Test vorher zufaellig einen aktivierten Plan angelegt hat.
+    const { token, url, key } = await getSupabaseRequestContext(page);
+    const localWegId = await createTestWeg(page, "Details");
+    const unitName = await createTestUnit(page, localWegId, "Details", "100", "1000");
+    const planId = await createTestWirtschaftsplan(
+      page,
+      localWegId,
+      "2039",
+      "Wirtschaftsplan Details",
+      "12000",
+    );
+    await activateWirtschaftsplan(page, localWegId, planId);
+
+    const unitRes = await page.request.get(
+      `${url}/rest/v1/unit?select=id&weg_id=eq.${localWegId}&bezeichnung=eq.${encodeURIComponent(unitName)}`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(unitRes.ok()).toBe(true);
+    const [unit] = (await unitRes.json()) as Array<{ id: string }>;
+    expect(unit?.id).toBeTruthy();
+
+    // Die Sollstellungen stehen auf der Eigentuemerschafts-Seite der Einheit.
+    // Der Einheiten-Link auf der WEG-Seite fuehrt dagegen ins Bearbeiten-Formular
+    // — dort gibt es keine Sollstellungen, und genau darauf hat der Test frueher
+    // vergeblich gewartet (verdeckt durch ein `if (isVisible())` drumherum).
+    await page.goto(`/wegs/${localWegId}/einheiten/${unit.id}/eigentuemerschaft`);
+    await expect(
+      page.getByText("Monatliche Soll-Zahlungen für diese Wohneinheit."),
+    ).toBeVisible();
+    // 12000 * (100/1000) / 12 = 100,00 pro Monat — als echte Tabellenzeile.
+    await expect(
+      page.getByRole("row").filter({ hasText: "100,00" }).first(),
+    ).toBeVisible();
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("sollstellung-no-duplicates: generator is idempotent for existing Sollstellungen", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+  test("sollstellung-no-duplicates: generator is idempotent for existing Sollstellungen", async ({ page }) => {
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Idempotent");
     await createTestUnit(page, localWegId, "IdempotentA", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -298,6 +311,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Idempotent",
       "12000",
     );
+    await activateWirtschaftsplan(page, localWegId, planId);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id&order=id.asc`,
@@ -305,15 +319,20 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     );
     expect(beforeRes.ok()).toBe(true);
     const beforeRows = await beforeRes.json() as Array<{ id: string }>;
+    expect(beforeRows).toHaveLength(12);
 
-    const rpcRes = await page.request.post(
+    // Direkte Generierung ist laut docs/07-finance-lifecycle.md verboten
+    // ("Sollstellungs-Erzeugung ausserhalb von activate_wirtschaftsplan").
+    // Ob die RPC den Aufruf ablehnt oder idempotent schluckt, ist hier egal —
+    // entscheidend ist, dass keine Duplikate entstehen. Deshalb bewusst kein
+    // Assert auf den Status.
+    await page.request.post(
       `${url}/rest/v1/rpc/generate_sollstellungen`,
       {
         data: { p_wirtschaftsplan_id: planId },
         headers: { apikey: key, Authorization: `Bearer ${token}` },
       },
     );
-    expect(rpcRes.ok()).toBe(true);
 
     const afterRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id&order=id.asc`,
@@ -324,9 +343,8 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     expect(afterRows).toEqual(beforeRows);
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("sollstellung-history-preserved: deleting a posted plan is blocked", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+  test("sollstellung-history-preserved: deleting a posted plan is blocked", async ({ page }) => {
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "DeleteBlocked");
     await createTestUnit(page, localWegId, "DeleteBlocked", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -336,6 +354,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Delete Blocked",
       "12000",
     );
+    await activateWirtschaftsplan(page, localWegId, planId);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=id`,
@@ -359,15 +378,14 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const yearInput = page.getByLabel(/jahr/i);
     const submitBtn = page.getByRole("button", { name: /speichern/i });
 
-    if (await yearInput.isVisible()) {
-      await yearInput.fill("-2026");
-      await submitBtn.click();
-      await expect(page.locator("#jahr-error")).toBeVisible();
+    await expect(yearInput).toBeVisible();
+    await yearInput.fill("-2026");
+    await submitBtn.click();
+    await expect(page.locator("#jahr-error")).toBeVisible();
 
-      await yearInput.fill("9999");
-      await submitBtn.click();
-      await expect(page.locator("#jahr-error")).toBeVisible();
-    }
+    await yearInput.fill("9999");
+    await submitBtn.click();
+    await expect(page.locator("#jahr-error")).toBeVisible();
   });
 
   test("finanz-wp-negative-gesamtkosten: validation error for zero or negative annual costs", async ({ page }) => {
@@ -375,15 +393,14 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const costsInput = page.getByLabel(/gesamtkosten/i);
     const submitBtn = page.getByRole("button", { name: /speichern/i });
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("-1000");
-      await submitBtn.click();
-      await expect(page.locator("#gesamtkosten-error")).toBeVisible();
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("-1000");
+    await submitBtn.click();
+    await expect(page.locator("#gesamtkosten-error")).toBeVisible();
 
-      await costsInput.fill("0");
-      await submitBtn.click();
-      await expect(page.locator("#gesamtkosten-error")).toBeVisible();
-    }
+    await costsInput.fill("0");
+    await submitBtn.click();
+    await expect(page.locator("#gesamtkosten-error")).toBeVisible();
   });
 
   // Current Unit creation requires positive MEA values; zero-MEA units are not representable via UI.
@@ -409,30 +426,27 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${localWegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("12000");
-      // 30% of 12000 = 3600 / 12 = 300€
-      await expect(page.getByText("300,00")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("12000");
+    // 30% of 12000 = 3600 / 12 = 300€
+    await expect(page.getByText("300,00")).toBeVisible();
   });
 
   test("finanz-wp-large-costs: overflow and decimal precision handling for very large annual costs", async ({ page }) => {
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      // Very large amount: 999999999.99
-      await costsInput.fill("999999999.99");
-      await page.getByLabel(/jahr/i).fill("2027");
-      await page.getByLabel(/bezeichnung/i).fill("Large Cost Plan");
-      await page.getByRole("button", { name: /speichern/i }).click();
-      await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
-    }
+    await expect(costsInput).toBeVisible();
+    // Very large amount: 999999999.99
+    await costsInput.fill("999999999.99");
+    await page.getByLabel(/jahr/i).fill("2027");
+    await page.getByLabel(/bezeichnung/i).fill("Large Cost Plan");
+    await page.getByRole("button", { name: /speichern/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("sollstellung-partial-year: generates all 12 months even if plan is created mid-year", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+  test("sollstellung-partial-year: generates all 12 months even if plan is created mid-year", async ({ page }) => {
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "PartialYear");
     await createTestUnit(page, localWegId, "Partial", "100", "1000");
     const planId = await createTestWirtschaftsplan(
@@ -442,6 +456,8 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Partial Year",
       "12000",
     );
+    await activateWirtschaftsplan(page, localWegId, planId);
+
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${planId}&select=monat`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -463,13 +479,12 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${localWegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await costsInput.fill("1000");
-      // 1000 * (333 / 1000) / 12 = 27.75
-      // 1000 * (334 / 1000) / 12 = 27.83
-      await expect(page.getByText("27,75")).toHaveCount(2);
-      await expect(page.getByText("27,83")).toBeVisible();
-    }
+    await expect(costsInput).toBeVisible();
+    await costsInput.fill("1000");
+    // 1000 * (333 / 1000) / 12 = 27.75
+    // 1000 * (334 / 1000) / 12 = 27.83
+    await expect(page.getByText("27,75")).toHaveCount(2);
+    await expect(page.getByText("27,83")).toBeVisible();
   });
 
   // Current Unit creation requires positive MEA values; missing-MEA units are not representable via UI.
@@ -491,7 +506,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   });
 
   test("sollstellung-overlapping-years: adjacent years generate independent Sollstellung entries", async ({ page }) => {
-    const { token, url, key } = await getAuthToken(page);
+    const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "AdjacentYears");
     await createTestUnit(page, localWegId, "Adjacent", "100", "1000");
     const firstPlanId = await createTestWirtschaftsplan(
@@ -508,12 +523,24 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Wirtschaftsplan Adjacent 2045",
       "24000",
     );
+    await activateWirtschaftsplan(page, localWegId, firstPlanId);
+    await activateWirtschaftsplan(page, localWegId, secondPlanId);
 
     const res = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=in.(${firstPlanId},${secondPlanId})&select=wirtschaftsplan_id,betrag`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
     );
-    expect(res.ok() || res.status() === 404).toBe(true);
+    expect(res.ok()).toBe(true);
+    const rows = (await res.json()) as Array<{ wirtschaftsplan_id: string; betrag: number | string }>;
+
+    // Beide Jahre stehen nebeneinander: 12 Monate je Plan, unterschiedliche
+    // Betraege (12000 -> 100,00 / 24000 -> 200,00 bei MEA 100/1000).
+    const first = rows.filter((row) => row.wirtschaftsplan_id === firstPlanId);
+    const second = rows.filter((row) => row.wirtschaftsplan_id === secondPlanId);
+    expect(first).toHaveLength(12);
+    expect(second).toHaveLength(12);
+    expect(new Set(first.map((row) => Number(row.betrag)))).toEqual(new Set([100]));
+    expect(new Set(second.map((row) => Number(row.betrag)))).toEqual(new Set([200]));
   });
 
   test("sollstellung-multiple-units: bulk creation performance and UI loading indicators for 100+ units", async ({ page }) => {
@@ -521,14 +548,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await page.goto(`/wegs/${wegId}/finanzen/new`).catch(() => {});
     const costsInput = page.getByLabel(/gesamtkosten/i);
 
-    if (await costsInput.isVisible()) {
-      await page.getByLabel(/jahr/i).fill("2028");
-      await page.getByLabel(/bezeichnung/i).fill("Bulk Plan");
-      await costsInput.fill("24000");
-      // Double check click and wait for redirect
-      const submitBtn = page.getByRole("button", { name: /speichern/i });
-      await submitBtn.click();
-      await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`), { timeout: 30_000 });
-    }
+    await expect(costsInput).toBeVisible();
+    await page.getByLabel(/jahr/i).fill("2028");
+    await page.getByLabel(/bezeichnung/i).fill("Bulk Plan");
+    await costsInput.fill("24000");
+    // Double check click and wait for redirect
+    const submitBtn = page.getByRole("button", { name: /speichern/i });
+    await submitBtn.click();
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`), { timeout: 30_000 });
   });
 });

@@ -72,9 +72,12 @@ typecheck:
     uv run --project apps/agent mypy apps/agent
 
 # Regenerate shared TS types from FastAPI OpenAPI schema (§2.2)
+# Regenerate packages/shared-types from the agent's OpenAPI contract.
+# Exports the schema straight from the FastAPI app — no running server needed.
 codegen:
-    @echo "Fetching OpenAPI schema from agent..."
-    curl -s http://localhost:8000/openapi.json > packages/shared-types/openapi.json
+    @echo "Exporting OpenAPI schema from the agent app..."
+    uv sync --project apps/agent --extra dev --quiet
+    cd apps/agent && .venv/bin/python -c 'import json; from app.main import app; print(json.dumps(app.openapi(), indent=2))' > ../../packages/shared-types/openapi.json
     pnpm --filter @weg-verwaltung/shared-types codegen
 
 # Apply Supabase migrations to the linked cloud project.

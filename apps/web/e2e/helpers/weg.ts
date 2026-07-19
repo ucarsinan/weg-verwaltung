@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+import { getSupabaseRequestContext } from "./fixtures";
+
 interface WegAddressInput {
   street?: string;
   houseNumber?: string;
@@ -74,31 +76,4 @@ export async function createWegFixture(
   await page.goto(`/wegs/${created.id}`);
   await expect(page).toHaveURL(new RegExp(`/wegs/${created.id}$`));
   return created.id;
-}
-
-async function getSupabaseRequestContext(page: Page) {
-  const cookies = await page.context().cookies();
-  const authCookie = cookies.find(
-    (cookie) => cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token"),
-  );
-  if (!authCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-
-  let cookieValue = decodeURIComponent(authCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(cookieValue);
-  const token: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    throw new Error("Missing Supabase URL or anon key for E2E fixture setup");
-  }
-
-  return { token, url, key };
 }

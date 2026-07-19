@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireTenantAdmin } from "@/modules/identity";
 import { normalizeRequiredText } from "@/modules/settings/shared";
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
@@ -18,33 +18,15 @@ export interface AdminFormState {
   };
 }
 
-async function requireTenantAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const appMetadata =
-    (claimsData?.claims?.app_metadata as
-      | { tenant_id?: string; role?: string }
-      | undefined) ?? {};
-
-  if (!user || !appMetadata.tenant_id || appMetadata.role !== "tenant_admin") {
-    return null;
-  }
-
-  return { user, tenantId: appMetadata.tenant_id };
-}
-
 async function verifyLiveTenantAdmin(
   admin: AdminClient,
-  session: NonNullable<Awaited<ReturnType<typeof requireTenantAdmin>>>,
+  session: { actorUserId: string; tenantId: string },
 ) {
   const { data, error } = await admin
     .from("tenant_member")
     .select("id")
     .eq("tenant_id", session.tenantId)
-    .eq("user_id", session.user.id)
+    .eq("user_id", session.actorUserId)
     .eq("role", "tenant_admin")
     .maybeSingle();
 
@@ -69,7 +51,7 @@ export async function updateTenantNameAction(
   if (name.length > 120) return { errors: { name: ["Name ist zu lang."] } };
 
   const session = await requireTenantAdmin();
-  if (!session) return { errors: { _form: ["Keine Berechtigung."] } };
+  if (!session.ok) return { errors: { _form: ["Keine Berechtigung."] } };
 
   const admin = createAdminClient();
   if (!admin) {

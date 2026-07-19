@@ -180,5 +180,9 @@ describe("createTenantInvitationAction", () => {
     expect(result.status).toBe("success");
     expect(result.invitationUrl).toBeTruthy();
     expect(result.message).toMatch(/Einladungslink für neu@example\.test/);
+    // Kein verifizierter Absender ist ein Konfigurations-, kein Stoerungszustand:
+    // die Meldung muss das benennen und darf nicht nach einem Fehlschlag klingen.
+    expect(result.message).toMatch(/nicht eingerichtet/);
+    expect(result.message).not.toMatch(/fehlgeschlagen/);
   });
 });

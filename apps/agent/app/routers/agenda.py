@@ -17,10 +17,10 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.auth import AuthContext, get_auth
-from app.graphs.agenda import agenda_graph
+from app.graphs.agenda import AgendaVorschlag, agenda_graph
 from app.graphs.base import build_thread_id
 
 logger = logging.getLogger(__name__)
@@ -47,9 +47,14 @@ class AgendaInvokeRequest(BaseModel):
 
 
 class AgendaResponse(BaseModel):
-    """Router response — the structured ``AgendaVorschlag`` + thread_id for traces."""
+    """Router response — the structured ``AgendaVorschlag`` + thread_id for traces.
 
-    vorschlag: dict[str, Any]
+    ``vorschlag`` ist bewusst das Graph-Modell selbst: der OpenAPI-Kontrakt
+    (``just codegen`` → shared-types) trägt damit die volle Payload-Form,
+    und Drift zwischen Graph und apps/web wird zum Compile-Fehler.
+    """
+
+    vorschlag: AgendaVorschlag
     thread_id: str
 
 
@@ -127,4 +132,13 @@ async def post_agenda(
             detail="Agenda-Graph lieferte keinen Vorschlag.",
         )
 
-    return AgendaResponse(vorschlag=vorschlag, thread_id=thread_id)
+    try:
+        vorschlag_model = AgendaVorschlag.model_validate(vorschlag)
+    except ValidationError as exc:
+        logger.error("agenda graph returned malformed vorschlag: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Agenda-Graph lieferte unerwartete Vorschlag-Form.",
+        ) from exc
+
+    return AgendaResponse(vorschlag=vorschlag_model, thread_id=thread_id)

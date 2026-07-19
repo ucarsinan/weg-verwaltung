@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
+import { getTenantClaims } from "@/modules/identity";
 import {
   getArchivedFilesAction,
   getArchivablePartitionsAction,
@@ -13,27 +14,10 @@ import {
 import { AuditShell } from "./audit-shell";
 import type { AuditFeedItem } from "./audit-feed";
 
-interface AppMetadata {
-  tenant_id?: string;
-  role?: string;
-}
-
-function readAppMetadata(value: unknown): AppMetadata {
-  if (!value || typeof value !== "object") return {};
-  const record = value as Record<string, unknown>;
-  return {
-    tenant_id:
-      typeof record.tenant_id === "string" ? record.tenant_id : undefined,
-    role: typeof record.role === "string" ? record.role : undefined,
-  };
-}
-
 export default async function AuditPage() {
   const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const claims = claimsData?.claims;
-  const appMetadata = readAppMetadata(claims?.app_metadata);
-  const isAdmin = appMetadata.role === "tenant_admin";
+  const { claims } = await getTenantClaims(supabase);
+  const isAdmin = claims.role === "tenant_admin";
 
   const feed = await getAuditFeedAction({ limit: 50 });
   const integrity = isAdmin

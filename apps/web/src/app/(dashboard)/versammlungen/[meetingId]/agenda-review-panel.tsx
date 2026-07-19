@@ -133,13 +133,13 @@ function VorschlagDisplay({ result }: { result: AgendaSuggestResult }) {
       </ol>
 
       {/* Missing inputs */}
-      {vorschlag.fehlende_inputs.length > 0 ? (
+      {(vorschlag.fehlende_inputs ?? []).length > 0 ? (
         <div className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-950">
           <p className="mb-1 text-xs font-medium text-amber-700 dark:text-amber-300 uppercase tracking-wide">
             Fehlende Kontext-Informationen
           </p>
           <ul className="list-disc list-inside space-y-0.5">
-            {vorschlag.fehlende_inputs.map((inp, i) => (
+            {(vorschlag.fehlende_inputs ?? []).map((inp, i) => (
               <li
                 key={i}
                 className="text-xs text-amber-800 dark:text-amber-200"

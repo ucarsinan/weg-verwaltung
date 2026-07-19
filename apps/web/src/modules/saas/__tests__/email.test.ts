@@ -56,6 +56,30 @@ describe("resendEmailProvider", () => {
 
     expect(result.status).toBe("error");
   });
+
+  // Mit dem resend.dev-Sandbox-Absender bedeutet ein Fehlschlag "kein
+  // verifizierter Absender eingerichtet", nicht "der Mailversand ist kaputt".
+  // Der Aufrufer soll das dem Nutzer nicht als Stoerung melden.
+  it("maps a failure with the resend.dev sandbox sender to disabled, not error", async () => {
+    mocks.send.mockResolvedValue({
+      data: null,
+      error: { name: "validation_error", message: "You can only send testing emails to..." },
+    });
+    const provider = resendEmailProvider("re_test", "WEG-Verwaltung <onboarding@resend.dev>");
+
+    const result = await provider.send({ to: "fremd@example.test", subject: "s", html: "h" });
+
+    expect(result).toEqual({ status: "disabled" });
+  });
+
+  it("still reports a real send with the sandbox sender as sent", async () => {
+    mocks.send.mockResolvedValue({ data: { id: "email-9" }, error: null });
+    const provider = resendEmailProvider("re_test", "WEG-Verwaltung <onboarding@resend.dev>");
+
+    const result = await provider.send({ to: "eigene@example.test", subject: "s", html: "h" });
+
+    expect(result).toEqual({ status: "sent", id: "email-9" });
+  });
 });
 
 describe("disabledEmailProvider", () => {

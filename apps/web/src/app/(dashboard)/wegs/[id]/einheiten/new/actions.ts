@@ -1,10 +1,8 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
 
-// Server Action for Unit (Wohneinheit) creation.
+// Server Action for Unit (Wohneinheit) creation — über den action-kernel.
 //
 // Section 3 invariants:
 //  - tenant_id omitted: column default `auth.tenant_id()` in migration 0003
@@ -25,65 +23,95 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const POSITIVE_INTEGER_RE = /^[1-9]\d*$/;
 
+interface UnitInput {
+  wegId: string;
+  bezeichnung: string;
+  zaehler: number;
+  nenner: number;
+}
+
 export async function createUnit(
   _prev: UnitFormState,
   formData: FormData,
 ): Promise<UnitFormState> {
-  const wegId = String(formData.get("weg_id") ?? "").trim();
-  const bezeichnung = String(formData.get("bezeichnung") ?? "").trim();
-  const zaehlerRaw = String(formData.get("mea_zaehler") ?? "").trim();
-  const nennerRaw = String(formData.get("mea_nenner") ?? "").trim();
+  return runFormAction<UnitInput, UnitFormState>(
+    {
+      scope: "createUnit",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: (data) => {
+        const wegId = String(data.get("weg_id") ?? "").trim();
+        const bezeichnung = String(data.get("bezeichnung") ?? "").trim();
+        const zaehlerRaw = String(data.get("mea_zaehler") ?? "").trim();
+        const nennerRaw = String(data.get("mea_nenner") ?? "").trim();
 
-  // Guard: weg_id must be a valid UUID (it comes from a hidden form field,
-  // but we must not trust it).
-  if (!UUID_RE.test(wegId)) {
-    return { errors: { _form: ["Ungültige WEG-ID. Bitte Seite neu laden."] } };
-  }
+        // Guard: weg_id must be a valid UUID (it comes from a hidden form
+        // field, but we must not trust it).
+        if (!UUID_RE.test(wegId)) {
+          return {
+            errors: {
+              errors: { _form: ["Ungültige WEG-ID. Bitte Seite neu laden."] },
+            },
+          };
+        }
 
-  const errors: UnitFormState["errors"] = {};
+        const errors: UnitFormState["errors"] = {};
 
-  if (bezeichnung.length < 1) {
-    errors.bezeichnung = ["Bezeichnung darf nicht leer sein."];
-  } else if (bezeichnung.length > 200) {
-    errors.bezeichnung = ["Bezeichnung darf höchstens 200 Zeichen lang sein."];
-  }
+        if (bezeichnung.length < 1) {
+          errors.bezeichnung = ["Bezeichnung darf nicht leer sein."];
+        } else if (bezeichnung.length > 200) {
+          errors.bezeichnung = [
+            "Bezeichnung darf höchstens 200 Zeichen lang sein.",
+          ];
+        }
 
-  const zaehler = Number(zaehlerRaw);
-  if (!POSITIVE_INTEGER_RE.test(zaehlerRaw)) {
-    errors.mea_zaehler = ["MEA-Zähler muss eine positive ganze Zahl sein."];
-  }
+        if (!POSITIVE_INTEGER_RE.test(zaehlerRaw)) {
+          errors.mea_zaehler = ["MEA-Zähler muss eine positive ganze Zahl sein."];
+        }
 
-  const nenner = Number(nennerRaw);
-  if (!POSITIVE_INTEGER_RE.test(nennerRaw)) {
-    errors.mea_nenner = ["MEA-Nenner muss eine positive ganze Zahl sein."];
-  }
+        if (!POSITIVE_INTEGER_RE.test(nennerRaw)) {
+          errors.mea_nenner = ["MEA-Nenner muss eine positive ganze Zahl sein."];
+        }
 
-  if (Object.keys(errors).length > 0) {
-    return { errors };
-  }
+        if (Object.keys(errors).length > 0) {
+          return { errors: { errors } };
+        }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("unit").insert({
-    weg_id: wegId,
-    bezeichnung,
-    mea_zaehler: zaehler,
-    mea_nenner: nenner,
-  });
-
-  if (error) {
-    console.error("[createUnit] insert failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-    return {
-      errors: {
-        _form: [
-          "Wohneinheit konnte nicht angelegt werden. Bitte erneut versuchen.",
-        ],
+        return {
+          input: {
+            wegId,
+            bezeichnung,
+            zaehler: Number(zaehlerRaw),
+            nenner: Number(nennerRaw),
+          },
+        };
       },
-    };
-  }
+      execute: async ({ supabase }, input) => {
+        const { error } = await supabase.from("unit").insert({
+          weg_id: input.wegId,
+          bezeichnung: input.bezeichnung,
+          mea_zaehler: input.zaehler,
+          mea_nenner: input.nenner,
+        });
 
-  revalidatePath(`/wegs/${wegId}`);
-  redirect(`/wegs/${wegId}`);
+        if (error) {
+          logPostgrestError("createUnit", error);
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "Wohneinheit konnte nicht angelegt werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
+
+        return {
+          revalidate: [`/wegs/${input.wegId}`],
+          redirectTo: `/wegs/${input.wegId}`,
+        };
+      },
+    },
+    formData,
+  );
 }

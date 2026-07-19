@@ -1,8 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
 import {
   formatWegAddress,
   readWegAddressFormData,
@@ -27,47 +25,58 @@ export async function updateWeg(
   _prev: WegEditFormState,
   formData: FormData,
 ): Promise<WegEditFormState> {
-  const name = String(formData.get("name") ?? "").trim();
-  const address = readWegAddressFormData(formData);
+  return runFormAction<{ name: string; adresse: string | null }, WegEditFormState>(
+    {
+      scope: "updateWeg",
+      guardError: (message) => ({ errors: { _form: [message] } }),
+      parse: (data) => {
+        const name = String(data.get("name") ?? "").trim();
+        const address = readWegAddressFormData(data);
 
-  const errors: WegEditFormState["errors"] = {};
+        const errors: WegEditFormState["errors"] = {};
 
-  if (name.length < NAME_MIN) {
-    errors.name = [`Name muss mindestens ${NAME_MIN} Zeichen lang sein.`];
-  } else if (name.length > NAME_MAX) {
-    errors.name = [`Name darf höchstens ${NAME_MAX} Zeichen lang sein.`];
-  }
+        if (name.length < NAME_MIN) {
+          errors.name = [`Name muss mindestens ${NAME_MIN} Zeichen lang sein.`];
+        } else if (name.length > NAME_MAX) {
+          errors.name = [`Name darf höchstens ${NAME_MAX} Zeichen lang sein.`];
+        }
 
-  const addressErrors = validateWegAddress(address);
-  if (Object.keys(addressErrors).length > 0) {
-    errors.address = addressErrors;
-  }
+        const addressErrors = validateWegAddress(address);
+        if (Object.keys(addressErrors).length > 0) {
+          errors.address = addressErrors;
+        }
 
-  if (Object.keys(errors).length > 0) {
-    return { errors };
-  }
+        if (Object.keys(errors).length > 0) {
+          return { errors: { errors } };
+        }
 
-  const adresse = formatWegAddress(address);
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("weg")
-    .update({ name, adresse })
-    .eq("id", id);
-
-  if (error) {
-    console.error("[updateWeg] update failed", {
-      code: error.code,
-      hint: error.hint,
-    });
-    return {
-      errors: {
-        _form: ["WEG konnte nicht aktualisiert werden. Bitte erneut versuchen."],
+        return { input: { name, adresse: formatWegAddress(address) } };
       },
-    };
-  }
+      execute: async ({ supabase }, { name, adresse }) => {
+        const { error } = await supabase
+          .from("weg")
+          .update({ name, adresse })
+          .eq("id", id);
 
-  revalidatePath("/wegs");
-  revalidatePath(`/wegs/${id}`);
-  redirect(`/wegs/${id}`);
+        if (error) {
+          logPostgrestError("updateWeg", error);
+          return {
+            errors: {
+              errors: {
+                _form: [
+                  "WEG konnte nicht aktualisiert werden. Bitte erneut versuchen.",
+                ],
+              },
+            },
+          };
+        }
+
+        return {
+          revalidate: ["/wegs", `/wegs/${id}`],
+          redirectTo: `/wegs/${id}`,
+        };
+      },
+    },
+    formData,
+  );
 }

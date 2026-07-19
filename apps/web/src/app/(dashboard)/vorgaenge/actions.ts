@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { agentJson, AgentAuthError, AgentResponseError } from "@/lib/agent/fetch";
+import {
+  agentErrorMessage,
+  postVorgang,
+  type VorgangInvokeRequest,
+  type VorgangResponse,
+  type VorgangSuggestion,
+} from "@/modules/agent-bridge";
 import { createClient } from "@/lib/supabase/server";
 import type { TaskStatus, VorgangPriority } from "@/lib/vorgangszentrale/types";
 
@@ -55,7 +61,9 @@ const VORGANG_TYPES = new Set([
   "allgemein",
 ]);
 const PRIORITIES = new Set<VorgangPriority>(["low", "normal", "high", "urgent"]);
-const SUGGESTION_TYPES = new Set([
+// Kanonische Werte kommen aus dem generierten Agent-Kontrakt (shared-types).
+type AgentSuggestionType = NonNullable<VorgangInvokeRequest["suggestion_type"]>;
+const SUGGESTION_TYPES = new Set<AgentSuggestionType>([
   "vorgang_triage",
   "antwort_entwurf",
   "frist_vorschlag",
@@ -66,16 +74,6 @@ const SUGGESTION_TYPES = new Set([
 ]);
 const DEFAULT_AGENT_REQUEST =
   "Bitte prüfe diesen Vorgang konservativ anhand der verfügbaren Quellen und erstelle nur einen menschlich zu prüfenden Vorschlag.";
-
-interface AgentVorgangResponse {
-  suggestion: {
-    suggestion_type?: string;
-    title?: string;
-    summary?: string;
-    [key: string]: unknown;
-  };
-  thread_id: string;
-}
 
 export async function createTaskAction(
   vorgangId: string,
@@ -195,16 +193,13 @@ export async function requestVorgangAgentSuggestionAction(
   const userRequest = readFormText(formData, "user_request") ?? DEFAULT_AGENT_REQUEST;
   const suggestionType = readSuggestionType(formData);
 
-  let data: AgentVorgangResponse;
+  let data: VorgangResponse & { suggestion: VorgangSuggestion };
   try {
-    data = await agentJson<AgentVorgangResponse>("/agent/vorgang", {
-      method: "POST",
-      body: JSON.stringify({
-        vorgang_id: vorgangId,
-        weg_id: wegId,
-        user_request: userRequest,
-        suggestion_type: suggestionType,
-      }),
+    data = await postVorgang({
+      vorgang_id: vorgangId,
+      weg_id: wegId,
+      user_request: userRequest,
+      suggestion_type: suggestionType,
     });
   } catch (err) {
     return handleAgentError("requestVorgangAgentSuggestionAction", err);
@@ -506,9 +501,11 @@ function readPriority(formData: FormData): VorgangPriority {
     : "normal";
 }
 
-function readSuggestionType(formData: FormData): string | null {
+function readSuggestionType(formData: FormData): AgentSuggestionType | null {
   const value = readFormText(formData, "suggestion_type");
-  return value && SUGGESTION_TYPES.has(value) ? value : null;
+  return value && SUGGESTION_TYPES.has(value as AgentSuggestionType)
+    ? (value as AgentSuggestionType)
+    : null;
 }
 
 function readId(rows: unknown): string | undefined {
@@ -525,31 +522,14 @@ function revalidateVorgangPaths(vorgangId: string): void {
 }
 
 function handleAgentError(scope: string, err: unknown): ActionResult {
-  if (err instanceof AgentAuthError) {
-    return { error: "Sitzung abgelaufen — bitte neu einloggen." };
-  }
-  if (err instanceof AgentResponseError) {
-    if (err.status === 400) {
-      return { error: readAgentDetail(err.body) ?? "Agent-Anfrage wurde abgelehnt." };
-    }
-    return {
-      error: `KI-Vorschlag temporär nicht verfügbar (${err.status}). Bitte später erneut versuchen.`,
-    };
-  }
-  console.error(`[vorgangszentrale] ${scope} unexpected error`, err);
-  return { error: "Unbekannter Fehler beim KI-Vorschlag." };
-}
-
-function readAgentDetail(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as { detail?: unknown };
-    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
-      return parsed.detail;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  return {
+    error: agentErrorMessage(`vorgangszentrale.${scope}`, err, {
+      unavailable: (status) =>
+        `KI-Vorschlag temporär nicht verfügbar (${status}). Bitte später erneut versuchen.`,
+      unknown: "Unbekannter Fehler beim KI-Vorschlag.",
+      rejected: "Agent-Anfrage wurde abgelehnt.",
+    }),
+  };
 }
 
 function logActionError(scope: string, error: QueryError): void {

@@ -10,6 +10,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { Database } from "@/lib/supabase/database.types";
+import {
+  PROTOCOL_STATUS_LABEL,
+  isProtocolStatus,
+} from "@/modules/versammlung";
 import { generateProtokoll, submitRevision, signProtokoll } from "./protokoll-actions";
 import { DraftReviewForm } from "./draft-review-form";
 import { SignForm } from "./sign-form";
@@ -28,20 +32,16 @@ interface PageProps {
 // Status helpers
 // ---------------------------------------------------------------------------
 
-const STATUS_LABEL: Record<string, string> = {
-  awaiting_review: "Warte auf Prüfung",
-  ki_entwurf: "KI-Entwurf freigegeben",
-  unterzeichnet: "Unterzeichnet",
-};
-
 function StatusPill({ status }: { status: string }) {
-  const label = STATUS_LABEL[status] ?? status;
+  const label = isProtocolStatus(status) ? PROTOCOL_STATUS_LABEL[status] : status;
 
   const classMap: Record<string, string> = {
     awaiting_review:
       "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200",
     ki_entwurf:
       "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200",
+    verwalter_revision:
+      "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200",
     unterzeichnet:
       "border-green-300 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200",
   };

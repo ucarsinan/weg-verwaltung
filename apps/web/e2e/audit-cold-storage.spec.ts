@@ -1,48 +1,19 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+  getSupabaseRequestContext,
+  type SupabaseRequestContext,
+} from "./helpers/fixtures";
 
 test.describe.configure({ mode: "serial" });
-
-type RpcAuth = {
-  token: string;
-  url: string;
-  key: string;
-};
 
 type ArchivablePartition = {
   partition_name: string;
   partition_date: string;
 };
 
-async function getAuthToken(page: Page): Promise<RpcAuth> {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (cookie) =>
-      cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token"),
-  );
-  if (!sbCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-
-  let cookieValue = decodeURIComponent(sbCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-
-  const tokenData: unknown = JSON.parse(cookieValue);
-  const token = Array.isArray(tokenData)
-    ? String(tokenData[0])
-    : String((tokenData as { access_token: string }).access_token);
-
-  return {
-    token,
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321",
-    key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-  };
-}
-
 async function postRpc(
   page: Page,
-  auth: RpcAuth,
+  auth: SupabaseRequestContext,
   functionName: string,
   body: Record<string, unknown> = {},
 ) {
@@ -60,7 +31,7 @@ test.describe("Audit Log Cold-Storage", () => {
   test("lists only partitions older than the cold-storage cutoff", async ({
     page,
   }) => {
-    const auth = await getAuthToken(page);
+    const auth = await getSupabaseRequestContext(page);
     const res = await postRpc(page, auth, "get_archivable_partitions");
 
     expect(res.ok()).toBe(true);
@@ -82,7 +53,7 @@ test.describe("Audit Log Cold-Storage", () => {
   test("keeps tenant-scoped cold-storage checks read-only", async ({
     page,
   }) => {
-    const auth = await getAuthToken(page);
+    const auth = await getSupabaseRequestContext(page);
 
     const firstRes = await postRpc(page, auth, "get_archivable_partitions");
     expect(firstRes.ok()).toBe(true);
@@ -96,7 +67,7 @@ test.describe("Audit Log Cold-Storage", () => {
   test("reports archivable status without mutating partitions", async ({
     page,
   }) => {
-    const auth = await getAuthToken(page);
+    const auth = await getSupabaseRequestContext(page);
 
     const invalidRes = await postRpc(page, auth, "check_partition_archivable", {
       p_name: "audit_event_invalid",
@@ -144,7 +115,7 @@ test.describe("Audit Log Cold-Storage", () => {
   });
 
   test("rejects expired archive signed URLs", async ({ page }) => {
-    const auth = await getAuthToken(page);
+    const auth = await getSupabaseRequestContext(page);
     const res = await page.request.get(
       `${auth.url}/storage/v1/object/sign/audit-archives/some-file.csv?token=expired-token`,
       {

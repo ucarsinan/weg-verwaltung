@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getTenantClaims } from "@/modules/identity";
 
 export interface ProfileFormState {
   success?: string;
@@ -17,30 +18,7 @@ export interface ProfileFormState {
   };
 }
 
-interface AppMetadataClaims {
-  tenant_id?: string;
-}
-
-interface JwtClaims {
-  app_metadata?: unknown;
-}
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function readClaims(value: unknown): JwtClaims {
-  if (!value || typeof value !== "object") return {};
-  return value as JwtClaims;
-}
-
-function readAppMetadata(value: unknown): AppMetadataClaims {
-  if (!value || typeof value !== "object") return {};
-
-  const record = value as Record<string, unknown>;
-  return {
-    tenant_id:
-      typeof record.tenant_id === "string" ? record.tenant_id : undefined,
-  };
-}
 
 function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
@@ -112,10 +90,8 @@ export async function updateProfilePersonAction(
 
   if (!user) redirect("/login");
 
-  const { data: claimsData, error: claimsError } =
-    await supabase.auth.getClaims();
-  const claims = readClaims(claimsData?.claims);
-  const { tenant_id: tenantId } = readAppMetadata(claims.app_metadata);
+  const { claims, error: claimsError } = await getTenantClaims(supabase);
+  const tenantId = claims.tenantId;
 
   if (claimsError || !tenantId) {
     if (claimsError) {

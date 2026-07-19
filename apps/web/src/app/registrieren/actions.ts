@@ -51,6 +51,13 @@ export async function registerAction(
   });
 
   if (error) {
+    // Ohne dieses Log ist jeder Sign-up-Fehler von außen ununterscheidbar
+    // (die Nutzermeldung bleibt absichtlich generisch, um User-Enumeration zu
+    // vermeiden). Nur `code`/`status` — `error.message` enthält die E-Mail-Adresse.
+    console.error("[registrieren] signUp fehlgeschlagen", {
+      code: error.code,
+      status: error.status,
+    });
     return {
       status: "error",
       message:

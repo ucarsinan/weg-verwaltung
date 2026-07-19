@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { getAccessToken, setMeetingStatus } from "./helpers/fixtures";
 import { createWegFixture } from "./helpers/weg";
 
 // Versammlungs-Happy-Path gegen Cloud Frankfurt. Läuft als geseedeter
@@ -14,51 +15,6 @@ import { createWegFixture } from "./helpers/weg";
 test.describe.configure({ mode: "serial" });
 
 const stamp = () => Date.now();
-
-async function getAccessToken(page: Page): Promise<string> {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"),
-  );
-  expect(sbCookie).toBeTruthy();
-
-  let cookieValue = decodeURIComponent(sbCookie!.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-
-  const tokenData = JSON.parse(cookieValue);
-  const accessToken: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-  expect(accessToken).toBeTruthy();
-  return accessToken;
-}
-
-async function updateMeetingStatus(
-  page: Page,
-  meetingId: string,
-  status: "laufend" | "beendet",
-): Promise<void> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  expect(supabaseUrl).toBeTruthy();
-  expect(supabaseKey).toBeTruthy();
-
-  const updateRes = await page.request.patch(
-    `${supabaseUrl}/rest/v1/meeting?id=eq.${meetingId}`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${await getAccessToken(page)}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      data: { status },
-    },
-  );
-  expect(updateRes.ok()).toBeTruthy();
-}
 
 async function gotoDomReady(page: Page, path: string): Promise<void> {
   let lastError: unknown;
@@ -345,7 +301,7 @@ test.describe("versammlungen happy path", () => {
       timeout: 15_000,
     });
     const meetingId = page.url().match(/\/versammlungen\/([0-9a-f-]{36})/)![1];
-    await updateMeetingStatus(page, meetingId, "laufend");
+    await setMeetingStatus(page, meetingId, "laufend");
 
     // 6. TOP anlegen.
     await page.goto(`/versammlungen/${meetingId}/tops/new`);
@@ -442,7 +398,7 @@ test.describe("versammlungen happy path", () => {
     ).not.toBeVisible();
 
     // 4. Nach beendetem Meeting ist der Review erreichbar.
-    await updateMeetingStatus(page, meetingId!, "beendet");
+    await setMeetingStatus(page, meetingId!, "beendet");
     await gotoDomReady(page, `/versammlungen/${meetingId}`);
     const protokollHref = await page
       .getByRole("link", { name: /^Protokoll$/ })
@@ -485,7 +441,7 @@ test.describe("versammlungen happy path", () => {
     });
     const meetingId = page.url().match(/versammlungen\/([0-9a-f-]{36})/)?.[1];
     expect(meetingId).toBeTruthy();
-    await updateMeetingStatus(page, meetingId!, "beendet");
+    await setMeetingStatus(page, meetingId!, "beendet");
 
     // 3. Protokoll-Row mit status='ki_entwurf' direkt via Supabase REST API
     //    seeden — Agent läuft nicht im E2E-Kontext, daher kein Click auf

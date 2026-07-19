@@ -1,55 +1,25 @@
 import { test, expect, Page } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
+import { activateWirtschaftsplan } from "./helpers/finanzen";
+import {
+  decodeTenantIdFromJwt,
+  getSupabaseRequestContext,
+  getTokenFromAuthFile,
+} from "./helpers/fixtures";
 import { fillWegAddress } from "./helpers/weg";
 
 test.describe.configure({ mode: "serial" });
-
-function getTokenFromAuthFile(filename: string): string {
-  const filePath = path.resolve(process.cwd(), "playwright", ".auth", filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found at ${filePath}`);
-  }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const cookie = data.cookies.find((c: { name: string; value: string }) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
-
-  if (!cookie) throw new Error(`Supabase auth cookie not found in ${filename}`);
-  let val = decodeURIComponent(cookie.value);
-  if (val.startsWith("base64-")) {
-    val = Buffer.from(val.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(val);
-  return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
-}
-
-async function getAuthToken(page: Page) {
-  const cookies = await page.context().cookies();
-  const sbCookie = cookies.find(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
-  );
-  if (!sbCookie) {
-    throw new Error("Supabase auth token cookie not found");
-  }
-  let cookieValue = decodeURIComponent(sbCookie.value);
-  if (cookieValue.startsWith("base64-")) {
-    cookieValue = Buffer.from(cookieValue.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(cookieValue);
-  const token: string = Array.isArray(tokenData)
-    ? (tokenData[0] as string)
-    : (tokenData as { access_token: string }).access_token;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return { token, url, key };
-}
 
 async function createTestWeg(page: Page, label: string): Promise<string> {
   await page.goto("/wegs/new");
   await page.getByLabel(/Name der WEG/).fill(`Cross ${label} ${Date.now()}`);
   await fillWegAddress(page, { street: "Crossweg", city: "Teststadt" });
   await page.getByRole("button", { name: /Speichern/ }).click();
-  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  // 30s, not the usual 15s: on the Free-plan Cloud project, this navigation
+  // can land right after finanzen.spec.ts's 100+-unit bulk-write test when
+  // files run in a non-standard order, and Cloud latency has been observed
+  // to blow a 15s budget there (see docs/agent-reports/2026-07-14-worker-
+  // general-cloud-e2e-first-run.md, "reihenfolgeabhaengige Flakiness").
+  await expect(page).toHaveURL(/\/wegs\/[0-9a-f-]{36}$/, { timeout: 30_000 });
 
   const match = page.url().match(/\/wegs\/([0-9a-f-]{36})/);
   if (!match) throw new Error("Could not extract WEG ID from URL");
@@ -98,33 +68,58 @@ async function createWirtschaftsplan(
 test.describe("Tier 3: Cross-Feature Interactions", () => {
   let tokenA: string;
   let tokenB: string;
+  let tenantAId: string;
+  let tenantBId: string;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
   test.beforeAll(() => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
+    tenantAId = decodeTenantIdFromJwt(tokenA);
+    tenantBId = decodeTenantIdFromJwt(tokenB);
   });
 
   test("cross-audit-and-finanz: creating a Wirtschaftsplan generates audit events", async ({ page }) => {
-    // Create a plan via UI/API and verify audit_event table gets a log entry
-    const res = await page.request.get(`${url}/rest/v1/audit_event?select=*&limit=5`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${tokenA}`
-      }
-    });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    // Actually create a Wirtschaftsplan, then prove the audit trigger
+    // (wirtschaftsplan_audit_emit, 0036_wirtschaftsplan_hausgeld.sql) logged
+    // it — querying audit_event unfiltered and accepting 404 as a pass
+    // proved nothing about audit content.
+    const wegId = await createTestWeg(page, "AuditFinanz");
+    await createWirtschaftsplan(page, wegId, "2040", "6000");
+
+    const { token } = await getSupabaseRequestContext(page);
+    const planRes = await page.request.get(
+      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2040`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(planRes.ok()).toBe(true);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    expect(plan?.id).toBeTruthy();
+
+    const auditRes = await page.request.get(
+      `${url}/rest/v1/audit_event?select=id,entity_typ,action&entity_typ=eq.wirtschaftsplan&entity_id=eq.${plan.id}`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(auditRes.ok()).toBe(true);
+    const events = (await auditRes.json()) as Array<{
+      id: string;
+      entity_typ: string;
+      action: string;
+    }>;
+    expect(events.length).toBeGreaterThan(0);
+    expect(
+      events.some((e) => e.entity_typ === "wirtschaftsplan" && e.action === "insert"),
+    ).toBe(true);
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
+  test("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "PlanUpdate");
     await createTestUnit(page, wegId, "UnitA", "100");
     await createTestUnit(page, wegId, "UnitB", "200");
     await createWirtschaftsplan(page, wegId, "2031", "12000");
 
-    const { token } = await getAuthToken(page);
+    const { token } = await getSupabaseRequestContext(page);
     const planRes = await page.request.get(
       `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2031`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },
@@ -132,6 +127,7 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     expect(planRes.ok()).toBe(true);
     const [plan] = (await planRes.json()) as Array<{ id: string }>;
     expect(plan?.id).toBeTruthy();
+    await activateWirtschaftsplan(page, wegId, plan.id);
 
     const beforeRes = await page.request.get(
       `${url}/rest/v1/sollstellung?wirtschaftsplan_id=eq.${plan.id}&select=betrag`,
@@ -170,16 +166,29 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
   });
 
   test("cross-rls-and-sollstellung: tenant isolation blocks cross-tenant access to Sollstellung entries", async ({ request }) => {
-    // Tenant A queries Sollstellungen
+    // A GET against an existing, authorized table always returns 200 with a
+    // (possibly empty) array via PostgREST — RLS filters rows, it never
+    // 404s. The ok()||404 hedge accepted any outcome and never checked
+    // whether rows actually stayed scoped to their own tenant.
     const resA = await request.get(`${url}/rest/v1/sollstellung?select=*`, {
       headers: { apikey: key, Authorization: `Bearer ${tokenA}` }
     });
-    // Tenant B queries Sollstellungen
     const resB = await request.get(`${url}/rest/v1/sollstellung?select=*`, {
       headers: { apikey: key, Authorization: `Bearer ${tokenB}` }
     });
-    expect(resA.ok() || resA.status() === 404).toBe(true);
-    expect(resB.ok() || resB.status() === 404).toBe(true);
+    expect(resA.ok()).toBe(true);
+    expect(resB.ok()).toBe(true);
+
+    const rowsA = (await resA.json()) as Array<{ tenant_id: string }>;
+    const rowsB = (await resB.json()) as Array<{ tenant_id: string }>;
+    for (const row of rowsA) {
+      expect(row.tenant_id).toBe(tenantAId);
+      expect(row.tenant_id).not.toBe(tenantBId);
+    }
+    for (const row of rowsB) {
+      expect(row.tenant_id).toBe(tenantBId);
+      expect(row.tenant_id).not.toBe(tenantAId);
+    }
   });
 
   test("cross-audit-ui-and-rls: non-admin users do not see admin audit tabs", async ({ page }) => {
@@ -203,13 +212,21 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
     await newContext.close();
   });
 
-  // Requires migrations 0039/0040 on the remote Cloud DB.
-  test.skip("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
+  test("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "UnitMeaUpdate");
     const unitName = await createTestUnit(page, wegId, "UnitA", "100");
     await createWirtschaftsplan(page, wegId, "2032", "12000");
 
-    const { token } = await getAuthToken(page);
+    const { token } = await getSupabaseRequestContext(page);
+    const planRes = await page.request.get(
+      `${url}/rest/v1/wirtschaftsplan?select=id&weg_id=eq.${wegId}&jahr=eq.2032`,
+      { headers: { apikey: key, Authorization: `Bearer ${token}` } },
+    );
+    expect(planRes.ok()).toBe(true);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    expect(plan?.id).toBeTruthy();
+    await activateWirtschaftsplan(page, wegId, plan.id);
+
     const unitRes = await page.request.get(
       `${url}/rest/v1/unit?select=id&weg_id=eq.${wegId}&bezeichnung=eq.${encodeURIComponent(unitName)}`,
       { headers: { apikey: key, Authorization: `Bearer ${token}` } },

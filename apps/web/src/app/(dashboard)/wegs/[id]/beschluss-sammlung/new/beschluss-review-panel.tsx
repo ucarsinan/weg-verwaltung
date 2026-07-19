@@ -114,13 +114,13 @@ function BefundDisplay({ befund }: { befund: BestimmtheitsBefund }) {
       </div>
 
       {/* Missing elements */}
-      {befund.fehlende_elemente.length > 0 && (
+      {(befund.fehlende_elemente ?? []).length > 0 && (
         <div>
           <p className="mb-1 text-xs font-medium text-[color:var(--color-muted-foreground)] uppercase tracking-wide">
             Fehlende Elemente
           </p>
           <ul className="list-disc list-inside space-y-0.5">
-            {befund.fehlende_elemente.map((el, i) => (
+            {(befund.fehlende_elemente ?? []).map((el, i) => (
               <li key={i} className="text-sm text-[color:var(--color-foreground)]">
                 {el}
               </li>

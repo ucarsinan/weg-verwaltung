@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
@@ -24,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.graphs.base import AgentState
 from app.llm.anthropic_client import get_instructor_client
 from app.rag.retrieve import HybridRetriever, RetrievedChunk
+from app.tools.runtime import get_jwt, tool_runtime_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -117,14 +117,6 @@ def _extract_user_request(state: AgentState) -> str:
         elif isinstance(part, str):
             parts.append(part)
     return "\n".join(parts)
-
-
-def _configurable(config: RunnableConfig | None) -> dict[str, Any]:
-    if isinstance(config, dict):
-        value = config.get("configurable") or {}
-        return value if isinstance(value, dict) else {}
-    value = getattr(config, "configurable", {}) or {}
-    return value if isinstance(value, dict) else {}
 
 
 def _source_risk_flags(text: str) -> list[str]:
@@ -248,8 +240,7 @@ async def retrieve_context_node(
 ) -> dict[str, Any]:
     """Call the current RAG scaffold with the user JWT from RunnableConfig."""
 
-    configurable = _configurable(config)
-    jwt = configurable.get("jwt")
+    jwt = get_jwt(config)
     if not jwt:
         logger.warning("vorgang retrieve_context_node: JWT missing")
         return {
@@ -262,7 +253,7 @@ async def retrieve_context_node(
             ]
         }
 
-    runtime = SimpleNamespace(config={"configurable": {"jwt": jwt}})
+    runtime = tool_runtime_from_config(config)
     retriever = HybridRetriever(runtime)
     query = _extract_user_request(state)
     weg_id = state.get("meeting_id")

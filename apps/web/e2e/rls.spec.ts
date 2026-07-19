@@ -1,51 +1,80 @@
 import { test, expect } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
+import {
+  decodeTenantIdFromJwt,
+  getTokenFromAuthFile,
+} from "./helpers/fixtures";
 
 test.describe.configure({ mode: "serial" });
 
-function getTokenFromAuthFile(filename: string): string {
-  const filePath = path.resolve(process.cwd(), "playwright", ".auth", filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found at ${filePath}`);
-  }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const cookie = data.cookies.find((c: { name: string; value: string }) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
-
-  if (!cookie) throw new Error(`Supabase auth cookie not found in ${filename}`);
-  let val = decodeURIComponent(cookie.value);
-  if (val.startsWith("base64-")) {
-    val = Buffer.from(val.slice(7), "base64").toString("utf-8");
-  }
-  const tokenData = JSON.parse(val);
-  return Array.isArray(tokenData) ? tokenData[0] : tokenData.access_token;
-}
 
 test.describe("Feature 5: RLS Security Constraints", () => {
   let tokenA: string;
   let tokenB: string;
+  let tenantAId: string;
+  let tenantBId: string;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-  test.beforeAll(() => {
+  // A real Tenant-B Wirtschaftsplan to target cross-tenant write attempts
+  // against. Without this, tests that PATCH/DELETE a fabricated all-zero UUID
+  // cannot distinguish "RLS blocked it" from "that row never existed" — both
+  // return the same empty 200. weg.tenant_id/wirtschaftsplan.tenant_id both
+  // default to public.tenant_id(), so posting as Tenant B is enough to scope
+  // these correctly without passing tenant_id explicitly.
+  let tenantBPlanId: string;
+  let tenantBPlanBezeichnung: string;
+
+  test.beforeAll(async ({ request }) => {
     tokenA = getTokenFromAuthFile("admin.json");
     tokenB = getTokenFromAuthFile("tenant_b.json");
+    tenantAId = decodeTenantIdFromJwt(tokenA);
+    tenantBId = decodeTenantIdFromJwt(tokenB);
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321";
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    const headersB = {
+      apikey: key,
+      Authorization: `Bearer ${tokenB}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    };
+
+    const wegRes = await request.post(`${url}/rest/v1/weg`, {
+      data: { name: `RLS Fixture ${Date.now()}` },
+      headers: headersB,
+    });
+    if (!wegRes.ok()) throw new Error(`beforeAll: failed to create Tenant B weg fixture: ${wegRes.status()}`);
+    const [weg] = (await wegRes.json()) as Array<{ id: string }>;
+
+    tenantBPlanBezeichnung = `RLS Fixture Plan ${Date.now()}`;
+    const planRes = await request.post(`${url}/rest/v1/wirtschaftsplan`, {
+      data: {
+        weg_id: weg.id,
+        jahr: 2099,
+        bezeichnung: tenantBPlanBezeichnung,
+        gesamtkosten: 1000,
+      },
+      headers: headersB,
+    });
+    if (!planRes.ok()) throw new Error(`beforeAll: failed to create Tenant B plan fixture: ${planRes.status()}`);
+    const [plan] = (await planRes.json()) as Array<{ id: string }>;
+    tenantBPlanId = plan.id;
   });
 
   test("rls-wp-select-isolated: Tenant A cannot read Tenant B's Wirtschaftspläne", async ({ request }) => {
-    // Querying with Tenant A's token
+    // A GET against an existing, authorized table always returns 200 with a
+    // (possibly empty) array via PostgREST — RLS filters rows, it never 404s.
     const res = await request.get(`${url}/rest/v1/wirtschaftsplan?select=*`, {
       headers: {
         apikey: key,
         Authorization: `Bearer ${tokenA}`
       }
     });
-    expect(res.ok() || res.status() === 404).toBe(true);
-    if (res.ok()) {
-      const plans = await res.json() as Array<{ tenant_id: string }>;
-      // Ensure none of the returned plans belong to Tenant B's tenant_id (if we knew Tenant B's ID)
-      // Or just verify all retrieved plans belong to Tenant A's tenant (Postgres filters out Tenant B's rows silently)
-      expect(plans.length).toBeGreaterThanOrEqual(0);
+    expect(res.ok()).toBe(true);
+    const plans = await res.json() as Array<{ tenant_id: string }>;
+    for (const plan of plans) {
+      expect(plan.tenant_id).toBe(tenantAId);
+      expect(plan.tenant_id).not.toBe(tenantBId);
     }
   });
 
@@ -75,7 +104,12 @@ test.describe("Feature 5: RLS Security Constraints", () => {
         Authorization: `Bearer ${tokenA}`
       }
     });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    expect(res.ok()).toBe(true);
+    const sollstellungen = await res.json() as Array<{ tenant_id: string }>;
+    for (const row of sollstellungen) {
+      expect(row.tenant_id).toBe(tenantAId);
+      expect(row.tenant_id).not.toBe(tenantBId);
+    }
   });
 
   test("rls-sollstellung-direct-writes-blocked: Tenant A cannot insert Tenant B's Sollstellungen", async ({ request }) => {
@@ -123,21 +157,33 @@ test.describe("Feature 5: RLS Security Constraints", () => {
   });
 
   test("rls-cross-tenant-update: database rejects direct updates of another tenant's rows", async ({ request }) => {
-    const res = await request.patch(`${url}/rest/v1/wirtschaftsplan?id=eq.00000000-0000-0000-0000-000000000000`, {
-      data: { bezeichnung: "Hacked" },
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${tokenA}`
-      }
-    });
-    expect(res.ok() || res.status() === 404).toBe(true);
-    if (res.ok()) {
-      // Postgres RLS makes it so that 0 rows are updated silently, which returns 200 or 204 with no content
-      const data = await res.json().catch(() => null);
-      if (Array.isArray(data)) {
-        expect(data.length).toBe(0);
-      }
-    }
+    // Target a REAL Tenant-B row (created in beforeAll) — patching a
+    // fabricated UUID can't distinguish "RLS blocked it" from "it never
+    // existed"; both return the same empty 200.
+    const res = await request.patch(
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${tenantBPlanId}`,
+      {
+        data: { bezeichnung: "Hacked" },
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${tokenA}`,
+          Prefer: "return=representation",
+        },
+      },
+    );
+    expect(res.ok()).toBe(true);
+    const updated = (await res.json()) as unknown[];
+    expect(updated).toEqual([]); // RLS filters the row out — 0 rows matched, 0 updated
+
+    // Prove the row itself is genuinely untouched, not just invisible to the
+    // response — read it back with Tenant B's own token.
+    const verifyRes = await request.get(
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${tenantBPlanId}&select=bezeichnung`,
+      { headers: { apikey: key, Authorization: `Bearer ${tokenB}` } },
+    );
+    expect(verifyRes.ok()).toBe(true);
+    const [plan] = (await verifyRes.json()) as Array<{ bezeichnung: string }>;
+    expect(plan.bezeichnung).toBe(tenantBPlanBezeichnung);
   });
 
   test("rls-schema-tampering: resistance to SQL injection in parameters", async ({ request }) => {
@@ -169,16 +215,38 @@ test.describe("Feature 5: RLS Security Constraints", () => {
         "X-Tenant-ID": "some-other-tenant"
       }
     });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    expect(res.ok()).toBe(true);
+    const plans = await res.json() as Array<{ tenant_id: string }>;
+    for (const plan of plans) {
+      expect(plan.tenant_id).toBe(tenantAId);
+      expect(plan.tenant_id).not.toBe(tenantBId);
+    }
   });
 
   test("rls-sollstellung-history-lockdown: cross-tenant deletes do not remove historical finance data", async ({ request }) => {
-    const res = await request.delete(`${url}/rest/v1/wirtschaftsplan?tenant_id=eq.00000000-0000-0000-0000-000000000000`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${tokenA}`
-      }
-    });
-    expect(res.ok() || res.status() === 404).toBe(true);
+    // Same real-row requirement as rls-cross-tenant-update: delete a
+    // fabricated tenant_id filter and you can't tell "blocked" from "matched
+    // nothing to begin with".
+    const res = await request.delete(
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${tenantBPlanId}`,
+      {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${tokenA}`,
+          Prefer: "return=representation",
+        },
+      },
+    );
+    expect(res.ok()).toBe(true);
+    const deleted = (await res.json()) as unknown[];
+    expect(deleted).toEqual([]); // RLS filters the row out — 0 rows matched, 0 deleted
+
+    const verifyRes = await request.get(
+      `${url}/rest/v1/wirtschaftsplan?id=eq.${tenantBPlanId}&select=id`,
+      { headers: { apikey: key, Authorization: `Bearer ${tokenB}` } },
+    );
+    expect(verifyRes.ok()).toBe(true);
+    const stillThere = (await verifyRes.json()) as Array<{ id: string }>;
+    expect(stillThere).toHaveLength(1); // Tenant B still sees its own row, untouched
   });
 });
