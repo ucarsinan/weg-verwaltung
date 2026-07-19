@@ -1,0 +1,834 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WEG-Verwaltung Agent",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/agenda": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Post Agenda",
+        "description": "Run the Tagesordnung-Vorschlag graph for a given WEG.\n\nStreamed via SSE will come next (\u00a7 4.4); for now we ``ainvoke`` and\nreturn the final ``AgendaVorschlag`` shape directly.",
+        "operationId": "post_agenda_agent_agenda_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Bearer <user_jwt>",
+              "title": "Authorization"
+            },
+            "description": "Bearer <user_jwt>"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgendaInvokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgendaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/beschluss": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Post Beschluss",
+        "description": "Run the Beschluss-Formulierungs-Pr\u00fcfung graph on a single draft text.",
+        "operationId": "post_beschluss_agent_beschluss_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Bearer <user_jwt>",
+              "title": "Authorization"
+            },
+            "description": "Bearer <user_jwt>"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeschlussRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BeschlussCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/protokoll": {
+      "post": {
+        "tags": [
+          "protokoll"
+        ],
+        "summary": "Generate Or Resume Protokoll",
+        "description": "Run or resume the HITL Protokoll graph.\n\n- Without resume_token: invokes graph, catches GraphInterrupt, returns draft.\n- With resume_token:    verifies tenant ownership, resumes with edited_draft,\n                        returns completed status after persist_node writes the row.",
+        "operationId": "generate_or_resume_protokoll_agent_protokoll_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Bearer <user_jwt>",
+              "title": "Authorization"
+            },
+            "description": "Bearer <user_jwt>"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProtokollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtokollResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/vorgang": {
+      "post": {
+        "tags": [
+          "vorgang"
+        ],
+        "summary": "Post Vorgang",
+        "description": "Run the Vorgangszentrale suggestion graph.",
+        "operationId": "post_vorgang_agent_vorgang_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Bearer <user_jwt>",
+              "title": "Authorization"
+            },
+            "description": "Bearer <user_jwt>"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VorgangInvokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VorgangResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/internal/frist-scan": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Frist Scan",
+        "description": "Nightly scan for upcoming Einladungsfristen (\u00a7 4.4). Stub returns empty results.",
+        "operationId": "frist_scan_agent_internal_frist_scan_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Bearer <agent_internal_token>",
+              "title": "Authorization"
+            },
+            "description": "Bearer <agent_internal_token>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FristScanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgendaInvokeRequest": {
+        "properties": {
+          "weg_id": {
+            "type": "string",
+            "title": "Weg Id",
+            "description": "UUID-string der WEG, f\u00fcr die die TO vorbereitet wird."
+          },
+          "verwalter_hinweis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verwalter Hinweis",
+            "description": "Optionaler Freitext zur Versammlung \u2014 'Beirats-Wahl steht an', 'au\u00dferordentliche Versammlung wegen Wasserschaden', etc."
+          }
+        },
+        "type": "object",
+        "required": [
+          "weg_id"
+        ],
+        "title": "AgendaInvokeRequest",
+        "description": "Trigger payload for the agenda graph.\n\nDistinct from ``schemas.AgendaRequest`` (which is the older stub-era\ncontract). Once the router stabilises this can replace it in\n``app.schemas``."
+      },
+      "AgendaItemSuggestion": {
+        "properties": {
+          "titel": {
+            "type": "string",
+            "title": "Titel",
+            "description": "Knapper TOP-Titel, max ~80 Zeichen."
+          },
+          "beschreibung": {
+            "type": "string",
+            "title": "Beschreibung",
+            "description": "Inhalt des TOP \u2014 Antragsteller, Beschluss-Gegenstand, geplante Mehrheit (Bestimmtheitsgrundsatz, \u00a7 4.6)."
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "description": "Warum dieser TOP vorgeschlagen wird (z. B. 'wiederkehrend laut Vorjahres-Protokoll TOP 5', 'Branchenstandard', 'Beirats-Wahl alle 2 Jahre \u00a7 29 WEG')."
+          },
+          "quelle": {
+            "type": "string",
+            "enum": [
+              "vorjahres_protokoll",
+              "branchenstandard",
+              "frist_gebunden"
+            ],
+            "title": "Quelle",
+            "description": "Herkunft des Vorschlags \u2014 speist die UI-Begr\u00fcndungs-Spalte."
+          }
+        },
+        "type": "object",
+        "required": [
+          "titel",
+          "beschreibung",
+          "rationale",
+          "quelle"
+        ],
+        "title": "AgendaItemSuggestion",
+        "description": "One proposed TOP (Tagesordnungs-Punkt) for the upcoming meeting."
+      },
+      "AgendaResponse": {
+        "properties": {
+          "vorschlag": {
+            "$ref": "#/components/schemas/AgendaVorschlag"
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vorschlag",
+          "thread_id"
+        ],
+        "title": "AgendaResponse",
+        "description": "Router response \u2014 the structured ``AgendaVorschlag`` + thread_id for traces.\n\n``vorschlag`` ist bewusst das Graph-Modell selbst: der OpenAPI-Kontrakt\n(``just codegen`` \u2192 shared-types) tr\u00e4gt damit die volle Payload-Form,\nund Drift zwischen Graph und apps/web wird zum Compile-Fehler."
+      },
+      "AgendaVorschlag": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AgendaItemSuggestion"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Vorgeschlagene TOPs in der gew\u00fcnschten Reihenfolge."
+          },
+          "konfidenz": {
+            "type": "string",
+            "enum": [
+              "hoch",
+              "mittel",
+              "niedrig"
+            ],
+            "title": "Konfidenz",
+            "description": "Selbstbewertung der Vorschlags-Sicherheit."
+          },
+          "fehlende_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fehlende Inputs",
+            "description": "Inputs, die nicht im Kontext lagen, den Vorschlag aber verbessert h\u00e4tten (z. B. 'Jahresabrechnung-Status')."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "konfidenz"
+        ],
+        "title": "AgendaVorschlag",
+        "description": "Top-level structured response from the agenda graph."
+      },
+      "AgentSuggestion": {
+        "properties": {
+          "suggestion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Suggestion Id"
+          },
+          "use_case": {
+            "type": "string",
+            "enum": [
+              "agenda",
+              "beschluss",
+              "frist",
+              "protokoll",
+              "vorgang"
+            ],
+            "title": "Use Case"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "suggestion_id",
+          "use_case",
+          "tenant_id",
+          "created_at",
+          "payload"
+        ],
+        "title": "AgentSuggestion",
+        "description": "Generic suggestion envelope \u2014 concrete shapes refine per use-case later."
+      },
+      "BeschlussCheckResponse": {
+        "properties": {
+          "befund": {
+            "$ref": "#/components/schemas/BestimmtheitsBefund"
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "befund",
+          "thread_id"
+        ],
+        "title": "BeschlussCheckResponse",
+        "description": "Router response \u2014 the structured Befund + the thread_id for trace links.\n\n``befund`` ist bewusst das Graph-Modell selbst: der OpenAPI-Kontrakt\n(``just codegen`` \u2192 shared-types) tr\u00e4gt damit die volle Payload-Form,\nund Drift zwischen Graph und apps/web wird zum Compile-Fehler."
+      },
+      "BeschlussRequest": {
+        "properties": {
+          "weg_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Weg Id"
+          },
+          "draft_text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Draft Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "weg_id",
+          "draft_text"
+        ],
+        "title": "BeschlussRequest",
+        "description": "Trigger payload for the beschluss graph (\u00a7 4.1, Use-Case 2)."
+      },
+      "BestimmtheitsBefund": {
+        "properties": {
+          "antragsteller_klar": {
+            "type": "boolean",
+            "title": "Antragsteller Klar",
+            "description": "Ist der Antragsteller im Wortlaut eindeutig benannt?"
+          },
+          "beschlussgegenstand_klar": {
+            "type": "boolean",
+            "title": "Beschlussgegenstand Klar",
+            "description": "Ist der konkrete Beschlussgegenstand aus dem Wortlaut ableitbar?"
+          },
+          "mehrheitserfordernis_klar": {
+            "type": "boolean",
+            "title": "Mehrheitserfordernis Klar",
+            "description": "Ist das Mehrheitserfordernis explizit angegeben?"
+          },
+          "fehlende_elemente": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fehlende Elemente",
+            "description": "Knappe Liste der fehlenden oder unklaren Elemente."
+          },
+          "redlining_vorschlag": {
+            "type": "string",
+            "title": "Redlining Vorschlag",
+            "description": "Konkrete Umformulierung des Beschluss-Textes, die alle drei Bestimmtheits-Anforderungen erf\u00fcllt."
+          },
+          "konfidenz": {
+            "type": "string",
+            "enum": [
+              "hoch",
+              "mittel",
+              "niedrig"
+            ],
+            "title": "Konfidenz",
+            "description": "Selbstbewertung der Pr\u00fcfsicherheit."
+          }
+        },
+        "type": "object",
+        "required": [
+          "antragsteller_klar",
+          "beschlussgegenstand_klar",
+          "mehrheitserfordernis_klar",
+          "redlining_vorschlag",
+          "konfidenz"
+        ],
+        "title": "BestimmtheitsBefund",
+        "description": "Structured verdict on a draft Beschluss per the Bestimmtheitsgrundsatz.\n\nThe three booleans are the canonical legal test (Antragsteller,\nBeschlussgegenstand, Mehrheitserfordernis). ``redlining_vorschlag`` is\nthe actionable output for the Verwalter \u2014 what they paste back into the\ndraft to make it bestimmt."
+      },
+      "FristScanResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "stub",
+            "title": "Status",
+            "default": "stub"
+          },
+          "scan_results": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSuggestion"
+            },
+            "type": "array",
+            "title": "Scan Results"
+          }
+        },
+        "type": "object",
+        "title": "FristScanResponse",
+        "description": "Response shape for the internal pg_cron callback (\u00a7 4.4)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          }
+        },
+        "type": "object",
+        "title": "HealthResponse"
+      },
+      "ProtokollRequest": {
+        "properties": {
+          "meeting_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Meeting Id"
+          },
+          "resume_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Token",
+            "description": "Set when resuming an interrupted graph via Command(resume=...)."
+          },
+          "edited_draft": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited Draft",
+            "description": "Verwalter-edited Markdown text, required when resume_token is set."
+          }
+        },
+        "type": "object",
+        "required": [
+          "meeting_id"
+        ],
+        "title": "ProtokollRequest",
+        "description": "Trigger payload for the protokoll graph (\u00a7 4.1, Use-Case 4 \u2014 HITL).\n\nTwo modes:\n  - First call:  resume_token=None \u2192 graph runs to interrupt, returns draft.\n  - Resume call: resume_token=thread_id + edited_draft \u2192 graph continues, persists."
+      },
+      "ProtokollResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_review",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft"
+          },
+          "konfidenz": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hoch",
+                  "mittel",
+                  "niedrig"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Konfidenz"
+          },
+          "fehlende_daten": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fehlende Daten"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "thread_id"
+        ],
+        "title": "ProtokollResponse",
+        "description": "Router response for both modes of the protokoll endpoint."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VorgangInvokeRequest": {
+        "properties": {
+          "user_request": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "User Request",
+            "description": "Freitext-Auftrag des Verwalters."
+          },
+          "vorgang_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vorgang Id"
+          },
+          "inbox_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbox Item Id"
+          },
+          "weg_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weg Id"
+          },
+          "suggestion_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "vorgang_triage",
+                  "antwort_entwurf",
+                  "frist_vorschlag",
+                  "dokument_metadaten_vorschlag",
+                  "tool_action_proposal",
+                  "rag_answer",
+                  "blocked_proposal"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Type",
+            "description": "Optionaler UI-Hinweis auf die erwartete Vorschlagsart."
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_request"
+        ],
+        "title": "VorgangInvokeRequest",
+        "description": "Trigger payload for the Vorgangszentrale graph."
+      },
+      "VorgangResponse": {
+        "properties": {
+          "suggestion": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Suggestion"
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suggestion",
+          "thread_id"
+        ],
+        "title": "VorgangResponse",
+        "description": "Router response \u2014 structured suggestion plus thread id for traces."
+      }
+    }
+  }
+}
