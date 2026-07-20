@@ -144,6 +144,14 @@ jobs:
         uses: extractions/setup-just@v2
 
       - name: Regenerate shared-types from the agent contract
+        # `app.main` builds the FastAPI app (and validates Settings) at import time.
+        # These are the same placeholder values apps/agent/tests/conftest.py injects
+        # for pytest — no real Supabase project is reached, only app.openapi() runs.
+        env:
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_ANON_KEY: test-anon-key
+          SUPABASE_PROJECT_REF: test
+          AGENT_INTERNAL_TOKEN: internal-test-token
         run: just codegen
 
       - name: Fail on drift
