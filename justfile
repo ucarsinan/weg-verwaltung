@@ -64,12 +64,14 @@ e2e:
 # Lint everything
 lint:
     pnpm --filter @weg-verwaltung/web lint
-    uv run --project apps/agent ruff check apps/agent
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/ruff check apps/agent
 
 # Type-check everything
 typecheck:
     pnpm --filter @weg-verwaltung/web typecheck
-    uv run --project apps/agent mypy apps/agent
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/mypy apps/agent
 
 # Regenerate shared TS types from FastAPI OpenAPI schema (§2.2)
 # Regenerate packages/shared-types from the agent's OpenAPI contract.
