@@ -21,6 +21,17 @@ export type {
   ZuordnungsPruefung,
   Zuordnungswunsch,
 } from "./zahlung";
+export {
+  RUECKLAGEN_RICHTUNG_LABEL,
+  berechneEntwicklung,
+  bestandZumStichtag,
+  pruefeEntnahme,
+} from "./ausgabe";
+export type {
+  EntnahmePruefung,
+  RuecklagenBewegung,
+  RuecklagenJahr,
+} from "./ausgabe";
 export type {
   AnteilsErgebnis,
   AnteilsFehler,
