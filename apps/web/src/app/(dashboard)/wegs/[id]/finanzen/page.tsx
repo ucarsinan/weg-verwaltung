@@ -132,6 +132,12 @@ export default async function FinanzenPage({
             >
               Rücklage
             </Link>
+            <Link
+              href={`/wegs/${wegId}/finanzen/abrechnungen` as Route}
+              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+            >
+              Jahresabrechnung
+            </Link>
             <Button asChild>
               <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
                 Wirtschaftsplan erstellen
