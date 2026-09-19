@@ -51,16 +51,25 @@ async function wegMitPlanUndSchluessel(
   });
   await activateWirtschaftsplanFixture(page, planId);
 
-  await page.goto(`/wegs/${wegId}/finanzen/verteilungsschluessel/new`);
-  await page.getByLabel("Name").fill("MEA");
-  await page.getByLabel("Verteilungsart").selectOption("mea");
-  await page.getByLabel("Rechtsgrundlage").selectOption("gesetz");
-  await page.getByLabel("Gültig ab").fill("2020-01-01");
-  await page.getByRole("button", { name: /^Speichern$/ }).click();
-  await page.waitForURL(
-    new RegExp(`/wegs/${wegId}/finanzen/verteilungsschluessel$`),
-    { timeout: 20_000 },
-  );
+  // Zwei Schluessel, die gegenlaeufig wirken. Mit nur einem proportionalen
+  // Schluessel zahlen bei Ausgaben ueber Plan zwangslaeufig ALLE nach — ein
+  // Guthaben kann dann gar nicht entstehen, und ein Vorzeichenfehler bliebe
+  // unentdeckt.
+  for (const schluessel of [
+    { name: "MEA", typ: "mea" },
+    { name: "Pro Einheit", typ: "einheit" },
+  ]) {
+    await page.goto(`/wegs/${wegId}/finanzen/verteilungsschluessel/new`);
+    await page.getByLabel("Name").fill(schluessel.name);
+    await page.getByLabel("Verteilungsart").selectOption(schluessel.typ);
+    await page.getByLabel("Rechtsgrundlage").selectOption("gesetz");
+    await page.getByLabel("Gültig ab").fill("2020-01-01");
+    await page.getByRole("button", { name: /^Speichern$/ }).click();
+    await page.waitForURL(
+      new RegExp(`/wegs/${wegId}/finanzen/verteilungsschluessel$`),
+      { timeout: 20_000 },
+    );
+  }
 
   return { wegId };
 }
@@ -68,13 +77,23 @@ async function wegMitPlanUndSchluessel(
 async function erfasseAusgabe(
   page: Page,
   wegId: string,
-  input: { betrag: string; datum: string; empfaenger: string; kostenart: string },
+  input: {
+    betrag: string;
+    datum: string;
+    empfaenger: string;
+    kostenart: string;
+    /** Label wie im Auswahlfeld, z. B. "MEA — Miteigentumsanteile (MEA)". */
+    schluessel: string;
+  },
 ): Promise<void> {
   await page.goto(`/wegs/${wegId}/finanzen/ausgaben`);
   await page.getByLabel("Betrag (€)").fill(input.betrag);
   await page.getByLabel("Wertstellung").fill(input.datum);
   await page.getByLabel("Empfänger").fill(input.empfaenger);
   await page.getByLabel("Kostenart").fill(input.kostenart);
+  await page
+    .getByLabel("Verteilungsschlüssel")
+    .selectOption({ label: input.schluessel });
   await page.getByRole("button", { name: /^Ausgabe erfassen$/ }).click();
   await expect(
     page.getByRole("row").filter({ hasText: input.empfaenger }),
@@ -87,13 +106,22 @@ test.describe("Feature 6: Jahresabrechnung (0063)", () => {
   }) => {
     const { wegId } = await wegMitPlanUndSchluessel(page, "Spitze");
 
-    // 13.000 nach MEA: A 5.200, B 7.800. Soll: A 4.800, B 7.200.
-    // => A zahlt 400 nach, B bekommt 600 zurück.
+    // 10.000 nach MEA (A 4.000 / B 6.000) und 2.000 pro Einheit (je 1.000).
+    // Zusammen: A 5.000, B 7.000. Soll: A 4.800, B 7.200.
+    // => A zahlt 200 nach, B bekommt 200 zurück — beide Vorzeichen in einer WEG.
     await erfasseAusgabe(page, wegId, {
-      betrag: "13000",
+      betrag: "10000",
       datum: `${JAHR}-06-01`,
       empfaenger: "Verwalter",
       kostenart: "Verwaltung",
+      schluessel: "MEA — Miteigentumsanteile (MEA)",
+    });
+    await erfasseAusgabe(page, wegId, {
+      betrag: "2000",
+      datum: `${JAHR}-07-01`,
+      empfaenger: "Kabel AG",
+      kostenart: "Kabel",
+      schluessel: "Pro Einheit — Pro Einheit (gleich)",
     });
 
     await page.goto(`/wegs/${wegId}/finanzen/abrechnungen`);
@@ -105,19 +133,22 @@ test.describe("Feature 6: Jahresabrechnung (0063)", () => {
       { timeout: 20_000 },
     );
 
-    // Gesamtabrechnung.
+    // Gesamtabrechnung: je Kostenart eine Zeile.
     await expect(
       page.getByRole("row").filter({ hasText: "Verwaltung" }),
-    ).toContainText("13.000,00 €");
+    ).toContainText("10.000,00 €");
+    await expect(
+      page.getByRole("row").filter({ hasText: "Kabel" }),
+    ).toContainText("2.000,00 €");
 
-    // Einzelabrechnung: Vorzeichen und Beträge.
+    // Einzelabrechnung: beide Vorzeichen in derselben WEG.
     const zeileA = page.getByRole("row").filter({ hasText: "Whg A" });
-    await expect(zeileA).toContainText("5.200,00 €"); // Kostenanteil
+    await expect(zeileA).toContainText("5.000,00 €"); // Kostenanteil
     await expect(zeileA).toContainText("4.800,00 €"); // Soll-Vorschüsse
     await expect(zeileA).toContainText("Nachschuss");
 
     const zeileB = page.getByRole("row").filter({ hasText: "Whg B" });
-    await expect(zeileB).toContainText("7.800,00 €");
+    await expect(zeileB).toContainText("7.000,00 €");
     await expect(zeileB).toContainText("7.200,00 €");
     await expect(zeileB).toContainText("Guthaben");
   });
@@ -132,6 +163,7 @@ test.describe("Feature 6: Jahresabrechnung (0063)", () => {
       datum: `${JAHR}-06-01`,
       empfaenger: "Verwalter",
       kostenart: "Verwaltung",
+      schluessel: "MEA — Miteigentumsanteile (MEA)",
     });
 
     await page.goto(`/wegs/${wegId}/finanzen/abrechnungen`);
@@ -164,6 +196,7 @@ test.describe("Feature 6: Jahresabrechnung (0063)", () => {
       datum: `${JAHR}-06-01`,
       empfaenger: "Verwalter",
       kostenart: "Verwaltung",
+      schluessel: "MEA — Miteigentumsanteile (MEA)",
     });
 
     // Erstbeschluss.
