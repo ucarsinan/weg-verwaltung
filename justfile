@@ -16,7 +16,7 @@
 #     AGENTS.md; do not add them here before they are green.
 # ---------------------------------------------------------------------------
 AUDIT_DB_TESTS := "supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0059_tenant_audit_emitter.sql"
-FINANCE_DB_TESTS := "supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql"
+FINANCE_DB_TESTS := "supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql supabase/tests/0061_zahlung_und_offene_posten.sql"
 SAAS_DB_TESTS := "supabase/tests/0057_self_managed_saas_foundation.sql"
 
 # Show available recipes
