@@ -1,6 +1,24 @@
 # WEG-Verwaltung — root task runner.
 # All recipes run from the repo root; see docs/02-architecture-deployment.md §2.7.
 
+# ---------------------------------------------------------------------------
+# pgTAP contract groups — the single source of truth for which contracts run.
+# CI calls `just test-db-all` instead of repeating these paths, so the gate and
+# the local recipes cannot drift apart (they did: 0057-0060 were green locally
+# but absent from CI until 2026-09-19).
+#
+# Deliberately NOT listed:
+#   - 0001, 0039: commented-out contract shapes, no runnable assertions.
+#   - 0050, 0052, 0054: currently failing. 0054 dies on `permission denied for
+#     schema auth` inside audit_writer.tg_emit_vorgang_audit_event, which looks
+#     like a gap in the local bootstrap rather than a product bug — the hosted
+#     project grants audit_writer more than `supabase db reset` does. Tracked in
+#     AGENTS.md; do not add them here before they are green.
+# ---------------------------------------------------------------------------
+AUDIT_DB_TESTS := "supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0059_tenant_audit_emitter.sql"
+FINANCE_DB_TESTS := "supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql"
+SAAS_DB_TESTS := "supabase/tests/0057_self_managed_saas_foundation.sql"
+
 # Show available recipes
 default:
     @just --list
@@ -39,21 +57,31 @@ test-audit-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
-    cd infra && supabase test db supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0059_tenant_audit_emitter.sql --local
+    cd infra && supabase test db {{AUDIT_DB_TESTS}} --local
 
 # Run finance pgTAP contracts against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
 test-finance-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
-    cd infra && supabase test db supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql --local
+    cd infra && supabase test db {{FINANCE_DB_TESTS}} --local
 
 # Run self-managed SaaS pgTAP contracts against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
 test-saas-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
-    cd infra && supabase test db supabase/tests/0057_self_managed_saas_foundation.sql --local
+    cd infra && supabase test db {{SAAS_DB_TESTS}} --local
+
+# Every green pgTAP contract against ONE ephemeral local Supabase DB. This is
+# what the CI db-regression job runs; the grouped recipes above stay for focused
+# local runs. Applying the migrations is the slow part, so doing it once beats
+# running the three recipes back to back.
+test-db-all:
+    supabase db start --workdir infra
+    supabase db reset --workdir infra --local --no-seed
+    cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
+    cd infra && supabase test db {{AUDIT_DB_TESTS}} {{FINANCE_DB_TESTS}} {{SAAS_DB_TESTS}} --local
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
