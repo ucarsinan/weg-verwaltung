@@ -10,6 +10,17 @@ export {
   isVerteilungsschluesselTyp,
 } from "./verteilungsschluessel";
 export { berechneAnteile, berechneMonatsvorschau } from "./allocation";
+export {
+  formatMonat,
+  pruefeZuordnungen,
+  verteileAufAeltesteOffen,
+} from "./zahlung";
+export type {
+  OffenerPosten,
+  ZuordnungsFehler,
+  ZuordnungsPruefung,
+  Zuordnungswunsch,
+} from "./zahlung";
 export type {
   AnteilsErgebnis,
   AnteilsFehler,

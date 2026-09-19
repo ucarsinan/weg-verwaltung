@@ -57,6 +57,12 @@ export type VerteilungsschluesselTyp =
   | "manuell"
   | "gemischt";
 
+/**
+ * Woher ein Zahlungseingang stammt (Migration 0061). `camt` ist bereits
+ * vorgesehen, damit der Kontoauszug-Import keine weitere Migration braucht.
+ */
+export type ZahlungsQuelle = "manuell" | "camt";
+
 /** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
 export type VerteilungsschluesselQuelle =
   | "gesetz"
@@ -465,6 +471,98 @@ export type Database = Overwrite<
                 verteilungsschluessel_snapshot?: Json;
                 created_at?: string;
                 updated_at?: string;
+              };
+              Relationships: [];
+            };
+            // Zahlungskette (Migration 0061) — ebenfalls manuell nachgetragen.
+            zahlung: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                betrag: number;
+                wert_datum: string;
+                zahler_referenz: string;
+                quelle: ZahlungsQuelle;
+                notiz: string | null;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                betrag: number;
+                wert_datum: string;
+                zahler_referenz: string;
+                quelle?: ZahlungsQuelle;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                betrag?: number;
+                wert_datum?: string;
+                zahler_referenz?: string;
+                quelle?: ZahlungsQuelle;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            zahlungszuordnung: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                zahlung_id: string;
+                sollstellung_id: string;
+                betrag: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                zahlung_id: string;
+                sollstellung_id: string;
+                betrag: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                zahlung_id?: string;
+                sollstellung_id?: string;
+                betrag?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+          }
+        >;
+        Views: Overwrite<
+          GeneratedDatabase["public"]["Views"],
+          {
+            // Abgeleitete Sicht aus 0061: Sollstellung minus zugeordnete
+            // Zahlungen. Nur lesbar — deshalb kein Insert/Update.
+            offener_posten: {
+              Row: {
+                sollstellung_id: string;
+                tenant_id: string;
+                weg_id: string;
+                unit_id: string;
+                unit_bezeichnung: string;
+                jahr: number;
+                monat: number;
+                soll_betrag: number;
+                gezahlt_betrag: number;
+                offen_betrag: number;
               };
               Relationships: [];
             };
