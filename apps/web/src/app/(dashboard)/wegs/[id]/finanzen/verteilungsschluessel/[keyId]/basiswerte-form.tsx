@@ -73,9 +73,18 @@ export default function BasiswerteForm({
         typ,
         units,
         units
+          // Ein leeres Feld ist ein FEHLENDER Wert, keine Null: `Number("")`
+          // ist 0 und wuerde als gueltiger Basiswert durchgehen. Die Vorschau
+          // zeigte dann eine plausible Aufteilung (75 % / 0 %), statt auf die
+          // Luecke hinzuweisen, die der Generator spaeter mit 23514 ablehnt.
           .map((unit) => ({
             unitId: unit.id,
-            wert: Number((werte[unit.id] ?? "").replace(",", ".")),
+            roh: (werte[unit.id] ?? "").trim(),
+          }))
+          .filter((eintrag) => eintrag.roh.length > 0)
+          .map((eintrag) => ({
+            unitId: eintrag.unitId,
+            wert: Number(eintrag.roh.replace(",", ".")),
           }))
           .filter((eintrag) => Number.isFinite(eintrag.wert) && eintrag.wert >= 0),
       ),
