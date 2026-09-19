@@ -63,6 +63,12 @@ export type VerteilungsschluesselTyp =
  */
 export type ZahlungsQuelle = "manuell" | "camt";
 
+/** Art einer Ausgabe (Migration 0062). */
+export type AusgabenArt = "kosten" | "ruecklage_zufuehrung";
+
+/** Bewegungsrichtung im Ruecklagen-Konto (Migration 0062). */
+export type RuecklagenRichtung = "anfangsbestand" | "zufuehrung" | "entnahme";
+
 /** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
 export type VerteilungsschluesselQuelle =
   | "gesetz"
@@ -544,6 +550,94 @@ export type Database = Overwrite<
               };
               Relationships: [];
             };
+            // Ausgaben und Erhaltungsruecklage (Migration 0062).
+            ausgabe: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                betrag: number;
+                wert_datum: string;
+                empfaenger: string;
+                kostenart: string;
+                art: AusgabenArt;
+                verteilungsschluessel_version_id: string;
+                quelle: ZahlungsQuelle;
+                notiz: string | null;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                betrag: number;
+                wert_datum: string;
+                empfaenger: string;
+                kostenart: string;
+                art?: AusgabenArt;
+                verteilungsschluessel_version_id: string;
+                quelle?: ZahlungsQuelle;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                betrag?: number;
+                wert_datum?: string;
+                empfaenger?: string;
+                kostenart?: string;
+                art?: AusgabenArt;
+                verteilungsschluessel_version_id?: string;
+                quelle?: ZahlungsQuelle;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            ruecklage_bewegung: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                datum: string;
+                betrag: number;
+                richtung: RuecklagenRichtung;
+                ausgabe_id: string | null;
+                notiz: string | null;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                datum: string;
+                betrag: number;
+                richtung: RuecklagenRichtung;
+                ausgabe_id?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                datum?: string;
+                betrag?: number;
+                richtung?: RuecklagenRichtung;
+                ausgabe_id?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
           }
         >;
         Views: Overwrite<
@@ -551,6 +645,19 @@ export type Database = Overwrite<
           {
             // Abgeleitete Sicht aus 0061: Sollstellung minus zugeordnete
             // Zahlungen. Nur lesbar — deshalb kein Insert/Update.
+            // Die vier Groessen aus § 28 Abs. 2 WEG je Jahr (Migration 0062).
+            ruecklage_entwicklung: {
+              Row: {
+                tenant_id: string;
+                weg_id: string;
+                jahr: number;
+                anfangsbestand: number;
+                zufuehrungen: number;
+                entnahmen: number;
+                endbestand: number;
+              };
+              Relationships: [];
+            };
             offener_posten: {
               Row: {
                 sollstellung_id: string;
