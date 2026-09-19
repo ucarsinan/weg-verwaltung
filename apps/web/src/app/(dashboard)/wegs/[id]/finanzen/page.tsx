@@ -108,6 +108,18 @@ export default async function FinanzenPage({
             >
               Verteilungsschlüssel
             </Link>
+            <Link
+              href={`/wegs/${wegId}/finanzen/offene-posten` as Route}
+              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+            >
+              Offene Posten
+            </Link>
+            <Link
+              href={`/wegs/${wegId}/finanzen/zahlungen` as Route}
+              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+            >
+              Zahlungen
+            </Link>
             <Button asChild>
               <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
                 Wirtschaftsplan erstellen
