@@ -44,6 +44,27 @@ export type AnfechtungsEventTyp =
   | "unwirksam_erklaert"
   | "bestaetigt";
 
+/**
+ * Verteilungsschluessel (Migration 0056). `gemischt` is modelled but the
+ * Sollstellung generator rejects it with 0A000 until the basis-value schema can
+ * express which part of a mixed rule a value belongs to — see 0060.
+ */
+export type VerteilungsschluesselTyp =
+  | "mea"
+  | "einheit"
+  | "flaeche"
+  | "verbrauch"
+  | "manuell"
+  | "gemischt";
+
+/** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
+export type VerteilungsschluesselQuelle =
+  | "gesetz"
+  | "teilungserklaerung"
+  | "gemeinschaftsordnung"
+  | "beschluss"
+  | "manuell";
+
 export type Json =
   | string
   | number
@@ -290,6 +311,163 @@ export type Database = Overwrite<
                 >;
               }
             >;
+            // Finance-Allocation-Tabellen (Migration 0056) — vollstaendig
+            // manuell nachgetragen, weil database.types.gen.ts sie noch nicht
+            // kennt (Regenerieren erfordert einen Cloud-Zugriff). Overwrite
+            // ergaenzt hier neue Schluessel, statt bestehende zu ersetzen.
+            verteilungsschluessel: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                name: string;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                name: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                name?: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            verteilungsschluessel_version: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                verteilungsschluessel_id: string;
+                typ: VerteilungsschluesselTyp;
+                quelle: VerteilungsschluesselQuelle;
+                resolution_id: string | null;
+                gueltig_ab: string;
+                gueltig_bis: string | null;
+                parameter: Json;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_id: string;
+                typ: VerteilungsschluesselTyp;
+                quelle: VerteilungsschluesselQuelle;
+                resolution_id?: string | null;
+                gueltig_ab: string;
+                gueltig_bis?: string | null;
+                parameter?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_id?: string;
+                typ?: VerteilungsschluesselTyp;
+                quelle?: VerteilungsschluesselQuelle;
+                resolution_id?: string | null;
+                gueltig_ab?: string;
+                gueltig_bis?: string | null;
+                parameter?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            verteilungsschluessel_basiswert: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                verteilungsschluessel_version_id: string;
+                unit_id: string;
+                wert: number;
+                einheit: string;
+                gueltig_ab: string;
+                gueltig_bis: string | null;
+                notiz: string | null;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id: string;
+                unit_id: string;
+                wert: number;
+                einheit: string;
+                gueltig_ab: string;
+                gueltig_bis?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id?: string;
+                unit_id?: string;
+                wert?: number;
+                einheit?: string;
+                gueltig_ab?: string;
+                gueltig_bis?: string | null;
+                notiz?: string | null;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            wirtschaftsplan_position: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                wirtschaftsplan_id: string;
+                position: number;
+                kostenart: string;
+                beschreibung: string | null;
+                jahresbetrag: number;
+                verteilungsschluessel_version_id: string;
+                verteilungsschluessel_snapshot: Json;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                wirtschaftsplan_id: string;
+                position: number;
+                kostenart: string;
+                beschreibung?: string | null;
+                jahresbetrag: number;
+                verteilungsschluessel_version_id: string;
+                verteilungsschluessel_snapshot?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                wirtschaftsplan_id?: string;
+                position?: number;
+                kostenart?: string;
+                beschreibung?: string | null;
+                jahresbetrag?: number;
+                verteilungsschluessel_version_id?: string;
+                verteilungsschluessel_snapshot?: Json;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
           }
         >;
         Functions: Overwrite<

@@ -146,11 +146,32 @@ weil eine Einheit spaeter verkauft wurde.
    - setzt Audit-Trigger,
    - blockiert Agent-Write-Pfade,
    - blockiert Planpositionsaenderungen an effektiven Plaenen.
-2. Folge-Slice
-   - UI fuer Planpositionen,
-   - Generator liest optional Planpositionen statt nur `gesamtkosten`,
-   - bestehender MEA-Pfad bleibt als Rueckfall erhalten.
-3. Danach
+2. `0060_wirtschaftsplan_position_allocation.sql` (Folge-Slice, umgesetzt)
+   - UI fuer Verteilungsschluessel, Basiswerte und Planpositionen,
+   - Generator liest Planpositionen statt nur `gesamtkosten`,
+   - bestehender MEA-Pfad bleibt als Rueckfall erhalten (byte-identisch,
+     solange ein Plan keine Positionen hat),
+   - unterstuetzte Schluesseltypen: `mea`, `einheit`, `flaeche`, `verbrauch`,
+     `manuell`.
+   - Abweichung zum Alt-Pfad: im Positionen-Pfad werden `mea`-Anteile auf die
+     MEA-Summe der WEG normalisiert. Das Schema erzwingt nicht, dass sich die
+     MEA einer WEG auf 1 summieren; ohne Normalisierung bliebe ein Teil des
+     Positionsbetrags unverteilt. § 16 Abs. 2 WEG verteilt "im Verhaeltnis der
+     Miteigentumsanteile", und der Plan muss vollstaendig finanziert sein.
+3. Offener Folge-Slice: `gemischt`
+   - `gemischt` ist in 0056 modelliert, wird von 0060 aber fail-closed mit
+     `0A000` abgelehnt. Grund: `verteilungsschluessel_basiswert` ist eindeutig
+     ueber `(tenant_id, version_id, unit_id, gueltig_ab)` und hat keine Spalte
+     fuer die Zugehoerigkeit zu einem Teil der Regel — eine 70/30-Regel kann
+     Verbrauch UND Flaeche einer Einheit deshalb nicht speichern.
+   - Praxisrelevanz: Heiz- und Warmwasserkosten muessen nach HeizKV zwingend
+     gemischt verteilt werden (30-50 % Grundkosten nach Flaeche, 50-70 % nach
+     Verbrauch). Solange dieser Slice offen ist, lassen sich Heizkosten nicht
+     positionsgenau planen.
+   - Zu entscheiden: Diskriminator-Spalte am Basiswert vs. Komposition aus
+     referenzierten Sub-Versionen. Das ist eine Schema-/Produktentscheidung,
+     keine stille Annahme im Geldpfad.
+4. Danach
    - Forderungen/Open Items,
    - Zahlungen,
    - Belege/Buchungen,

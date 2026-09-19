@@ -46,7 +46,7 @@ test-audit-db:
 test-finance-db:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
-    cd infra && supabase test db supabase/tests/0056_finance_allocation_foundation.sql --local
+    cd infra && supabase test db supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql --local
 
 # Run self-managed SaaS pgTAP contracts against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
@@ -64,12 +64,14 @@ e2e:
 # Lint everything
 lint:
     pnpm --filter @weg-verwaltung/web lint
-    uv run --project apps/agent ruff check apps/agent
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/ruff check apps/agent
 
 # Type-check everything
 typecheck:
     pnpm --filter @weg-verwaltung/web typecheck
-    uv run --project apps/agent mypy apps/agent
+    uv sync --project apps/agent --extra dev --quiet
+    apps/agent/.venv/bin/mypy apps/agent
 
 # Regenerate shared TS types from FastAPI OpenAPI schema (§2.2)
 # Regenerate packages/shared-types from the agent's OpenAPI contract.

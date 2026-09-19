@@ -101,11 +101,19 @@ export default async function FinanzenPage({
               Finanzplanung für {weg.name}
             </p>
           </div>
-          <Button asChild className="shrink-0">
-            <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
-              Wirtschaftsplan erstellen
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <Link
+              href={`/wegs/${wegId}/finanzen/verteilungsschluessel` as Route}
+              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+            >
+              Verteilungsschlüssel
             </Link>
-          </Button>
+            <Button asChild>
+              <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
+                Wirtschaftsplan erstellen
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -159,15 +167,26 @@ export default async function FinanzenPage({
                         {formatCurrencyDE(Number(plan.gesamtkosten))}
                       </td>
                       <td className="py-3 text-right">
-                        <Link
-                          href={
-                            `/wegs/${wegId}/finanzen/${plan.id}/edit` as Route
-                          }
-                          className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-                          aria-label={`Wirtschaftsplan ${plan.jahr} bearbeiten`}
-                        >
-                          Bearbeiten
-                        </Link>
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={
+                              `/wegs/${wegId}/finanzen/${plan.id}/positionen` as Route
+                            }
+                            className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+                            aria-label={`Kostenpositionen für Wirtschaftsplan ${plan.jahr}`}
+                          >
+                            Positionen
+                          </Link>
+                          <Link
+                            href={
+                              `/wegs/${wegId}/finanzen/${plan.id}/edit` as Route
+                            }
+                            className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
+                            aria-label={`Wirtschaftsplan ${plan.jahr} bearbeiten`}
+                          >
+                            Bearbeiten
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
