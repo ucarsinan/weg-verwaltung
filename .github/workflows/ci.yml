@@ -272,6 +272,10 @@ jobs:
   # infra/supabase/tests — local pgTAP regression gate.
   # Runs against an ephemeral local Supabase DB in CI. It intentionally never
   # uses --linked, SUPABASE_ACCESS_TOKEN, or production secrets.
+  #
+  # The contract list lives in the justfile (AUDIT_DB_TESTS / FINANCE_DB_TESTS /
+  # SAAS_DB_TESTS) and is NOT repeated here. Keeping a second copy is what let
+  # 0057-0060 pass locally while never running in CI.
   # --------------------------------------------------------------------------
   audit-db-regression:
     name: db-regression (pgTAP)
@@ -286,25 +290,8 @@ jobs:
         with:
           version: 2.84.2
 
-      - name: Start local Supabase Postgres
-        run: supabase db start --workdir infra
+      - name: Setup just
+        uses: extractions/setup-just@v2
 
-      - name: Apply migrations to local DB
-        run: supabase db reset --workdir infra --local --no-seed
-
-      - name: Normalize local audit test grants
-        run: |
-          cd infra
-          supabase db query \
-            --file supabase/ci/audit_regression_bootstrap.sql \
-            --local
-
-      - name: Run pgTAP regressions
-        run: |
-          cd infra
-          supabase test db \
-            supabase/tests/0002_audit_chain.sql \
-            supabase/tests/0046_least_privilege.sql \
-            supabase/tests/0055_advisor_hardening.sql \
-            supabase/tests/0056_finance_allocation_foundation.sql \
-            --local
+      - name: Run every green pgTAP contract
+        run: just test-db-all
