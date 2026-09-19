@@ -45,6 +45,16 @@ async function wegMitSchluessel(
   return wegId;
 }
 
+async function erfasseBewegung(
+  page: Page,
+  input: { richtung: string; betrag: string; datum: string },
+): Promise<void> {
+  await page.getByLabel("Bewegungsart").selectOption(input.richtung);
+  await page.getByLabel("Betrag (€)").fill(input.betrag);
+  await page.getByLabel("Datum").fill(input.datum);
+  await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
+}
+
 test.describe("Feature 5: Ausgaben und Erhaltungsrücklage (0062)", () => {
   test("ausgabe-jahr: das Wertstellungsdatum bestimmt das Abrechnungsjahr", async ({
     page,
@@ -52,7 +62,7 @@ test.describe("Feature 5: Ausgaben und Erhaltungsrücklage (0062)", () => {
     const wegId = await wegMitSchluessel(page, "Jahr");
 
     await page.goto(`/wegs/${wegId}/finanzen/ausgaben`);
-    await page.getByLabel("Betrag (€)").fill("250,50");
+    await page.getByLabel("Betrag (€)").fill("250.50");
     await page.getByLabel("Wertstellung").fill("2080-03-01");
     await page.getByLabel("Empfänger").fill("Stadtwerke");
     await page.getByLabel("Kostenart").fill("Allgemeinstrom");
@@ -71,33 +81,37 @@ test.describe("Feature 5: Ausgaben und Erhaltungsrücklage (0062)", () => {
     const wegId = await wegMitSchluessel(page, "Rücklage");
 
     await page.goto(`/wegs/${wegId}/finanzen/ruecklage`);
-
-    // Anfangsbestand 10.000 zum 01.01.2080.
-    await page.getByLabel("Bewegungsart").selectOption("anfangsbestand");
-    await page.getByLabel("Betrag (€)").fill("10000");
-    await page.getByLabel("Datum").fill("2080-01-01");
-    await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
-    await expect(page.getByRole("status")).toContainText("Bewegung gespeichert");
-
-    // Zuführung 2.000 im selben Jahr.
-    await page.getByLabel("Bewegungsart").selectOption("zufuehrung");
-    await page.getByLabel("Betrag (€)").fill("2000");
-    await page.getByLabel("Datum").fill("2080-06-01");
-    await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
-    await expect(page.getByRole("status")).toContainText("Bewegung gespeichert");
-
-    // Entnahme 500 — danach 11.500.
-    await page.getByLabel("Bewegungsart").selectOption("entnahme");
-    await page.getByLabel("Betrag (€)").fill("500");
-    await page.getByLabel("Datum").fill("2080-09-01");
-    await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
-    await expect(page.getByRole("status")).toContainText("Bewegung gespeichert");
-
     const zeile2080 = page.getByRole("row").filter({ hasText: "2080" });
+
+    // Nach jedem Schritt auf den ENDBESTAND warten, nicht auf die
+    // Erfolgsmeldung: die bleibt nach dem ersten Speichern stehen, womit jede
+    // weitere Prüfung darauf sofort durchliefe — und die nächsten Eingaben
+    // würden von der noch laufenden Revalidierung überschrieben.
+    await erfasseBewegung(page, {
+      richtung: "anfangsbestand",
+      betrag: "10000",
+      datum: "2080-01-01",
+    });
+    await expect(zeile2080).toContainText("10.000,00 €");
+
+    await erfasseBewegung(page, {
+      richtung: "zufuehrung",
+      betrag: "2000",
+      datum: "2080-06-01",
+    });
+    await expect(zeile2080).toContainText("12.000,00 €");
+
+    await erfasseBewegung(page, {
+      richtung: "entnahme",
+      betrag: "500",
+      datum: "2080-09-01",
+    });
+    await expect(zeile2080).toContainText("11.500,00 €");
+
+    // Die vier Größen aus § 28 Abs. 2 in einer Zeile.
     await expect(zeile2080).toContainText("10.000,00 €"); // Anfang
     await expect(zeile2080).toContainText("2.000,00 €"); // Zuführungen
     await expect(zeile2080).toContainText("500,00 €"); // Entnahmen
-    await expect(zeile2080).toContainText("11.500,00 €"); // Ende
   });
 
   test("ruecklage-stichtag: eine zu früh datierte Entnahme wird abgelehnt", async ({
@@ -106,18 +120,21 @@ test.describe("Feature 5: Ausgaben und Erhaltungsrücklage (0062)", () => {
     const wegId = await wegMitSchluessel(page, "Stichtag");
 
     await page.goto(`/wegs/${wegId}/finanzen/ruecklage`);
+    const zeile2081 = page.getByRole("row").filter({ hasText: "2081" });
 
-    await page.getByLabel("Bewegungsart").selectOption("anfangsbestand");
-    await page.getByLabel("Betrag (€)").fill("1000");
-    await page.getByLabel("Datum").fill("2081-01-01");
-    await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
-    await expect(page.getByRole("status")).toContainText("Bewegung gespeichert");
+    await erfasseBewegung(page, {
+      richtung: "anfangsbestand",
+      betrag: "1000",
+      datum: "2081-01-01",
+    });
+    await expect(zeile2081).toContainText("1.000,00 €");
 
-    await page.getByLabel("Bewegungsart").selectOption("zufuehrung");
-    await page.getByLabel("Betrag (€)").fill("5000");
-    await page.getByLabel("Datum").fill("2081-12-01");
-    await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
-    await expect(page.getByRole("status")).toContainText("Bewegung gespeichert");
+    await erfasseBewegung(page, {
+      richtung: "zufuehrung",
+      betrag: "5000",
+      datum: "2081-12-01",
+    });
+    await expect(zeile2081).toContainText("6.000,00 €");
 
     // Bestand am Jahresende: 6.000. Zum 01.02.2081 aber erst 1.000 —
     // eine Entnahme von 3.000 zu diesem Datum darf nicht durchgehen.
@@ -126,13 +143,15 @@ test.describe("Feature 5: Ausgaben und Erhaltungsrücklage (0062)", () => {
     await page.getByLabel("Datum").fill("2081-02-01");
 
     // Die Vorschau warnt schon vor dem Absenden.
-    await expect(page.getByRole("status")).toContainText(
-      "sind erst 1.000,00 € vorhanden",
-    );
+    await expect(
+      page.getByText(/sind erst 1\.000,00\s€ vorhanden/),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: /^Bewegung erfassen$/ }).click();
 
     // Und die Datenbank lehnt ab, falls doch abgeschickt wird.
-    await expect(page.getByRole("alert").or(page.getByText(/übersteigt/))).toBeVisible();
+    await expect(
+      page.getByText(/übersteigt den Rücklagenbestand/),
+    ).toBeVisible();
   });
 });
