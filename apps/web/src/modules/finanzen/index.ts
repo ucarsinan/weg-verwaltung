@@ -40,3 +40,11 @@ export type {
   UnitAnteil,
   UnitMea,
 } from "./allocation";
+export {
+  ABRECHNUNGS_STATUS_LABEL,
+  SPITZEN_ART_LABEL,
+  pruefeVerteilung,
+  spitzenArt,
+  summiereSpitzen,
+} from "./abrechnung";
+export type { SpitzeZeile, SpitzenArt, SpitzenSummen } from "./abrechnung";

@@ -69,6 +69,12 @@ export type AusgabenArt = "kosten" | "ruecklage_zufuehrung";
 /** Bewegungsrichtung im Ruecklagen-Konto (Migration 0062). */
 export type RuecklagenRichtung = "anfangsbestand" | "zufuehrung" | "entnahme";
 
+/**
+ * Lebenszyklus einer Jahresabrechnung (Migration 0063). `abgeloest` entsteht
+ * durch einen Zweitbeschluss, der rechtlich ausdruecklich zulaessig ist.
+ */
+export type AbrechnungsStatus = "entwurf" | "beschlossen" | "abgeloest";
+
 /** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
 export type VerteilungsschluesselQuelle =
   | "gesetz"
@@ -599,6 +605,115 @@ export type Database = Overwrite<
               };
               Relationships: [];
             };
+            // Jahresabrechnung (Migration 0063).
+            abrechnung: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                jahr: number;
+                bezeichnung: string;
+                status: AbrechnungsStatus;
+                beschlossen_am: string | null;
+                resolution_id: string | null;
+                vorgaenger_abrechnung_id: string | null;
+                version_nr: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                jahr: number;
+                bezeichnung: string;
+                status?: AbrechnungsStatus;
+                beschlossen_am?: string | null;
+                resolution_id?: string | null;
+                vorgaenger_abrechnung_id?: string | null;
+                version_nr?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                jahr?: number;
+                bezeichnung?: string;
+                status?: AbrechnungsStatus;
+                beschlossen_am?: string | null;
+                resolution_id?: string | null;
+                vorgaenger_abrechnung_id?: string | null;
+                version_nr?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            abrechnung_kostenposition: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                abrechnung_id: string;
+                kostenart: string;
+                betrag_gesamt: number;
+                verteilungsschluessel_version_id: string;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                abrechnung_id: string;
+                kostenart: string;
+                betrag_gesamt: number;
+                verteilungsschluessel_version_id: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                abrechnung_id?: string;
+                kostenart?: string;
+                betrag_gesamt?: number;
+                verteilungsschluessel_version_id?: string;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            abrechnung_anteil: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                abrechnung_kostenposition_id: string;
+                unit_id: string;
+                betrag: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                abrechnung_kostenposition_id: string;
+                unit_id: string;
+                betrag: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                abrechnung_kostenposition_id?: string;
+                unit_id?: string;
+                betrag?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
             ruecklage_bewegung: {
               Row: {
                 id: string;
@@ -646,6 +761,22 @@ export type Database = Overwrite<
             // Abgeleitete Sicht aus 0061: Sollstellung minus zugeordnete
             // Zahlungen. Nur lesbar — deshalb kein Insert/Update.
             // Die vier Groessen aus § 28 Abs. 2 WEG je Jahr (Migration 0062).
+            // Abrechnungsspitze je Einheit (Migration 0063): Kostenanteil minus
+            // beschlossene Vorschuesse. Positiv = Nachschuss, negativ = Guthaben.
+            abrechnung_spitze: {
+              Row: {
+                abrechnung_id: string;
+                tenant_id: string;
+                weg_id: string;
+                jahr: number;
+                unit_id: string;
+                unit_bezeichnung: string;
+                kostenanteil: number;
+                soll_vorschuesse: number;
+                spitze: number;
+              };
+              Relationships: [];
+            };
             ruecklage_entwicklung: {
               Row: {
                 tenant_id: string;
@@ -689,6 +820,18 @@ export type Database = Overwrite<
             create_nachtragsplan: {
               Args: { p_wirtschaftsplan_id: string };
               Returns: string;
+            };
+            erstelle_abrechnung: {
+              Args: { p_weg_id: string; p_jahr: number };
+              Returns: string;
+            };
+            beschliesse_abrechnung: {
+              Args: {
+                p_abrechnung_id: string;
+                p_beschlossen_am: string;
+                p_resolution_id?: string | null;
+              };
+              Returns: undefined;
             };
             feststellen_resolution: {
               Args: { p_resolution_id: string };
