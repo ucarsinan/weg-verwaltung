@@ -81,9 +81,31 @@ export default async function FinanzenPage({
 
   const planRows: WirtschaftsplanRow[] = plans ?? [];
 
+  // Sechs Geschwisterseiten passen nicht mehr als Kopfzeilen-Links neben den
+  // Titel: der Titelblock wurde dadurch auf Breite null gequetscht und die
+  // truncate-Ueberschrift verschwand. Sie gehoeren in eine eigene Navigations-
+  // zeile, wie in `weg-workspace-nav`.
+  const bereichsLinks: { label: string; href: Route }[] = [
+    {
+      label: "Verteilungsschlüssel",
+      href: `/wegs/${wegId}/finanzen/verteilungsschluessel` as Route,
+    },
+    {
+      label: "Offene Posten",
+      href: `/wegs/${wegId}/finanzen/offene-posten` as Route,
+    },
+    { label: "Zahlungen", href: `/wegs/${wegId}/finanzen/zahlungen` as Route },
+    { label: "Ausgaben", href: `/wegs/${wegId}/finanzen/ausgaben` as Route },
+    { label: "Rücklage", href: `/wegs/${wegId}/finanzen/ruecklage` as Route },
+    {
+      label: "Jahresabrechnung",
+      href: `/wegs/${wegId}/finanzen/abrechnungen` as Route,
+    },
+  ];
+
   return (
     <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
-      <header>
+      <header className="space-y-4">
         <p className="text-sm text-[color:var(--color-muted-foreground)]">
           <Link
             href={`/wegs/${wegId}`}
@@ -92,7 +114,7 @@ export default async function FinanzenPage({
             ← Zurück zur WEG-Detailseite
           </Link>
         </p>
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-semibold tracking-tight">
               Wirtschaftspläne
@@ -101,50 +123,26 @@ export default async function FinanzenPage({
               Finanzplanung für {weg.name}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <Link
-              href={`/wegs/${wegId}/finanzen/verteilungsschluessel` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Verteilungsschlüssel
+          <Button asChild className="shrink-0">
+            <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
+              Wirtschaftsplan erstellen
             </Link>
-            <Link
-              href={`/wegs/${wegId}/finanzen/offene-posten` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Offene Posten
-            </Link>
-            <Link
-              href={`/wegs/${wegId}/finanzen/zahlungen` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Zahlungen
-            </Link>
-            <Link
-              href={`/wegs/${wegId}/finanzen/ausgaben` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Ausgaben
-            </Link>
-            <Link
-              href={`/wegs/${wegId}/finanzen/ruecklage` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Rücklage
-            </Link>
-            <Link
-              href={`/wegs/${wegId}/finanzen/abrechnungen` as Route}
-              className="text-sm underline underline-offset-4 hover:text-[var(--color-accent)]"
-            >
-              Jahresabrechnung
-            </Link>
-            <Button asChild>
-              <Link href={`/wegs/${wegId}/finanzen/new` as Route}>
-                Wirtschaftsplan erstellen
-              </Link>
-            </Button>
-          </div>
+          </Button>
         </div>
+        <nav
+          aria-label="Finanzbereich"
+          className="flex gap-1 overflow-x-auto border-t border-[color:var(--color-border)] pt-3"
+        >
+          {bereichsLinks.map(({ label, href }) => (
+            <Link
+              key={label}
+              href={href}
+              className="inline-flex min-h-9 shrink-0 items-center rounded-md border border-transparent px-3 text-sm font-medium text-[color:var(--color-muted-foreground)] transition-colors hover:border-[color:var(--color-border)] hover:bg-[color:var(--color-secondary)] hover:text-[color:var(--color-foreground)]"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       <Card>
