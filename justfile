@@ -112,7 +112,12 @@ codegen:
 
 # Apply Supabase migrations to the linked cloud project.
 # Workdir is `infra` because migrations live under infra/supabase/.
+#
+# Guarded: `supabase db push` reads the migrations DIRECTORY, not git, so an
+# uncommitted or half-written .sql lying there goes to production like any other.
+# scripts/db-migrate-guard.sh closes that gap and asks for a typed confirmation.
 db-migrate:
+    ./scripts/db-migrate-guard.sh
     supabase db push --workdir infra
 
 # Seed a tenant + tenant_admin user via the Supabase Admin API.
