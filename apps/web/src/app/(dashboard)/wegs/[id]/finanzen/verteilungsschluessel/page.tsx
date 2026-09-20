@@ -156,7 +156,7 @@ export default async function VerteilungsschluesselPage({
                               {!isGeneratorUnterstuetzt(version.typ) && (
                                 <span
                                   className="ml-2 inline-flex rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400"
-                                  title="Gemischte Schlüssel kann der Sollstellungs-Generator noch nicht auflösen."
+                                  title="Diesen Schlüsseltyp kann der Sollstellungs-Generator noch nicht auflösen."
                                 >
                                   noch nicht buchbar
                                 </span>

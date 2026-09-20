@@ -1,14 +1,21 @@
 export {
+  GENERATOR_TYPEN,
   VERTEILUNGSSCHLUESSEL_TYPEN,
   VERTEILUNGSSCHLUESSEL_QUELLEN,
   VERTEILUNGSSCHLUESSEL_TYP_LABEL,
   VERTEILUNGSSCHLUESSEL_QUELLE_LABEL,
+  VERTEILUNGSSCHLUESSEL_REGELWERKE,
+  VERTEILUNGSSCHLUESSEL_REGELWERK_LABEL,
   TYPEN_MIT_BASISWERTEN,
   brauchtBasiswerte,
+  brauchtTeile,
   isGeneratorUnterstuetzt,
   isVerteilungsschluesselQuelle,
+  isVerteilungsschluesselRegelwerk,
   isVerteilungsschluesselTyp,
+  pruefeTeile,
 } from "./verteilungsschluessel";
+export type { TeilEingabe, TeilePruefung } from "./verteilungsschluessel";
 export { berechneAnteile, berechneMonatsvorschau } from "./allocation";
 export {
   formatMonat,

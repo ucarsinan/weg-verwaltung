@@ -84,7 +84,7 @@ export async function erstelleAbrechnungAction(
               errors: {
                 errors: {
                   _form: [
-                    "Eine Ausgabe verwendet einen gemischten Verteilungsschlüssel. Den kann die Abrechnung noch nicht auflösen.",
+                    "Eine Ausgabe verwendet einen Verteilungsschlüssel, dessen Typ die Abrechnung nicht auflösen kann.",
                   ],
                 },
               },
@@ -96,7 +96,9 @@ export async function erstelleAbrechnungAction(
               errors: {
                 errors: {
                   _form: [
-                    "Für mindestens eine Einheit fehlen Basiswerte zum Stichtag. Bitte die Verteilungsschlüssel prüfen.",
+                    // Seit 0067 gibt es zwei Ursachen fuer 23514: fehlende
+                    // Basiswerte und eine gemischte Regel ohne Teile.
+                    "Ein Verteilungsschlüssel ist unvollständig — entweder fehlen einer Einheit Basiswerte zum Stichtag, oder eine gemischte Regel hat keine Teile.",
                   ],
                 },
               },

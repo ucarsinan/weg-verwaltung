@@ -95,20 +95,20 @@ describe("erstelleAbrechnungAction", () => {
     expect(state.errors?.jahr?.[0]).toContain("bereits ein Abrechnungsentwurf");
   });
 
-  it("names the mixed allocation key as the blocker", async () => {
+  it("names an unresolvable key type as the blocker", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { code: "0A000" } });
 
     const state = await erstelleAbrechnungAction({}, erstellenFormData());
 
-    expect(state.errors?._form?.[0]).toContain("gemischten Verteilungsschlüssel");
+    expect(state.errors?._form?.[0]).toContain("dessen Typ die Abrechnung nicht auflösen kann");
   });
 
-  it("points at missing basis values on a check violation", async () => {
+  it("names an incomplete key on a check violation — missing values or missing parts", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { code: "23514" } });
 
     const state = await erstelleAbrechnungAction({}, erstellenFormData());
 
-    expect(state.errors?._form?.[0]).toContain("Basiswerte");
+    expect(state.errors?._form?.[0]).toContain("unvollständig");
   });
 });
 

@@ -8,10 +8,12 @@ import type { Route } from "next";
 import {
   VERTEILUNGSSCHLUESSEL_QUELLEN,
   VERTEILUNGSSCHLUESSEL_QUELLE_LABEL,
+  VERTEILUNGSSCHLUESSEL_REGELWERKE,
+  VERTEILUNGSSCHLUESSEL_REGELWERK_LABEL,
   VERTEILUNGSSCHLUESSEL_TYPEN,
   VERTEILUNGSSCHLUESSEL_TYP_LABEL,
   brauchtBasiswerte,
-  isGeneratorUnterstuetzt,
+  brauchtTeile,
   isVerteilungsschluesselTyp,
 } from "@/modules/finanzen";
 import {
@@ -108,14 +110,44 @@ export default function VerteilungsschluesselForm({
           </p>
         ) : (
           <p id="typ-hint" className="text-sm text-[color:var(--color-muted-foreground)]">
-            {gewaehlterTyp && !isGeneratorUnterstuetzt(gewaehlterTyp)
-              ? "Gemischte Schlüssel lassen sich anlegen, aber noch nicht für Sollstellungen verwenden — die Basiswerte können pro Einheit derzeit nur einen Teil der Regel abbilden."
+            {gewaehlterTyp && brauchtTeile(gewaehlterTyp)
+              ? "Eine gemischte Regel setzt sich aus vorhandenen Schlüsseln zusammen — die wählen Sie gleich im nächsten Schritt aus und gewichten sie."
               : gewaehlterTyp && brauchtBasiswerte(gewaehlterTyp)
                 ? "Für diesen Typ ist anschließend je Einheit ein Basiswert zu hinterlegen."
                 : "Die Anteile ergeben sich aus den Stammdaten der Einheiten."}
           </p>
         )}
       </div>
+
+      {gewaehlterTyp && brauchtTeile(gewaehlterTyp) && (
+        <div className="space-y-2">
+          <label htmlFor="regelwerk" className="block text-sm font-medium">
+            Regelwerk
+          </label>
+          <select
+            id="regelwerk"
+            name="regelwerk"
+            defaultValue="frei"
+            aria-describedby="regelwerk-hint"
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm"
+          >
+            {VERTEILUNGSSCHLUESSEL_REGELWERKE.map((wert) => (
+              <option key={wert} value={wert}>
+                {VERTEILUNGSSCHLUESSEL_REGELWERK_LABEL[wert]}
+              </option>
+            ))}
+          </select>
+          <p
+            id="regelwerk-hint"
+            className="text-sm text-[color:var(--color-muted-foreground)]"
+          >
+            Für Heiz- und Warmwasserkosten schreibt die HeizkostenV vor,
+            mindestens 50 und höchstens 70 Prozent nach Verbrauch zu verteilen
+            und den Rest nach Fläche. Wählen Sie das passende Regelwerk, dann
+            lässt die Anwendung keine unzulässige Aufteilung zu.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label htmlFor="quelle" className="block text-sm font-medium">

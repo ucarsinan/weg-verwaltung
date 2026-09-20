@@ -24,6 +24,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   createVerteilungsschluesselAction,
   saveBasiswerteAction,
+  saveTeileAction,
 } from "../actions";
 
 const WEG_ID = "11111111-1111-4111-8111-111111111111";
@@ -287,5 +288,166 @@ describe("saveBasiswerteAction", () => {
 
     expect(state.errors?._form).toBeDefined();
     expect(state.ok).toBeUndefined();
+  });
+});
+
+const TEIL_VERBRAUCH = "66666666-6666-4666-8666-666666666666";
+const TEIL_FLAECHE = "77777777-7777-4777-8777-777777777777";
+
+/** `delete().eq()` gefolgt von `insert(...)` — der Ersetzungspfad der Teile. */
+function teileDbOk() {
+  const insert = vi.fn().mockResolvedValue({ error: null });
+  const deleteEq = vi.fn().mockResolvedValue({ error: null });
+  mockFrom.mockReturnValue({
+    delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+    insert,
+  });
+  return { insert, deleteEq };
+}
+
+function teileFormData(
+  teile: { versionId: string; typ: string; gewicht: string }[],
+  regelwerk = "heizkv_waerme",
+) {
+  const fd = new FormData();
+  fd.set("weg_id", WEG_ID);
+  fd.set("key_id", KEY_ID);
+  fd.set("version_id", VERSION_ID);
+  fd.set("regelwerk", regelwerk);
+  for (const teil of teile) {
+    fd.append("teil_version_id", teil.versionId);
+    fd.set(`typ_${teil.versionId}`, teil.typ);
+    fd.set(`gewicht_${teil.versionId}`, teil.gewicht);
+  }
+  return fd;
+}
+
+describe("saveTeileAction", () => {
+  it("replaces the whole set in one insert, so the per-statement sum holds", () => {
+    // Zeilenweise gespeichert waere die Summe nach der ersten Zeile nie 100 —
+    // Migration 0067 wuerde jedes Speichern ablehnen.
+    const { insert, deleteEq } = teileDbOk();
+
+    return saveTeileAction(
+      {},
+      teileFormData([
+        { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "70" },
+        { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "30" },
+      ]),
+    ).then((state) => {
+      expect(state.errors).toBeUndefined();
+      expect(deleteEq).toHaveBeenCalledWith(
+        "verteilungsschluessel_version_id",
+        VERSION_ID,
+      );
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(insert).toHaveBeenCalledWith([
+        expect.objectContaining({ teil_version_id: TEIL_VERBRAUCH, gewicht: 70 }),
+        expect.objectContaining({ teil_version_id: TEIL_FLAECHE, gewicht: 30 }),
+      ]);
+    });
+  });
+
+  it("refuses 80 percent by consumption before touching the database", async () => {
+    const state = await saveTeileAction(
+      {},
+      teileFormData([
+        { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "80" },
+        { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "20" },
+      ]),
+    );
+
+    expect(state.errors?.teile?.join(" ")).toContain("höchstens 70");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("refuses weights that do not sum to 100", async () => {
+    const state = await saveTeileAction(
+      {},
+      teileFormData(
+        [
+          { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "60" },
+          { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "30" },
+        ],
+        "frei",
+      ),
+    );
+
+    expect(state.errors?.teile?.join(" ")).toContain("100 %");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("accepts a free rule outside the HeizKV corridor", async () => {
+    const { insert } = teileDbOk();
+
+    const state = await saveTeileAction(
+      {},
+      teileFormData(
+        [
+          { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "90" },
+          { versionId: TEIL_VERBRAUCH, typ: "einheit", gewicht: "10" },
+        ],
+        "frei",
+      ),
+    );
+
+    expect(state.errors).toBeUndefined();
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a German decimal comma in a weight", async () => {
+    const { insert } = teileDbOk();
+
+    await saveTeileAction(
+      {},
+      teileFormData(
+        [
+          { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "66,667" },
+          { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "33,333" },
+        ],
+        "frei",
+      ),
+    );
+
+    expect(insert).toHaveBeenCalledWith([
+      expect.objectContaining({ gewicht: 66.667 }),
+      expect.objectContaining({ gewicht: 33.333 }),
+    ]);
+  });
+
+  it("refuses a weight of zero", async () => {
+    const state = await saveTeileAction(
+      {},
+      teileFormData(
+        [
+          { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "0" },
+          { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "100" },
+        ],
+        "frei",
+      ),
+    );
+
+    expect(state.errors?.teile).toBeDefined();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("passes the database message through when the guard fires there", async () => {
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    mockFrom.mockReturnValue({
+      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+      insert: vi.fn().mockResolvedValue({
+        error: { code: "23514", message: "Der Teil gehört zu einer anderen WEG." },
+      }),
+    });
+
+    const state = await saveTeileAction(
+      {},
+      teileFormData([
+        { versionId: TEIL_VERBRAUCH, typ: "verbrauch", gewicht: "70" },
+        { versionId: TEIL_FLAECHE, typ: "flaeche", gewicht: "30" },
+      ]),
+    );
+
+    expect(state.errors?.teile?.join(" ")).toContain("anderen WEG");
   });
 });

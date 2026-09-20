@@ -163,7 +163,7 @@ export default function PositionForm({
           >
             {buchbare.length === 0
               ? "Für diese WEG ist noch kein verwendbarer Verteilungsschlüssel angelegt."
-              : "Gemischte Schlüssel stehen hier bewusst nicht zur Auswahl."}
+              : "Ein gemischter Schlüssel verteilt über seine Teile — die müssen auf seiner Detailseite hinterlegt sein."}
           </p>
         )}
       </div>

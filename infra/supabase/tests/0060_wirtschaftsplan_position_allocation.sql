@@ -5,7 +5,8 @@
 --   - each supported allocation key type (mea, einheit, flaeche) allocates as specified
 --   - mea shares are normalized by the WEG total, so a position is always fully allocated
 --   - several positions with different keys sum per unit
---   - typ = 'gemischt' fails closed with 0A000, missing basis values with 23514
+--   - typ = 'gemischt' without parts and missing basis values both fail closed
+--     with 23514 (the 0A000 branch moved to still-unknown types in 0067)
 --   - partial-year plans keep the monthly rate and only post fewer months
 --   - the generator stays idempotent and outside the public RPC surface
 --
@@ -316,11 +317,14 @@ select is(
 -- Fail-closed paths
 -- ============================================================================
 
+-- Seit 0067 kann der Generator gemischte Schluessel aufloesen — aber nur ueber
+-- ihre Teile. Diese Version hat keine, und ohne Teile gibt es nichts zu
+-- verteilen: 23514 statt 0A000, fail closed wie zuvor.
 select throws_ok(
   $$select private._generate_sollstellungen_for_plan('a5000000-0000-4000-8000-000000000060'::uuid, 1)$$,
-  '0A000',
+  '23514',
   null,
-  'typ = gemischt fails closed instead of guessing a mixed allocation'
+  'typ = gemischt without parts fails closed instead of guessing a mixed allocation'
 );
 
 select throws_ok(
