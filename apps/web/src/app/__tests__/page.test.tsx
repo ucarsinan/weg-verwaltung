@@ -25,7 +25,7 @@ describe("LandingPage", () => {
     render(<LandingPage />);
 
     expect(
-      screen.getByText(/Keine Bankanbindung, keine Jahresabrechnung und keine Rechtsberatung/i),
+      screen.getByText(/Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung/i),
     ).toBeInTheDocument();
     expect(screen.getByText("12,90 €")).toBeInTheDocument();
     expect(screen.getByText("Für 3–10 Einheiten")).toBeInTheDocument();

@@ -13,8 +13,10 @@ const sharedFeatures = [
   "30 Tage kostenlos testen – ohne Kreditkarte",
   "Ein Konto pro Eigentümer",
   "Mehrere Admins oder Verwalter",
-  "Dokumente, Vorgänge und Versammlungen",
-  "Beschlüsse und Abstimmungen",
+  "Vorgänge, Versammlungen und Beschluss-Sammlung",
+  "Wirtschaftsplan, Hausgeld und offene Posten",
+  "Jahresabrechnung und Vermögensbericht (§ 28 WEG)",
+  "Heizkosten nach HeizkostenV",
   "Monatlich kündbar",
 ];
 
@@ -82,7 +84,7 @@ export default function PricesPage() {
       <section className="border-y border-[color:var(--color-border)] bg-[color:var(--color-secondary)]">
         <div className="mx-auto grid max-w-5xl gap-6 px-6 py-10 sm:px-8 md:grid-cols-2">
           <div className="flex gap-3"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" /><div><h2 className="text-sm font-semibold">Ein Bereich nur für eure WEG</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Alle Eigentümer erhalten ihr eigenes Konto und arbeiten getrennt von anderen Gemeinschaften.</p></div></div>
-          <div><h2 className="text-sm font-semibold">Was noch nicht enthalten ist</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Jahresabrechnung, kein Mahnwesen und keine Rechtsberatung.</p></div>
+          <div><h2 className="text-sm font-semibold">Was noch nicht enthalten ist</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung.</p></div>
         </div>
       </section>
 
