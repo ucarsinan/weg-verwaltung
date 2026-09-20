@@ -83,8 +83,14 @@ export default async function FinanzenPage({
 
   // Die Geschwisterseiten passen nicht als Kopfzeilen-Links neben den Titel:
   // bei sechs Stueck wurde der Titelblock auf Breite null gequetscht und die
-  // truncate-Ueberschrift verschwand. Sie gehoeren in eine eigene Navigations-
-  // zeile, wie in `weg-workspace-nav` — die traegt jetzt auch die siebte.
+  // truncate-Ueberschrift verschwand. Sie stehen deshalb in einer eigenen
+  // Navigationszeile.
+  //
+  // Diese Zeile bricht um (`flex-wrap`) und scrollt NICHT. Mit `overflow-x-auto`
+  // verschwand der siebte Eintrag bei ueblicher Fensterbreite lautlos aus dem
+  // Blick — kein Pfeil, kein Schatten, kein Hinweis. Wer nicht zufaellig wischt,
+  // erfaehrt nie, dass es ihn gibt. Eine zweite Zeile ist haesslicher als ein
+  // sauberer Scrollbereich, aber sie verbirgt nichts.
   const bereichsLinks: { label: string; href: Route }[] = [
     {
       label: "Verteilungsschlüssel",
@@ -135,7 +141,7 @@ export default async function FinanzenPage({
         </div>
         <nav
           aria-label="Finanzbereich"
-          className="flex gap-1 overflow-x-auto border-t border-[color:var(--color-border)] pt-3"
+          className="flex flex-wrap gap-1 border-t border-[color:var(--color-border)] pt-3"
         >
           {bereichsLinks.map(({ label, href }) => (
             <Link

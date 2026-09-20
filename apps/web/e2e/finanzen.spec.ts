@@ -104,9 +104,13 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     ).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole("link", { name: /wirtschaftsplan erstellen/i })).toBeVisible();
 
-    // Der Titel verschwand einmal unbemerkt, weil die sechs Geschwister-Links
-    // den truncate-Titelblock auf Breite null drueckten. Beides zusammen
-    // pruefen: die Navigation ist da UND verdraengt den Titel nicht.
+    // Der Titel verschwand einmal unbemerkt, weil die Geschwister-Links den
+    // truncate-Titelblock auf Breite null drueckten. Beides zusammen pruefen:
+    // die Navigation ist da UND verdraengt den Titel nicht.
+    //
+    // Alle sieben, ausdruecklich: solange die Zeile mit `overflow-x-auto`
+    // scrollte, war der letzte Eintrag bei ueblicher Fensterbreite aus dem
+    // Blick — im DOM vorhanden, fuer einen Menschen unauffindbar.
     const bereich = page.getByRole("navigation", { name: "Finanzbereich" });
     for (const label of [
       "Verteilungsschlüssel",
@@ -115,6 +119,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
       "Ausgaben",
       "Rücklage",
       "Jahresabrechnung",
+      "Vermögensbericht",
     ]) {
       await expect(bereich.getByRole("link", { name: label })).toBeVisible();
     }
