@@ -181,7 +181,7 @@ test.describe("Feature 3b: Wirtschaftsplan-Positionen (0060)", () => {
     );
   });
 
-  test("positionen-gemischt-nicht-waehlbar: gemischte Schlüssel stehen nicht zur Auswahl", async ({
+  test("positionen-gemischt-waehlbar: gemischte Schlüssel stehen zur Auswahl", async ({
     page,
   }) => {
     const { wegId } = await createWegWithTwoUnits(page, "Gemischt");
@@ -197,20 +197,22 @@ test.describe("Feature 3b: Wirtschaftsplan-Positionen (0060)", () => {
       typ: "gemischt",
       quelle: "gesetz",
     });
-    // Ein gemischter Schlüssel braucht keine Basiswerte -> zurück zur Liste.
+
+    // Seit 0067 fuehrt das Anlegen auf die Detailseite: eine gemischte Regel
+    // ist ohne ihre Teile unbrauchbar, genau wie ein Flaechenschluessel ohne
+    // Basiswerte.
     await page.waitForURL(
-      new RegExp(`/wegs/${wegId}/finanzen/verteilungsschluessel$`),
+      new RegExp(`/wegs/${wegId}/finanzen/verteilungsschluessel/[0-9a-f-]+$`),
       { timeout: 20_000 },
     );
     await expect(
-      page.getByRole("row").filter({ hasText: "Heizung" }),
-    ).toContainText("noch nicht buchbar");
+      page.getByRole("heading", { name: "Zusammensetzung der Regel" }),
+    ).toBeVisible();
 
-    // Im Positionsformular darf er nicht auswählbar sein: der Generator lehnt
-    // ihn mit 0A000 ab, und dieser Fehler soll gar nicht erst erreichbar sein.
+    // Und im Positionsformular ist er waehlbar — der Generator loest ihn auf.
     await page.goto(`/wegs/${wegId}/finanzen/${planId}/positionen`);
     const select = page.getByLabel("Verteilungsschlüssel");
     await expect(select).toBeVisible();
-    await expect(select.getByRole("option", { name: /Heizung/ })).toHaveCount(0);
+    await expect(select.getByRole("option", { name: /Heizung/ })).toHaveCount(1);
   });
 });

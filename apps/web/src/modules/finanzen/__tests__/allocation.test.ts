@@ -74,10 +74,10 @@ describe("berechneAnteile", () => {
     });
   });
 
-  it("lehnt gemischt ab, statt eine Aufteilung zu raten", () => {
+  it("verweist bei gemischt auf die Teile, statt eine Aufteilung zu raten", () => {
     expect(berechneAnteile("gemischt", UNITS_VOLL)).toEqual({
       ok: false,
-      fehler: { grund: "gemischt_nicht_unterstuetzt" },
+      fehler: { grund: "gemischt_wird_aus_teilen_gebildet" },
     });
   });
 

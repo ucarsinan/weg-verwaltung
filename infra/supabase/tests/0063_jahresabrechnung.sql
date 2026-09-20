@@ -7,7 +7,8 @@
 --   - die Spitze rechnet gegen das SOLL, nicht gegen geleistete Zahlungen
 --   - Zweitbeschluss loest den Erstbeschluss ab; nur einer bleibt beschlossen
 --   - eine beschlossene Abrechnung ist gesperrt
---   - Statuswechsel nur ueber die RPC, Agent-Writes blockiert, gemischt 0A000
+--   - Statuswechsel nur ueber die RPC, Agent-Writes blockiert, ein gemischter
+--     Schluessel ohne Teile 23514
 --
 -- Laeuft in einer Transaktion und rollt alle Fixtures zurueck.
 
@@ -326,12 +327,14 @@ values (
   'e3100000-0000-4000-8000-000000000063'::uuid
 );
 
+-- Seit 0067 loest der Generator gemischte Schluessel auf. Dieser hier hat aber
+-- keine Teile, und ohne Teile gibt es nichts zu verteilen: 23514 statt 0A000.
 select throws_ok(
   $q$select public.erstelle_abrechnung(
        'c0000000-0000-4000-8000-000000000063'::uuid, 2091)$q$,
-  '0A000',
+  '23514',
   null,
-  'ein gemischter Schluessel scheitert auch in der Abrechnung fail-closed'
+  'ein gemischter Schluessel ohne Teile scheitert auch in der Abrechnung fail-closed'
 );
 
 select pg_catalog.set_config('app.actor_type', 'agent', true);

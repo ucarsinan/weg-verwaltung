@@ -45,9 +45,9 @@ export type AnfechtungsEventTyp =
   | "bestaetigt";
 
 /**
- * Verteilungsschluessel (Migration 0056). `gemischt` is modelled but the
- * Sollstellung generator rejects it with 0A000 until the basis-value schema can
- * express which part of a mixed rule a value belongs to — see 0060.
+ * Verteilungsschluessel (Migration 0056). Since 0067 `gemischt` resolves through
+ * verteilungsschluessel_teil: a mixed rule references other, simple key versions
+ * and weights them, rather than carrying basis values of its own.
  */
 export type VerteilungsschluesselTyp =
   | "mea"
@@ -98,6 +98,18 @@ export type VermoegensberichtAbschnitt =
 export type VermoegensberichtQuelle = "abgeleitet" | "manuell";
 
 /** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
+/**
+ * Regelwerk einer gemischten Regel (Migration 0067), abgelegt in
+ * `verteilungsschluessel_version.parameter->>'regelwerk'`. Der 50/70-Korridor
+ * gilt fuer Heizkosten, nicht fuer gemischte Regeln ueberhaupt — `frei` prueft
+ * nur die Summe.
+ */
+export type VerteilungsschluesselRegelwerk =
+  | "frei"
+  | "heizkv_waerme"
+  | "heizkv_warmwasser"
+  | "heizkv_waerme_70";
+
 export type VerteilungsschluesselQuelle =
   | "gesetz"
   | "teilungserklaerung"
@@ -731,6 +743,37 @@ export type Database = Overwrite<
                 abrechnung_kostenposition_id?: string;
                 unit_id?: string;
                 betrag?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            // Teile einer gemischten Regel (Migration 0067).
+            verteilungsschluessel_teil: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                verteilungsschluessel_version_id: string;
+                teil_version_id: string;
+                gewicht: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id: string;
+                teil_version_id: string;
+                gewicht: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                verteilungsschluessel_version_id?: string;
+                teil_version_id?: string;
+                gewicht?: number;
                 created_at?: string;
                 updated_at?: string;
               };

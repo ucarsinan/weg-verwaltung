@@ -31,7 +31,7 @@ export interface UnitAnteil {
 }
 
 export type AnteilsFehler =
-  | { grund: "gemischt_nicht_unterstuetzt" }
+  | { grund: "gemischt_wird_aus_teilen_gebildet" }
   | { grund: "keine_einheiten" }
   | { grund: "basiswerte_fehlen"; fehlendeUnitIds: string[] }
   | { grund: "basiswert_summe_nicht_positiv" };
@@ -52,8 +52,12 @@ export function berechneAnteile(
   units: readonly UnitMea[],
   basiswerte: readonly Basiswert[] = [],
 ): AnteilsErgebnis {
+  // Eine gemischte Regel hat keine eigenen Basiswerte: sie setzt sich aus
+  // anderen Schluesselversionen zusammen, die jede fuer sich aufgeloest werden
+  // (0067). Diese Funktion rechnet eine einzelne Version und kann das nicht
+  // leisten — sie sagt das, statt eine Aufteilung zu raten.
   if (typ === "gemischt") {
-    return { ok: false, fehler: { grund: "gemischt_nicht_unterstuetzt" } };
+    return { ok: false, fehler: { grund: "gemischt_wird_aus_teilen_gebildet" } };
   }
 
   if (units.length === 0) {

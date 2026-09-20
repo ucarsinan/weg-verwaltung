@@ -13,9 +13,12 @@ import {
   VERTEILUNGSSCHLUESSEL_QUELLE_LABEL,
   VERTEILUNGSSCHLUESSEL_TYP_LABEL,
   brauchtBasiswerte,
+  brauchtTeile,
+  isVerteilungsschluesselRegelwerk,
 } from "@/modules/finanzen";
 import type { Database } from "@/lib/supabase/database.types";
 import BasiswerteForm, { type BasiswerteUnit } from "./basiswerte-form";
+import TeileForm, { type TeilKandidat } from "./teile-form";
 
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type UnitRow = Database["public"]["Tables"]["unit"]["Row"];
@@ -23,6 +26,7 @@ type VersionRow =
   Database["public"]["Tables"]["verteilungsschluessel_version"]["Row"];
 type BasiswertRow =
   Database["public"]["Tables"]["verteilungsschluessel_basiswert"]["Row"];
+type TeilRow = Database["public"]["Tables"]["verteilungsschluessel_teil"]["Row"];
 type KeyRow = Database["public"]["Tables"]["verteilungsschluessel"]["Row"] & {
   verteilungsschluessel_version: VersionRow[];
 };
@@ -109,6 +113,59 @@ export default async function VerteilungsschluesselDetailPage({
 
   const werteProUnit = new Map(basiswerte.map((b) => [b.unit_id, b]));
 
+  // Eine gemischte Regel setzt sich aus den EINFACHEN Schluesseln derselben WEG
+  // zusammen. Verschachtelung ist in 0067 verboten, gemischte Kandidaten
+  // tauchen deshalb gar nicht erst auf.
+  let kandidaten: TeilKandidat[] = [];
+
+  if (version && brauchtTeile(version.typ)) {
+    const [{ data: alleKeys }, { data: teile }] = await Promise.all([
+      supabase
+        .from("verteilungsschluessel")
+        .select("*, verteilungsschluessel_version(*)")
+        .eq("weg_id", wegId)
+        .order("name", { ascending: true })
+        .returns<KeyRow[]>(),
+      supabase
+        .from("verteilungsschluessel_teil")
+        .select("*")
+        .eq("verteilungsschluessel_version_id", version.id)
+        .returns<TeilRow[]>(),
+    ]);
+
+    const gewichtProVersion = new Map(
+      (teile ?? []).map((teil) => [teil.teil_version_id, teil.gewicht]),
+    );
+
+    kandidaten = (alleKeys ?? []).flatMap((kandidat) => {
+      const kandidatVersion = [
+        ...(kandidat.verteilungsschluessel_version ?? []),
+      ].sort((a, b) => b.gueltig_ab.localeCompare(a.gueltig_ab))[0];
+
+      if (!kandidatVersion || kandidatVersion.typ === "gemischt") return [];
+
+      const gespeichert = gewichtProVersion.get(kandidatVersion.id);
+
+      return [
+        {
+          versionId: kandidatVersion.id,
+          name: kandidat.name,
+          typ: kandidatVersion.typ,
+          gewicht: gespeichert === undefined ? "" : String(gespeichert),
+          gewaehlt: gespeichert !== undefined,
+        },
+      ];
+    });
+  }
+
+  const regelwerkRoh =
+    version && typeof version.parameter === "object" && version.parameter !== null
+      ? (version.parameter as Record<string, unknown>).regelwerk
+      : undefined;
+  const regelwerk = isVerteilungsschluesselRegelwerk(regelwerkRoh)
+    ? regelwerkRoh
+    : "frei";
+
   const formUnits: BasiswerteUnit[] = unitRows.map((unit) => ({
     id: unit.id,
     bezeichnung: unit.bezeichnung,
@@ -142,10 +199,15 @@ export default async function VerteilungsschluesselDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Basiswerte je Einheit</CardTitle>
+          <CardTitle>
+            {version && brauchtTeile(version.typ)
+              ? "Zusammensetzung der Regel"
+              : "Basiswerte je Einheit"}
+          </CardTitle>
           <CardDescription>
-            Jede Einheit der WEG braucht einen Wert. Fehlt einer, lehnt die
-            Sollstellung den Plan später ab, statt einen Teilbetrag zu verteilen.
+            {version && brauchtTeile(version.typ)
+              ? "Eine gemischte Regel verweist auf andere Schlüssel und gewichtet sie. Deren Basiswerte werden nur einmal gepflegt."
+              : "Jede Einheit der WEG braucht einen Wert. Fehlt einer, lehnt die Sollstellung den Plan später ab, statt einen Teilbetrag zu verteilen."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,14 +218,21 @@ export default async function VerteilungsschluesselDetailPage({
             >
               Für diesen Schlüssel ist noch keine Version hinterlegt.
             </p>
+          ) : brauchtTeile(version.typ) ? (
+            <TeileForm
+              wegId={wegId}
+              keyId={keyId}
+              versionId={version.id}
+              regelwerk={regelwerk}
+              kandidaten={kandidaten}
+            />
           ) : !brauchtBasiswerte(version.typ) ? (
             <p
               role="status"
               className="rounded-md border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-muted-foreground)]"
             >
-              {version.typ === "gemischt"
-                ? "Gemischte Schlüssel lassen sich derzeit nicht für Sollstellungen verwenden."
-                : "Dieser Typ leitet die Anteile aus den Stammdaten der Einheiten ab — es sind keine Basiswerte nötig."}
+              Dieser Typ leitet die Anteile aus den Stammdaten der Einheiten ab
+              — es sind keine Basiswerte nötig.
             </p>
           ) : unitRows.length === 0 ? (
             <p
