@@ -81,10 +81,10 @@ export default async function FinanzenPage({
 
   const planRows: WirtschaftsplanRow[] = plans ?? [];
 
-  // Sechs Geschwisterseiten passen nicht mehr als Kopfzeilen-Links neben den
-  // Titel: der Titelblock wurde dadurch auf Breite null gequetscht und die
+  // Die Geschwisterseiten passen nicht als Kopfzeilen-Links neben den Titel:
+  // bei sechs Stueck wurde der Titelblock auf Breite null gequetscht und die
   // truncate-Ueberschrift verschwand. Sie gehoeren in eine eigene Navigations-
-  // zeile, wie in `weg-workspace-nav`.
+  // zeile, wie in `weg-workspace-nav` — die traegt jetzt auch die siebte.
   const bereichsLinks: { label: string; href: Route }[] = [
     {
       label: "Verteilungsschlüssel",
@@ -100,6 +100,10 @@ export default async function FinanzenPage({
     {
       label: "Jahresabrechnung",
       href: `/wegs/${wegId}/finanzen/abrechnungen` as Route,
+    },
+    {
+      label: "Vermögensbericht",
+      href: `/wegs/${wegId}/finanzen/vermoegensberichte` as Route,
     },
   ];
 

@@ -75,6 +75,28 @@ export type RuecklagenRichtung = "anfangsbestand" | "zufuehrung" | "entnahme";
  */
 export type AbrechnungsStatus = "entwurf" | "beschlossen" | "abgeloest";
 
+/**
+ * Lebenszyklus eines Vermoegensberichts (Migration 0065). Bewusst `erstellt`
+ * statt `beschlossen`: § 28 Abs. 4 WEG macht den Bericht nicht zum
+ * Beschlussgegenstand. `abgeloest` entsteht durch eine Berichtigung, die jeder
+ * Eigentuemer verlangen kann.
+ */
+export type VermoegensberichtStatus = "entwurf" | "erstellt" | "abgeloest";
+
+/** Die fuenf Abschnitte eines Vermoegensberichts (Migration 0065). */
+export type VermoegensberichtAbschnitt =
+  | "konto"
+  | "ruecklage"
+  | "forderung"
+  | "verbindlichkeit"
+  | "sachwert";
+
+/**
+ * Woher eine Berichtsposition stammt (Migration 0065). `abgeleitet` ist ein
+ * Snapshot aus den Buechern, `manuell` hat der Verwalter eingetragen.
+ */
+export type VermoegensberichtQuelle = "abgeleitet" | "manuell";
+
 /** Legal basis of an allocation rule (§ 16 Abs. 2 WEG). */
 export type VerteilungsschluesselQuelle =
   | "gesetz"
@@ -714,6 +736,99 @@ export type Database = Overwrite<
               };
               Relationships: [];
             };
+            // Vermoegensbericht (Migration 0065).
+            vermoegensbericht: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                weg_id: string;
+                jahr: number;
+                stichtag: string;
+                bezeichnung: string;
+                status: VermoegensberichtStatus;
+                erstellt_am: string | null;
+                vorgaenger_vermoegensbericht_id: string | null;
+                version_nr: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                weg_id: string;
+                jahr: number;
+                stichtag: string;
+                bezeichnung: string;
+                status?: VermoegensberichtStatus;
+                erstellt_am?: string | null;
+                vorgaenger_vermoegensbericht_id?: string | null;
+                version_nr?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                weg_id?: string;
+                jahr?: number;
+                stichtag?: string;
+                bezeichnung?: string;
+                status?: VermoegensberichtStatus;
+                erstellt_am?: string | null;
+                vorgaenger_vermoegensbericht_id?: string | null;
+                version_nr?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
+            vermoegensbericht_position: {
+              Row: {
+                id: string;
+                tenant_id: string;
+                vermoegensbericht_id: string;
+                abschnitt: VermoegensberichtAbschnitt;
+                bezeichnung: string;
+                // Nur `sachwert` darf ohne Betrag stehen: das Gesetz verlangt
+                // Nennung, keine Bewertung.
+                betrag_anfang: number | null;
+                betrag: number | null;
+                quelle: VermoegensberichtQuelle;
+                unit_id: string | null;
+                sortierung: number;
+                created_at: string;
+                updated_at: string;
+              };
+              Insert: {
+                id?: string;
+                tenant_id?: string;
+                vermoegensbericht_id: string;
+                abschnitt: VermoegensberichtAbschnitt;
+                bezeichnung: string;
+                betrag_anfang?: number | null;
+                betrag?: number | null;
+                quelle?: VermoegensberichtQuelle;
+                unit_id?: string | null;
+                sortierung?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Update: {
+                id?: string;
+                tenant_id?: string;
+                vermoegensbericht_id?: string;
+                abschnitt?: VermoegensberichtAbschnitt;
+                bezeichnung?: string;
+                betrag_anfang?: number | null;
+                betrag?: number | null;
+                quelle?: VermoegensberichtQuelle;
+                unit_id?: string | null;
+                sortierung?: number;
+                created_at?: string;
+                updated_at?: string;
+              };
+              Relationships: [];
+            };
             ruecklage_bewegung: {
               Row: {
                 id: string;
@@ -830,6 +945,17 @@ export type Database = Overwrite<
                 p_abrechnung_id: string;
                 p_beschlossen_am: string;
                 p_resolution_id?: string | null;
+              };
+              Returns: undefined;
+            };
+            erstelle_vermoegensbericht: {
+              Args: { p_weg_id: string; p_jahr: number };
+              Returns: string;
+            };
+            stelle_vermoegensbericht_fertig: {
+              Args: {
+                p_vermoegensbericht_id: string;
+                p_erstellt_am: string;
               };
               Returns: undefined;
             };

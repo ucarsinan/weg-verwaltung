@@ -48,3 +48,16 @@ export {
   summiereSpitzen,
 } from "./abrechnung";
 export type { SpitzeZeile, SpitzenArt, SpitzenSummen } from "./abrechnung";
+export {
+  VERMOEGENSBERICHT_ABSCHNITTE,
+  VERMOEGENSBERICHT_ABSCHNITT_LABEL,
+  VERMOEGENSBERICHT_STATUS_LABEL,
+  berechneNettovermoegen,
+  offeneAbschnitte,
+  summiereAbschnitt,
+  summiereAlleAbschnitte,
+} from "./vermoegensbericht";
+export type {
+  AbschnittsSumme,
+  BerichtsPosition,
+} from "./vermoegensbericht";
