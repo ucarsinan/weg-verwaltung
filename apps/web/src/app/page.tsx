@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Building2,
+  Calculator,
   CheckCircle2,
   FileText,
   LockKeyhole,
@@ -17,7 +18,7 @@ const benefits = [
   {
     icon: FileText,
     title: "Alles an einem Ort",
-    text: "Dokumente, Vorgänge und Beschlüsse liegen für alle Eigentümer an einem klaren Ort.",
+    text: "Vorgänge, Versammlungen und Beschlüsse liegen für alle Eigentümer an einem klaren Ort.",
   },
   {
     icon: MessagesSquare,
@@ -28,6 +29,11 @@ const benefits = [
     icon: ShieldCheck,
     title: "Nachvollziehbar entscheiden",
     text: "Abstimmungen und Beschlüsse bleiben sauber dokumentiert – mit einem eigenen Bereich pro WEG.",
+  },
+  {
+    icon: Calculator,
+    title: "Geld nachvollziehbar abrechnen",
+    text: "Wirtschaftsplan, monatliches Hausgeld, Jahresabrechnung und Vermögensbericht – so, wie § 28 WEG es verlangt.",
   },
 ];
 
@@ -45,15 +51,17 @@ const setupSteps = [
   {
     number: "03",
     title: "Gemeinsam starten",
-    text: "Dokumente teilen, Themen organisieren und Beschlüsse festhalten.",
+    text: "Wirtschaftsplan aufstellen, Hausgeld abrechnen und Beschlüsse festhalten.",
   },
 ];
 
 const included = [
   "Ein eigenes Konto für jeden Eigentümer",
   "Mehrere Admins oder Verwalter möglich",
-  "Dokumente, Vorgänge und Versammlungen",
-  "Beschlüsse und Abstimmungen",
+  "Vorgänge, Versammlungen und Beschluss-Sammlung",
+  "Wirtschaftsplan, Hausgeld und offene Posten",
+  "Jahresabrechnung und Vermögensbericht (§ 28 WEG)",
+  "Heizkosten nach HeizkostenV",
 ];
 
 export default function LandingPage() {
@@ -104,7 +112,7 @@ export default function LandingPage() {
                 Eure WEG. Gemeinsam organisiert.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-[color:var(--color-muted-foreground)] sm:text-xl">
-                Verwalte Dokumente, Vorgänge, Versammlungen und Beschlüsse an
+                Wirtschaftsplan, Hausgeld, Versammlungen und Beschlüsse an
                 einem gemeinsamen Online-Ort – ohne Installation und ohne
                 Expertenwissen.
               </p>
@@ -189,7 +197,7 @@ export default function LandingPage() {
             Was eure Gemeinschaft wirklich braucht.
           </h2>
         </div>
-        <div className="mt-9 grid gap-4 md:grid-cols-3">
+        <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {benefits.map((benefit) => {
             const Icon = benefit.icon;
             return (
@@ -282,7 +290,7 @@ export default function LandingPage() {
             <Scale className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
             <div>
               <h2 className="text-sm font-semibold">Ehrlich auf das Wesentliche fokussiert</h2>
-              <p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Jahresabrechnung und keine Rechtsberatung im ersten Release.</p>
+              <p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung.</p>
             </div>
           </div>
         </div>
