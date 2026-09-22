@@ -97,19 +97,26 @@ Die folgende Tabelle beschreibt die Zieltopologie. Produktives Web-/Agent-Hostin
 
 | Service | Provider | Region | EU-Story | Größenordnung Kosten (idle) |
 | --- | --- | --- | --- | --- |
-| `apps/web` | **Vercel** | EU (Frankfurt-Edge, Functions in `fra1`) | Vercel Inc. (US), EU-Region ja | $0 Hobby / $20 Pro |
-| `apps/agent` | **Fly.io** | `fra` (Frankfurt) | Fly.io Inc. (US), Firecracker-microVMs in EU | $2–5/mo dank Scale-to-Zero |
-| Postgres + Auth + Storage | **Supabase** | Frankfurt (eu-central-1) | Supabase Inc. (US), EU-Region | $0 Free / $25 Pro |
+| `apps/web` | **Scaleway** Serverless Containers | Paris | Scaleway SAS (FR) — EU-Firma | 0 € schlafend / ~6 € laufend |
+| `apps/agent` | — | — | bleibt vorerst draußen (Entscheidung 3 in § 11.3) | 0 € |
+| Postgres + Auth + Storage | **Elestio** (betreibt Supabase) | EU-Partner: Hetzner / Netcup / Scaleway | Elestio (IE) — EU-Firma auf EU-Infrastruktur | ab ~16 $ |
 | LLM-Observability | **Langfuse** | `cloud.langfuse.com` (EU) | Langfuse GmbH (Berlin) | $0 Hobby |
 | Mail | **Resend** | EU-Region (`eu-west`) | Resend Inc. (US), EU-Region | $0 Free |
 
-**Latenz-Begründung:** Der Agent macht viele kleine Calls an Supabase. Same-Region (`fra` ↔ `eu-central-1`) bringt das Roundtrip auf einstellige ms. Vercel-Functions in `fra1` ebenfalls. Eine US-Region irgendwo in der Kette würde 80–120 ms pro Hop kosten und das Agent-Streaming spürbar zähflüssig machen.
+**Diese Tabelle wurde am 2026-09-22 ersetzt.** Begründung, geprüfte Alternativen und offene Punkte stehen vollständig in [11-betriebsmodell.md](./11-betriebsmodell.md). Die Latenzüberlegung bleibt gültig: Web-App und Datenbank gehören in dieselbe Region, sonst kostet jeder Hop 80–120 ms.
 
-### CLOUD-Act-Caveat (ehrlich)
+### CLOUD-Act-Caveat — erledigt durch die Entscheidung vom 2026-09-22
 
-Vercel, Fly.io und Supabase sind US-inkorporiert. Die EU-Region gibt **Daten-Residency** (Bytes liegen in Frankfurt), aber keine **Daten-Sovereignty** — der US CLOUD Act kann theoretisch Herausgabe verlangen, unabhängig vom physischen Ort. Für ein Portfolio-Piece ohne reale Mandanten ist das akzeptabel und offengelegt. Section 3 (Sicherheitsmodell) zeigt das Threat-Model im Detail.
+Die ursprüngliche Fassung hielt fest, dass Vercel, Fly.io und Supabase US-inkorporiert sind, dass die EU-Region nur **Daten-Residenz** und keine **Daten-Souveränität** liefert, und setzte den Auslöser für einen Wechsel auf „ab erstem Vertrag".
 
-**Migrationspfad — wann der Wechsel kommt:** Sobald der erste zahlende Verwalter einen Auftragsverarbeitungs-Vertrag (AVV) unterschreibt, wandert `apps/agent` auf **Hetzner Falkenstein + Coolify** (deutsche GmbH, EU-Recht). Web kann bei Vercel bleiben oder ebenfalls auf Hetzner umziehen. Supabase wäre auf **self-hosted Postgres + GoTrue** zu prüfen (deutlich mehr Ops-Last). Der Trigger ist nicht „ab Tag 1" — er ist „ab erstem Vertrag".
+**Der Auslöser wurde vorgezogen.** Am 2026-09-22 hat der Betreiber entschieden, vor dem ersten Vertrag zu wechseln — die vorsichtigere Reihenfolge, weil noch keine Kundendaten betroffen sind.
+
+**Zwei Korrekturen an der alten Fassung:**
+
+1. Vertragspartner von supabase.com ist **Supabase Pte. Ltd., Singapur** (Reg. 202005760H), eine Tochter von Supabase, Inc. (USA) — nicht die US-Gesellschaft. Das ändert den Transfermechanismus: Singapur hat keinen Angemessenheitsbeschluss, das EU-US Data Privacy Framework greift nicht, es gelten Standardvertragsklauseln.
+2. Die alte Fassung nahm an, ein Wechsel bedeute **self-hosted Postgres + GoTrue** mit „deutlich mehr Ops-Last". Das trifft nicht zu: ein EU-Betreiber (Elestio, Irland) führt dieselbe quelloffene Software inklusive Backups, Updates und Überwachung. Die Ops-Last steigt nicht — sie sinkt gegenüber heute, weil es überhaupt erst Backups gibt.
+
+Vollständige Begründung, zwölf geprüfte Anbieter, Kostenrechnung, Klumpenrisiko und Ausstiegsplan: [11-betriebsmodell.md](./11-betriebsmodell.md).
 
 ---
 

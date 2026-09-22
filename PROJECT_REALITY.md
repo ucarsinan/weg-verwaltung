@@ -1,6 +1,6 @@
 # PROJECT_REALITY
 
-Last audit: 2026-09-22
+Last audit: 2026-09-22 (zweiter Durchgang: Betriebsmodell)
 Recommendation: continue
 Confidence: medium — der lokale Codestand ist belegt (`0001`-`0067`, 15 gruene
 pgTAP-Vertraege im CI-Gate, `./scripts/verify.sh` gruen am 2026-09-20). Gesunken
@@ -65,6 +65,15 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   Advisors zeigen unveraendert 7x `auth_rls_initplan`-WARN und 1x `duplicate_index`-WARN
   (im `AGENTS.md`-Backlog). In der Frankfurt-Cloud liegen seit dem 2026-09-21 bewusst
   stehengelassene Demo-Daten.
+- Betriebsmodell: Am 2026-09-22 wurde entschieden, den Betrieb vor dem ersten
+  Kundenvertrag auf EU-Anbieter umzustellen — der in `02-architecture-deployment.md`
+  vorgesehene Ausloeser („ab erstem Vertrag") wurde vorgezogen. Entschieden:
+  zwei Supabase-Projekte (Demo + Entwicklung), Free-Tarif bleibt **unter der
+  Bedingung, dass keine echten Eigentuemerdaten hineinkommen**, KI-Dienst wird
+  vorerst nicht ausgeliefert, Massstab ist „Daten in der EU". Empfohlen und
+  offen: Web-App auf Scaleway (Paris), Datenbank bei Elestio (Irland) auf
+  EU-Infrastruktur. Zwoelf Anbieter geprueft, drei Fragen an Elestio offen.
+  Vollstaendig: `docs/11-betriebsmodell.md`.
 - Last stopping point: Elf Produktcode-Commits zwischen dem 2026-09-19 und dem
   2026-09-20 (PRs #9 bis #21) haben die Finanzkette fertiggestellt, ohne dass diese
   Datei nachgezogen wurde — die Frische-Pruefung meldete am 2026-09-22 folgerichtig
@@ -110,31 +119,35 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   wesentlich erweitern.
 
 ## Next Logical Step
-1. Step: Plan-Entscheidung treffen und den ersten echten Export ziehen.
-   Konzept und Werkzeug stehen (`docs/10-backup-und-wiederherstellung.md`,
-   `scripts/db-dump.sh`); was fehlt, ist eine Entscheidung und ein Lauf.
-   Why: Der Free-Plan hat kein Backup. Nicht `schwer wiederherstellbar` — keines.
-   Das ist die einzige offene Luecke, bei der ein Fehler nicht korrigierbar ist.
-   Zu entscheiden sind RPO/RTO, der Plan und der Umgang mit dem `audit_hmac_key`:
-   nur ein physisches Backup bzw. PITR stellt die Audit-Kette verifizierbar wieder
-   her, ein logischer Export nicht.
-   Validation: Drill mit Datum, Dauer, Datenverlust und Ergebnis der Kettenpruefung
-   in `docs/10-backup-und-wiederherstellung.md` § 10.8 eintragen.
-   Stop/continue rule: Solange keine getestete Wiederherstellung existiert, keine
-   produktionsnahen Zusagen und keine echten Kundendaten.
+
+Erledigt am 2026-09-22: Die Portabilitaet ist hergestellt und belegt —
+`apps/web/Dockerfile` (gebaut, gestartet, HTTP 200), `output: "standalone"` mit
+`outputFileTracingRoot` und der JWT-Hook in `infra/supabase/config.toml`.
+Entscheidung 6 (Datenbank-Betreiber) ist bewusst **vertagt**, mit vier
+definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
+
+1. Step: Weiterentwickeln. Die Betriebsfragen sind bewusst vertagt und an
+   Ausloeser gebunden (`docs/11-betriebsmodell.md` § 11.3.2). Getrennte
+   Umgebungen, Backup-Tarif und Betreiberwahl gehoeren zusammen und kommen
+   gemeinsam mit Ausloeser A — einzeln ergeben sie keinen Sinn.
+   Why: Solange nur Demo-Daten in der Datenbank liegen, ist keine dieser drei
+   Massnahmen notwendig, und jede einzelne waere Aufwand gegen ein Risiko, das
+   nicht existiert. Was die Lage traegt, ist die Regel in `AGENTS.md`: keine
+   echten Eigentuemerdaten in die Cloud-Datenbank.
+   Stop/continue rule: Sobald echte Daten anstehen, ist das Paket aus
+   Umgebungstrennung, Backup und Betreiberwahl faellig — oder es bleiben
+   Demo-Daten.
 2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
-   (freigabepflichtig) und das Ergebnis hier eintragen. Danach `just e2e` einmal
-   vollstaendig laufen lassen und die Zahlen festhalten — der letzte dokumentierte
-   Gesamtlauf stammt vom 2026-09-19.
-3. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen. Die
-   Funktion meldete im Test durchgehend `warning: keine Zeilen im verifizierbaren
-   Forward-Fenster`, obwohl Audit-Zeilen vorhanden waren und der Checkpoint
-   `valid_after_seq = null` trug — was laut `0045` alle Zeilen einschliesst.
-   Why: Die in der TOM-Liste vorgesehene naechtliche Kettenpruefung waere in diesem
-   Zustand wertlos: ein Job, der jede Nacht `keine Zeilen` meldet, sieht aus wie
-   eine bestandene Pruefung. Erst klaeren, dann den Scheduler bauen.
-4. Danach organisatorisch, nicht im Code: AVV, Art.-30-Verzeichnis, Meldeprozess
-   nach Art. 33, Loeschkonzept.
+   (freigabepflichtig) und einen vollstaendigen `just e2e`-Lauf dokumentieren.
+   Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
+3. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen, bevor
+   eine naechtliche Kettenpruefung eingerichtet wird — offen aus dem
+   Backup-Drill (`docs/10-...` § 10.6).
+4. Bei Ausloeser A–D: die drei Fragen an Elestio (§ 11.5), dann Umzug.
+   `scripts/db-migrate-guard.sh` ist dabei auf `--db-url` umzustellen.
+5. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
+   Unterauftragsverarbeiter-Liste von Supabase besorgen), Meldeprozess nach
+   Art. 33, Loeschkonzept.
 
 ## Do Not Build Yet
 - Keine produktive RAG-Pipeline oder weitere Agent-Automation vor dem einfachen Selbstverwaltungs-Onboarding.
