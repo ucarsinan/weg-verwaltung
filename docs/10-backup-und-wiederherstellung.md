@@ -198,7 +198,7 @@ Diese Fragen kann kein Skript beantworten. Sie gehören dem Betreiber.
 | --- | --- |
 | **RPO** — wie viele Stunden Datenverlust sind im schlimmsten Fall hinnehmbar? | Bestimmt die Frequenz. Ein wöchentlicher Export bedeutet bis zu sieben Tage Verlust. Bei Hausgeldbuchungen ist das vermutlich zu viel |
 | **RTO** — wie lange darf die Wiederherstellung dauern? | Bestimmt, ob ein manueller Export genügt oder ein automatisierter Weg nötig ist |
-| **Plan** | Free (heute): kein Backup, Kette überlebt keinen Restore. Pro ($25/Monat, 7 Tage tägliche Backups). PITR-Add-on ($100/Monat je 7 Tage Aufbewahrung, ersetzt die täglichen Backups). Preise laut Supabase-Preisseite, abgerufen 22.09.2026 — vor der Entscheidung erneut prüfen |
+| **Plan bzw. Betreiber** | Drei Wege, Stand 22.09.2026: **(a)** Free bleiben — kein Backup, nur mit Demo-Daten vertretbar. **(b)** Supabase Pro, 25 $/Monat, 7 Tage tägliche Backups; eine Wiederherstellung im selben Projekt erhält den Schlüssel, die Audit-Kette überlebt. **(c)** Betreiberwechsel zu einem EU-Anbieter — Elestio ab ~16 $/Monat mit 3-2-1-Backups und 7 Tagen Aufbewahrung in der kostenlosen Support-Stufe. Entscheidung und Begründung: [11-betriebsmodell.md](./11-betriebsmodell.md). Preise vor der Entscheidung erneut prüfen |
 | **Ablageort** | Ein Export, der neben der Datenbank liegt, überlebt genau die Ausfälle nicht, gegen die er schützt. Verschlüsselt und an einem anderen Ort — und dieser Ort ist ein Unterauftragsverarbeiter im Sinne von § 9.8 |
 | **Aufbewahrungsdauer der Exporte** | Kollidiert mit dem Löschkonzept: ein gelöschter Datensatz, der im Backup weiterlebt, ist nicht gelöscht. Art. 17 gegen zehnjährige Aufbewahrungspflicht — derselbe Konflikt wie in `03-security-model.md` § 3.2 |
 
@@ -275,3 +275,4 @@ Art. 32 Abs. 1 lit. c nicht stattgefunden.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-22 | Erstfassung. Free-Plan-Befund, Exportskript, lokaler Drill mit dem Audit-Ketten-Befund |
+| 2026-09-22 | Präzisierung: eine Wiederherstellung **im selben Projekt** erhält den Verschlüsselungsschlüssel, die Audit-Kette überlebt; nur eine Wiederherstellung in eine **neue** Umgebung bricht sie. Damit genügt bereits ein Tarif mit täglichen Backups — PITR ist dafür nicht erforderlich. Betreiberoption Elestio ergänzt |

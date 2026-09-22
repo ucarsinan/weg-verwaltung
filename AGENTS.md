@@ -96,6 +96,7 @@ Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im 
 - Finance-Domänenmodell: [docs/08-finance-domain-model.md](./docs/08-finance-domain-model.md)
 - TOM nach Art. 32 DSGVO: [docs/09-tom-art32.md](./docs/09-tom-art32.md)
 - Backup und Wiederherstellung: [docs/10-backup-und-wiederherstellung.md](./docs/10-backup-und-wiederherstellung.md)
+- Betriebsmodell und Anbieterwahl: [docs/11-betriebsmodell.md](./docs/11-betriebsmodell.md)
 
 ## Agentic-Arbeitsregel
 
@@ -135,6 +136,7 @@ Wenn etwas riskant oder fachlich unklar ist, triff keine gefaehrliche Annahme. F
 - Kein `just db-migrate`, `supabase db push`, `seed-admin`, `just db-dump` oder Cloud-E2E ohne ausdrueckliche Freigabe.
 - Ein Datenbank-Export enthaelt personenbezogene Daten. Er gehoert nie in einen Commit, nie in eine Fixture und nie in einen Bericht.
 - Tenant-Isolation ist nicht verhandelbar.
+- **Keine echten Eigentümerdaten in die Cloud-Datenbank, solange kein Backup existiert.** Das Projekt läuft auf dem Supabase-Free-Plan, der keine automatischen Backups enthält. Nur Demo- und Testdaten. Bedingung und Hintergrund: `docs/11-betriebsmodell.md` § 11.3.
 - KI-Agenten bleiben suggestion-only; kritische Writes duerfen nicht durch Agenten ermoeglicht werden.
 - Vote-Logik referenziert `ownership_id`, niemals `person_id` oder `user_id`.
 - Echte personenbezogene Daten, Cloud-Secrets, JWTs und Supabase-Credentials duerfen nicht gelesen, ausgegeben oder in Fixtures uebernommen werden.

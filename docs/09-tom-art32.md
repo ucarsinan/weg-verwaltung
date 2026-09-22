@@ -215,9 +215,25 @@ Hosting für Web und Agent ist aus diesem Repository nicht belegt.
 
 Nachweisbar in Benutzung ist derzeit:
 
-| Auftragsverarbeiter | Zweck | Region |
-| --- | --- | --- |
-| Supabase | Datenbank, Authentifizierung, Speicher | Frankfurt |
+| Auftragsverarbeiter | Rechtsträger | Zweck | Region | Transfermechanismus |
+| --- | --- | --- | --- | --- |
+| Supabase | **Supabase Pte. Ltd., Singapur** (Reg. 202005760H), Tochter von Supabase, Inc. (USA) | Datenbank, Authentifizierung, Speicher | Frankfurt | Standardvertragsklauseln |
+
+**Zur Einordnung.** Singapur hat **keinen Angemessenheitsbeschluss** der
+EU-Kommission. Das EU-US Data Privacy Framework greift hier **nicht** — es gilt
+nur für US-Unternehmen und wird im Auftragsverarbeitungsvertrag nicht erwähnt.
+Der Vertrag sagt zu, dass Daten in der gewählten Region gespeichert und primär
+dort verarbeitet werden. Über die US-Muttergesellschaft besteht theoretisch
+Zugriffsdruck nach US-Recht, unabhängig vom Speicherort.
+
+**Die Liste der Unterauftragsverarbeiter von Supabase liegt nur als PDF vor und
+ist hier noch nicht eingearbeitet.** Sie wird für das Art.-30-Verzeichnis
+gebraucht.
+
+**Geplante Änderung.** Am 2026-09-22 wurde entschieden, den Betrieb auf
+EU-Anbieter umzustellen. Zielbild, geprüfte Alternativen und offene Fragen:
+[11-betriebsmodell.md](./11-betriebsmodell.md). Diese Tabelle ist nach dem
+Umzug neu zu schreiben — mit dem, was dann tatsächlich läuft.
 
 Jede weitere Position braucht einen eigenen AVV, bevor sie produktiv Daten
 verarbeitet. Die Tabelle ist vor dem ersten Kundenvertrag zu vervollständigen —
@@ -230,5 +246,6 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-20 | Erstfassung, Migrationsstand `0067` |
+| 2026-09-22 | § 9.8 präzisiert: Vertragspartner ist Supabase Pte. Ltd. (Singapur), Tochter einer US-Gesellschaft; Transfer über Standardvertragsklauseln, kein Angemessenheitsbeschluss, kein Data Privacy Framework. Entscheidung zum Umzug auf EU-Anbieter vermerkt (`docs/11-betriebsmodell.md`). |
 | 2026-09-22 | Backup-Konzept als § 10 ergänzt; 9.7 präzisiert: der Free-Plan hat gar keine Backups, und ein logischer Restore stellt die Audit-Kette nicht wieder her. Nachweis: `docs/10-backup-und-wiederherstellung.md`. |
 | 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |
