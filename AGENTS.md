@@ -90,6 +90,7 @@ Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im 
 - Projektstatus: [PROJECT.md](./PROJECT.md)
 - Test-Infrastruktur: [TEST_INFRA.md](./TEST_INFRA.md)
 - Finance Lifecycle: [docs/07-finance-lifecycle.md](./docs/07-finance-lifecycle.md)
+- TOM nach Art. 32 DSGVO: [docs/09-tom-art32.md](./docs/09-tom-art32.md)
 
 ## Agentic-Arbeitsregel
 
