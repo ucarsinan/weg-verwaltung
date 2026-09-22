@@ -162,9 +162,20 @@ Datei durch den Server.
 Projekt hat nichts konfiguriert. Ein eingescanntes Protokoll von 3 MB würde
 abgewiesen, bevor es den Bucket sieht.
 
-**Entscheidung:** `serverActions.bodySizeLimit` auf **25 MB**, und der Bucket von
-100 MB auf 25 MB angeglichen — damit es auf die Frage „wie groß darf eine Datei
+**Entscheidung:** `serverActions.bodySizeLimit` auf **10 MB**, und der Bucket von
+100 MB auf 10 MB angeglichen — damit es auf die Frage „wie groß darf eine Datei
 sein" eine Antwort gibt statt zweier.
+
+Urspruenglich waren 25 MB vorgesehen. Auf 10 MB gesenkt, weil der Standardwert
+einen Sicherheitszweck hat: die Next.js-Dokumentation nennt ausdruecklich
+„excessive server resources in parsing large amounts of data" und „potential
+DDoS attacks". Von einem sicheren Standard weicht man so weit ab wie noetig und
+nicht weiter — eingescannte Protokolle und Rechnungen liegen praktisch immer
+unter 10 MB. Wer mehr braucht, hebt die Zahl bewusst und an einer Stelle.
+
+Restrisiko, benannt: Die Grenze schuetzt nicht mehr so eng wie 1 MB. Sie greift
+allerdings nur fuer angemeldete Nutzer mit Mandanten-Claim, nicht fuer anonyme
+Aufrufe, und der Bucket zieht mit derselben Zahl eine zweite Linie.
 
 **Diese Grenze ist bewusst nicht einstellbar.** `bodySizeLimit` wird beim Bauen
 gesetzt, nicht zur Laufzeit; ein Mandant kann sie ohne neuen Build nicht ändern.
@@ -238,12 +249,44 @@ WEG. Im selben PR nachziehen, wie bei PR #20.
 - **Herausgabepaket beim Verwalterwechsel.** Eigener Slice; `scripts/db-dump.sh`
   deckt die Datenbankseite bereits ab, die Storage-Seite nicht.
 
+## Entschiedene Punkte
+
+Am 2026-09-22 auf Nachfrage entschieden, Maßstab war ausdruecklich: **die
+Sicherheit darf darunter nicht leiden.**
+
+### Fristregeln werden NICHT vorbelegt
+
+Beim Anlegen eines Mandanten entstehen keine Regelzeilen. Es gilt der gesetzliche
+Rueckfall, bis jemand bewusst etwas anderes eintraegt.
+
+Begruendung: Der Rueckfall kann nie fehlen. Eine vorbelegte Zeile dagegen ist ein
+kopierter Wert, der veralten kann — und wenn eine spaetere Migration eine neue
+Dokumentart einfuehrt, haetten bestehende Mandanten dafuer ohnehin keine Zeile.
+Ein Wert, der nie fehlen kann, schlaegt einen, der zum Anlegezeitpunkt richtig
+war. Zusaetzlich spart es einen Schreibpfad in der Mandantenanlage.
+
+In der Oberflaeche steht dann „gesetzlicher Rueckfall" — ehrlicher als eine
+vorbelegte Zahl, die wie eine Entscheidung des Verwalters aussieht.
+
+### Specs liegen in `docs/specs/`, nicht in `docs/superpowers/`
+
+`.gitignore` schliesst `docs/superpowers/` aus. Dort lagen 15 Dateien, davon 6
+versioniert — die Trennung war willkuerlich, weil Ignore-Regeln bereits
+versionierte Dateien nicht mehr greifen.
+
+**Dieses Repository ist oeffentlich.** Die Ignore-Zeile zu entfernen haette neun
+ungepruefte Dateien mit einem einzigen `git add .` veroeffentlicht. Ein
+Sicherheitscheck fand darin keinen Geheimwert, kein JWT und keine Projekt-URL —
+nur zweimal einen Variablennamen im Fliesstext. Kein Leck, aber die Struktur war
+die Luecke.
+
+Deshalb umgekehrt entschieden: **die Ignore-Regel bleibt und wird begruendet**,
+dauerhafte Entwurfsdokumente ziehen nach `docs/specs/`. Diese Spec ist
+verschoben; das urspruengliche `git add -f` war unter diesem Maßstab falsch und
+ist zurueckgenommen. Der Altbestand bleibt liegen — er ist laengst oeffentlich,
+und ihn zu verschieben wuerde fremde Historie in diesen Slice mischen. Regel und
+Begruendung stehen in `docs/specs/README.md`.
+
 ## Offene Punkte
 
-- Ob die Fristregeln je Mandant beim Anlegen des Mandanten vorbelegt werden oder
-  erst beim ersten Bearbeiten entstehen. Der Rückfall macht beides funktionsfähig;
-  Vorbelegen wäre sichtbarer, Nicht-Vorbelegen ehrlicher („du hast nichts
-  eingestellt").
-- `.gitignore` Zeile 54 schließt `docs/superpowers/` aus, während sieben Specs
-  dort versioniert liegen. Regel und Praxis widersprechen sich. Zu klären, nicht
-  Teil dieses Slices.
+Keine mehr, die diesen Slice blockieren.

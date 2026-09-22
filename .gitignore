@@ -48,6 +48,9 @@ infra/supabase/.temp/
 **/supabase/.temp/
 
 # Claude Code / superpowers tool artefacts
+# Arbeitsordner, nicht versioniert. Dieses Repository ist OEFFENTLICH —
+# was hier liegt, ist ungeprueft. Kein `git add -f` von hier.
+# Dauerhafte Entwurfsdokumente gehoeren nach docs/specs/ (siehe dessen README).
 .claude/
 .agents/
 .superpowers/
