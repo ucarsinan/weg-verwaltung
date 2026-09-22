@@ -65,7 +65,7 @@ Produkttexten (vgl. PR #20):
 
 | # | Frage | Entscheidung | Status |
 | --- | --- | --- | --- |
-| 1 | Umgebungen | **Zwei Supabase-Projekte**: eines für die Demo, eines für Entwicklung und Browsertests | entschieden, nicht umgesetzt |
+| 1 | Umgebungen | **Ein Projekt, solange nur entwickelt wird.** Trennung kommt mit Ausloeser A | **zurueckgestellt** (§ 11.3.4) |
 | 2 | Datenbank-Tarif | **Free bleiben**, solange keine echten Daten drin sind | entschieden |
 | 3 | KI-Dienst | **Vorerst nicht ausliefern** | entschieden |
 | 4 | Maßstab | **Daten in der EU** | entschieden |
@@ -96,7 +96,7 @@ genuegt:**
 
 | # | Ausloeser | Warum genau hier |
 | --- | --- | --- |
-| A | **Echte personenbezogene Daten sollen in die Datenbank** | Dann faellt ohnehin auch Entscheidung 2 (Free-Tarif). Beide Fragen kommen gemeinsam auf den Tisch |
+| A | **Echte personenbezogene Daten sollen in die Datenbank** | Dann fallen zugleich Entscheidung 1 (getrennte Umgebungen, § 11.3.4) und Entscheidung 2 (Free-Tarif). Die drei Fragen kommen gemeinsam auf den Tisch — einzeln ergeben sie keinen Sinn |
 | B | Ein Kunde, ein Datenschutzbeauftragter oder ein AVV verlangt einen EU-Anbieter | Dann ist „halb EU" per Definition nicht mehr genug |
 | C | Die Produkttexte sollen mit „europäischer Anbieter" werben | Heute waere das eine Falschangabe (§ 11.2) |
 | D | supabase.com aendert Vertragspartner, Bedingungen oder Region zum Schlechteren | Der Vertrag ist einseitig aenderbar |
@@ -128,6 +128,24 @@ Der JWT-Hook war der unscheinbarste der vier Punkte und der gefährlichste:
 Solange er nur im Dashboard stand, wäre ein Umzug an einer vergessenen
 Einstellung gescheitert — und der Fehler hätte ausgesehen wie „die Anwendung ist
 kaputt", nicht wie „eine Einstellung fehlt".
+
+### 11.3.4 Warum vorerst nur ein Projekt
+
+Am 2026-09-22 zunaechst anders entschieden, am selben Tag korrigiert: Solange
+ausschliesslich entwickelt wird, **genuegt ein Projekt**.
+
+Der Grund fuer getrennte Umgebungen lautet „Entwicklung darf keine Kundendaten
+anfassen". Es gibt keine Kundendaten. Das Schlimmste, was ein Fehlgriff anrichten
+kann, sind zerstoerte Demo-Daten — die sind in Minuten neu angelegt. Ein zweites
+Projekt waere Aufwand gegen ein Risiko, das nicht existiert.
+
+**Was die Entscheidung traegt**, ist die Regel in `AGENTS.md`: keine echten
+Eigentuemerdaten in die Cloud-Datenbank. Faellt diese Regel, faellt auch diese
+Entscheidung — beides haengt an Ausloeser A.
+
+**Ab Ausloeser A ist die Trennung nicht mehr optional.** Sie gehoert dann in
+dasselbe Paket wie Backup und Betreiberwahl: echte Daten, getrennte Umgebungen,
+Sicherungen — oder keine echten Daten.
 
 ### Die Bedingung zu Entscheidung 2
 
@@ -405,7 +423,7 @@ darum, ihn jederzeit moeglich zu halten.
 | --- | --- | --- | --- |
 | ~~1~~ | ~~Docker-Datei und `output: "standalone"`~~ | Agent | ✅ **erledigt 2026-09-22**, Container getestet |
 | ~~2~~ | ~~JWT-Hook in `infra/supabase/config.toml`~~ | Agent | ✅ **erledigt 2026-09-22** |
-| 3 | Zweites Supabase-Projekt fuer Entwicklung, `dev-web` und Browsertests darauf umstellen | Betreiber legt an, Agent stellt um | **jetzt der naechste Schritt** — unabhaengig vom Anbieter, verhindert Entwicklung gegen Live-Daten |
+| 3 | Zweites Supabase-Projekt fuer Entwicklung | Betreiber legt an, Agent stellt um | **zurueckgestellt bis Ausloeser A** (§ 11.3.4) |
 | 4 | `scripts/db-migrate-guard.sh` auf `--db-url` vorbereiten | Agent | spaeter — erst beim Umzug noetig |
 | 5 | Die drei Fragen an Elestio (§ 11.5) | Betreiber | erst bei Ausloeser A–D |
 | 6 | Demo-Daten entfernen, bevor echte Daten hineinkommen | Betreiber | bei Ausloeser A |
@@ -415,5 +433,6 @@ darum, ihn jederzeit moeglich zu halten.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-22 | Erstfassung. Entscheidungen 1–4 getroffen, 5–6 als Empfehlung mit offenen Fragen. Korrektur der Angabe „Supabase Inc. (US)" aus `02-architecture-deployment.md`. |
+| 2026-09-22 | Entscheidung 1 zurueckgestellt: solange nur entwickelt wird, genuegt ein Projekt (§ 11.3.4). Die Trennung haengt jetzt an Ausloeser A, gemeinsam mit Backup und Betreiberwahl. |
 | 2026-09-22 | Portabilitaet hergestellt und belegt: `apps/web/Dockerfile` (gebaut, gestartet, `HTTP 200`), `output: "standalone"` mit `outputFileTracingRoot`, JWT-Hook in `config.toml`. Alle vier Bedingungen aus § 11.3.3 erfuellt. |
 | 2026-09-22 | Entscheidung 6 getroffen: **supabase.com bleibt waehrend der Weiterentwicklung**, Elestio ist der vorbereitete Rueckfall. Vier Ausloeser definiert (§ 11.3.2) und vier nachpruefbare Portabilitaetsbedingungen (§ 11.3.3), damit der Vorbehalt belegbar bleibt und nicht wie der Juni-Entschluss liegenbleibt. |

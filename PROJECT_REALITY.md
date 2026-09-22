@@ -126,28 +126,26 @@ Erledigt am 2026-09-22: Die Portabilitaet ist hergestellt und belegt —
 Entscheidung 6 (Datenbank-Betreiber) ist bewusst **vertagt**, mit vier
 definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
 
-1. Step: Zweites Supabase-Projekt fuer Entwicklung anlegen und `dev-web` sowie
-   die Browsertests darauf umstellen.
-   Why: Heute laeuft Entwicklung gegen dieselbe Datenbank, die spaeter
-   Kundendaten tragen soll. Das ist unabhaengig von jeder Anbieterfrage zu
-   beheben, kostet nichts (zwei Free-Projekte sind erlaubt) und nimmt das
-   groesste vermeidbare Risiko aus dem Alltag.
-   Validation: `just e2e` laeuft gegen das Dev-Projekt, die Demo-Datenbank
-   bleibt unberuehrt.
-2. Step: Backup-Frage entscheiden, sobald echte Daten anstehen — Ausloeser A in
-   `docs/11-betriebsmodell.md` § 11.3.2. Bis dahin gilt die Regel in `AGENTS.md`:
-   keine echten Eigentuemerdaten in die Cloud-Datenbank.
-   Why: Der Free-Tarif hat kein Backup. Das ist vertretbar, solange nur
-   Demo-Daten drin sind, und nur dann.
-3. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
+1. Step: Weiterentwickeln. Die Betriebsfragen sind bewusst vertagt und an
+   Ausloeser gebunden (`docs/11-betriebsmodell.md` § 11.3.2). Getrennte
+   Umgebungen, Backup-Tarif und Betreiberwahl gehoeren zusammen und kommen
+   gemeinsam mit Ausloeser A — einzeln ergeben sie keinen Sinn.
+   Why: Solange nur Demo-Daten in der Datenbank liegen, ist keine dieser drei
+   Massnahmen notwendig, und jede einzelne waere Aufwand gegen ein Risiko, das
+   nicht existiert. Was die Lage traegt, ist die Regel in `AGENTS.md`: keine
+   echten Eigentuemerdaten in die Cloud-Datenbank.
+   Stop/continue rule: Sobald echte Daten anstehen, ist das Paket aus
+   Umgebungstrennung, Backup und Betreiberwahl faellig — oder es bleiben
+   Demo-Daten.
+2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
    (freigabepflichtig) und einen vollstaendigen `just e2e`-Lauf dokumentieren.
    Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
-4. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen, bevor
+3. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen, bevor
    eine naechtliche Kettenpruefung eingerichtet wird — offen aus dem
    Backup-Drill (`docs/10-...` § 10.6).
-5. Bei Ausloeser A–D: die drei Fragen an Elestio (§ 11.5), dann Umzug.
+4. Bei Ausloeser A–D: die drei Fragen an Elestio (§ 11.5), dann Umzug.
    `scripts/db-migrate-guard.sh` ist dabei auf `--db-url` umzustellen.
-6. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
+5. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
    Unterauftragsverarbeiter-Liste von Supabase besorgen), Meldeprozess nach
    Art. 33, Loeschkonzept.
 
