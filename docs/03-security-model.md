@@ -145,7 +145,7 @@ $$ language sql stable;
 7. Keine `SECURITY DEFINER`-Funktionen auf Tenant-Tabellen, außer mit explizitem `tenant_id`-Check und bewusster `LEAKPROOF`-Markierung.
 8. **Eine Policy pro Command** (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) mit explizitem `WITH CHECK` — kein generisches `FOR ALL`.
 9. Zielzustand: CI-Gate auf Supabase Advisor Lints `0013_rls_disabled_in_public`, `0010_security_definer_view`, `0003_auth_rls_initplan` — schlägt Migration rot. Aktuell ist das als Security-Contract dokumentiert; die sichtbare Testabdeckung ist nicht vollständig als CI-Gate nachweisbar.
-10. Zielzustand: pgTAP-Negative-Test-Suite läuft bei jeder Migration (Beispiel weiter unten). `infra/supabase/tests/0002_audit_chain.sql` und `infra/supabase/tests/0046_least_privilege.sql` sind ausführbare Regressionstests für den 0045/0046-Audit-Contract; `infra/supabase/tests/0001_rls_negative.sql` bleibt eine kommentierte RLS-Negativtest-Skizze.
+10. Zielzustand: pgTAP-Negative-Test-Suite läuft bei jeder Migration (Beispiel weiter unten). `infra/supabase/tests/0002_audit_chain.sql` und `infra/supabase/tests/0046_least_privilege.sql` sind ausführbare Regressionstests für den 0045/0046-Audit-Contract; `infra/supabase/tests/0001_rls_negative.sql` bleibt eine kommentierte RLS-Negativtest-Skizze — die katalogweite Absicherung leistet stattdessen `infra/supabase/tests/0000_rls_katalog.sql` (RLS, FORCE RLS, Policy-Pflicht, leeres Schema `private`).
 
 ### Beispiel-Policy (für `weg`)
 
@@ -361,9 +361,9 @@ Das verifizierbare Forward Window beginnt pro Tenant bei `seq > audit_writer.aud
 
 - Legacy-Audit-Zeilen vor dem 0045-Checkpoint haben reduzierte forensische Stärke und bleiben außerhalb v2-Verifikation.
 - Advisory-Lock-Serialisierung ist migrationsseitig und durch v2-Continuity-Tests indirekt abgesichert, aber noch nicht durch einen echten parallelen Zwei-Transaktions-Stresstest.
-- Die neuen pgTAP-Regressionstests sind ausführbar, aber noch nicht als verpflichtendes CI-Gate nachgewiesen.
+- ~~Die neuen pgTAP-Regressionstests sind ausführbar, aber noch nicht als verpflichtendes CI-Gate nachgewiesen.~~ Erledigt: der CI-Job `db-regression (pgTAP)` führt `just test-db-all` bei jedem Pull Request aus (Stand 2026-09-22: 16 Verträge, 324 Zusicherungen).
 
-**Nächste empfohlene Aufgabe:** die neuen pgTAP-DB-Regressionstests als CI-Gate bzw. dokumentierten Remote-Testlauf verdrahten, ohne lokale `supabase start`-Abhängigkeit.
+**Nächste empfohlene Aufgabe:** Verfügbarkeit und Wiederherstellbarkeit nach Art. 32 Abs. 1 lit. b und c — ein dokumentiertes Backup-Regime mit mindestens einem echten Wiederherstellungslauf. Siehe `docs/09-tom-art32.md` § 9.7.
 
 ---
 
