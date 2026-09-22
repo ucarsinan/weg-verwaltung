@@ -1,0 +1,50 @@
+# Baukontext ist das Repository-Wurzelverzeichnis (siehe apps/web/Dockerfile).
+# Alles hier Genannte wird nicht in den Build-Kontext kopiert — das haelt den
+# Kontext klein und verhindert vor allem, dass Geheimnisse oder Datenexporte
+# versehentlich in ein Abbild geraten.
+#
+# Bewusst NICHT ausgeschlossen: Testdateien. `next build` typprueft mit, und
+# tsconfig bezieht sie ein — fehlen sie, bricht der Build an einer Stelle ab,
+# die nichts mit dem Fehler zu tun hat.
+
+# Geheimnisse — niemals ins Abbild
+.env
+.env.*
+!.env.example
+
+# Datenbank-Exporte (scripts/db-dump.sh) — enthalten personenbezogene Daten
+backups/
+
+# Wird im Abbild neu erzeugt
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+dist
+build
+
+# Fuer den Build der Web-App nicht noetig
+.git
+.github
+.claude
+.agents
+.superpowers
+docs
+infra
+apps/agent
+playwright-report
+test-results
+coverage
+.playwright-cli
+
+# Werkzeug- und Systemreste
+*.log
+.DS_Store
+.vscode
+.idea
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache

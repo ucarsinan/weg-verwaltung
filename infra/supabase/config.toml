@@ -14,3 +14,24 @@ major_version = 17
 [studio]
 enabled = true
 port = 54323
+
+# Custom Access Token Hook — der Schalter, an dem die Mandantentrennung haengt.
+#
+# public.custom_access_token_hook() ist in 0002_identity.sql definiert und an
+# supabase_auth_admin freigegeben. Sie schreibt tenant_id und Rolle in den
+# Zugriffstoken; public.tenant_id() liest sie dort wieder heraus, und jede
+# RLS-Policy baut darauf auf.
+#
+# Bis zum 2026-09-22 war der Hook AUSSCHLIESSLICH im Supabase-Dashboard
+# aktiviert und nirgends im Repository. Wer das Projekt allein aus dem Code neu
+# aufgebaut haette, haette eine Anwendung bekommen, in der niemand etwas sieht:
+# der Claim fehlt, tenant_id() liefert NULL, RLS sperrt alles. Fail closed, aber
+# unsichtbar — und der Fehler sieht aus wie "die Anwendung ist kaputt", nicht
+# wie "eine Einstellung fehlt".
+#
+# Beim Umzug zu einem anderen Betreiber entspricht dieser Block den GoTrue-
+# Variablen GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED und
+# GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI. Siehe docs/11-betriebsmodell.md § 11.7.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"

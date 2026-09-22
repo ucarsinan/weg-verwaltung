@@ -16,9 +16,15 @@ Verwandt: [09-tom-art32.md](./09-tom-art32.md) § 9.8,
 
 > „Der Trigger ist nicht ‚ab Tag 1' — er ist ‚ab erstem Vertrag'."
 
-Der Auslöser wurde am 2026-09-22 **vorgezogen**, auf Wunsch des Betreibers. Vor
-dem ersten Vertrag zu wechseln ist die vorsichtigere Reihenfolge: es gibt noch
-keine Kundendaten, die ein Umzug gefährden könnte.
+Die **Prüfung** wurde am 2026-09-22 vorgezogen, auf Wunsch des Betreibers. Der
+**Wechsel** selbst nicht: Entscheidung 6 ist bewusst vertagt (§ 11.3.1), mit
+definierten Auslösern (§ 11.3.2) und nachprüfbaren Portabilitätsbedingungen
+(§ 11.3.3).
+
+Der Unterschied ist der Kern dieses Dokuments. Die Alternativen vor dem ersten
+Vertrag zu kennen kostet nichts und macht die spätere Entscheidung zu einer
+Stunde Arbeit statt zu einem Projekt. Zu wechseln, bevor ein Grund dafür
+besteht, kostet Geld und Zeit für nichts.
 
 Ausgangslage war eine nüchterne Bestandsaufnahme: Die Software läuft, aber sie
 läuft nirgends. Entwicklung geschah gegen die Live-Datenbank, es gab kein
@@ -39,7 +45,9 @@ Gesprächen regelmäßig verrutscht:
 | **Daten-Souveränität** | Kein Rechtssystem außerhalb der EU kann Herausgabe erzwingen | Ziel |
 
 Ein Anbieter mit EU-Rechenzentrum, aber US-Mutterkonzern, liefert das Erste und
-nicht das Zweite. Genau das war der Zustand vor dieser Entscheidung.
+nicht das Zweite. **Das ist der aktuelle Zustand** und bleibt es bis zu einem
+Auslöser aus § 11.3.2 — bewusst akzeptiert, solange nur Demo-Daten im Spiel
+sind.
 
 **Was daraus für Werbeaussagen folgt** — dieselbe Trennung wie bei den
 Produkttexten (vgl. PR #20):
@@ -61,8 +69,65 @@ Produkttexten (vgl. PR #20):
 | 2 | Datenbank-Tarif | **Free bleiben**, solange keine echten Daten drin sind | entschieden |
 | 3 | KI-Dienst | **Vorerst nicht ausliefern** | entschieden |
 | 4 | Maßstab | **Daten in der EU** | entschieden |
-| 5 | Web-Hosting | **Scaleway** (Frankreich, Region Paris) | Empfehlung, offen |
-| 6 | Datenbank-Betreiber | **Elestio** (Irland) auf EU-Infrastruktur | Empfehlung, drei Fragen offen |
+| 5 | Web-Hosting | **Scaleway** (Frankreich, Region Paris) — wenn gehostet wird | vertagt, Vorarbeit laeuft |
+| 6 | Datenbank-Betreiber | **supabase.com bleibt vorerst**, Elestio ist der vorbereitete Rueckfall | **vertagt mit Vorbehalt** (§ 11.3.1) |
+
+### 11.3.1 Der Vorbehalt — Entscheidung 6 im Wortlaut
+
+Am 2026-09-22 hat der Betreiber entschieden, waehrend der Weiterentwicklung
+**bei der jetzigen Struktur zu bleiben** — unter der Bedingung, dass ein
+spaeterer Wechsel jederzeit ohne Umbau moeglich bleibt.
+
+Die Begruendung in seinen Worten: supabase.com ist „halb EU" — Daten in
+Frankfurt, Vertragspartner in Singapur, Mutter in den USA. Damit laesst sich
+leben, solange keine echten Eigentuemerdaten im Spiel sind. Reicht es nicht mehr,
+geht es zu Elestio.
+
+**Das ist keine Unentschlossenheit, sondern eine bewusst vertagte Entscheidung.**
+Der Unterschied liegt in zwei Dingen: einem Ausloeser und einer nachpruefbaren
+Portabilitaet. Beides steht unten.
+
+### 11.3.2 Ausloeser — wann Entscheidung 6 neu getroffen wird
+
+Diese Datei traegt bereits die Lehre aus einem vertagten Entschluss ohne
+scharfen Ausloeser: `02-architecture-deployment.md` setzte im Juni „ab erstem
+Vertrag" und lag sechs Monate. Deshalb hier konkret — **jeder einzelne Punkt
+genuegt:**
+
+| # | Ausloeser | Warum genau hier |
+| --- | --- | --- |
+| A | **Echte personenbezogene Daten sollen in die Datenbank** | Dann faellt ohnehin auch Entscheidung 2 (Free-Tarif). Beide Fragen kommen gemeinsam auf den Tisch |
+| B | Ein Kunde, ein Datenschutzbeauftragter oder ein AVV verlangt einen EU-Anbieter | Dann ist „halb EU" per Definition nicht mehr genug |
+| C | Die Produkttexte sollen mit „europäischer Anbieter" werben | Heute waere das eine Falschangabe (§ 11.2) |
+| D | supabase.com aendert Vertragspartner, Bedingungen oder Region zum Schlechteren | Der Vertrag ist einseitig aenderbar |
+
+Tritt keiner ein, bleibt alles wie es ist — das ist der Sinn der Entscheidung.
+
+### 11.3.3 Was „ohne Probleme wechseln" nachpruefbar verlangt
+
+Ein Vorbehalt ist nur so viel wert wie seine Belege. Vier Punkte, drei davon
+bereits erfuellt:
+
+| Punkt | Stand |
+| --- | --- |
+| **Datenbank umziehbar** — dieselbe Software laeuft ausserhalb von supabase.com | ✅ belegt: die lokale Entwicklungsdatenbank ist dasselbe Container-Abbild, 67 Migrationen laufen, 324 Zusicherungen gruen |
+| **Daten herausholbar** — vollstaendiger Abzug auf Knopfdruck | ✅ `scripts/db-dump.sh`, mit Manifest |
+| **Web-App umziehbar** — laeuft in einem Container statt an einen Anbieter gebunden | ✅ belegt am 2026-09-22: `apps/web/Dockerfile` gebaut, gestartet, abgefragt — `HTTP 200`, Startseite lädt |
+| **JWT-Hook im Repository** statt nur im Dashboard | ✅ erledigt: `[auth.hook.custom_access_token]` in `infra/supabase/config.toml`; 324 Zusicherungen danach weiterhin grün |
+
+**Alle vier Bedingungen sind erfüllt.** Der Vorbehalt aus § 11.3.1 ist damit
+kein Vorsatz mehr, sondern ein geprüfter Zustand.
+
+Zwei Dinge fielen dabei erst beim Ausführen auf, nicht beim Schreiben: Es gibt
+gar kein `public/`-Verzeichnis — die naheliegende `COPY`-Zeile hätte den Build
+zerlegt. Und ohne `outputFileTracingRoot` hätte der Container die im
+pnpm-Workspace verlinkten Pakete erst **zur Laufzeit** vermisst, nicht beim
+Bauen. Beides ist in `apps/web/Dockerfile` und `next.config.ts` kommentiert.
+
+Der JWT-Hook war der unscheinbarste der vier Punkte und der gefährlichste:
+Solange er nur im Dashboard stand, wäre ein Umzug an einer vergessenen
+Einstellung gescheitert — und der Fehler hätte ausgesehen wie „die Anwendung ist
+kaputt", nicht wie „eine Einstellung fehlt".
 
 ### Die Bedingung zu Entscheidung 2
 
@@ -290,8 +355,18 @@ Folgen:
 - Bei **jedem** Umzug kann dieser Schritt vergessen werden, und der Fehler sieht
   aus wie „die Anwendung ist kaputt", nicht wie „eine Einstellung fehlt".
 
-Zu tun: Beim Umzug in die Konfiguration aufnehmen und als Teil der
-Inbetriebnahme dokumentieren.
+**Erledigt am 2026-09-22.** `infra/supabase/config.toml` enthaelt jetzt:
+
+```toml
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+```
+
+Beim Umzug zu einem anderen Betreiber entspricht dieser Block den
+GoTrue-Variablen `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED` und
+`GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI`. Nach der Aenderung lief das volle
+Datenbank-Gate erneut durch: 16 Vertraege, 324 Zusicherungen, gruen.
 
 ---
 
@@ -323,20 +398,22 @@ Der saubere Weg ist nicht teurer.
 
 ## 11.9 Nächste Schritte
 
-| # | Schritt | Wer |
-| --- | --- | --- |
-| 1 | Die drei Fragen aus § 11.5 an Elestio stellen | Betreiber |
-| 2 | Zweites Supabase-Projekt für Entwicklung anlegen, `dev-web` und Browsertests darauf umstellen | Betreiber legt an, Agent stellt um |
-| 3 | Docker-Datei und `output: "standalone"` für die Web-App, lokal getestet | Agent |
-| 4 | Elestio-Instanz aufsetzen, JWT-Hook konfigurieren, Migrationen über `--db-url` einspielen | gemeinsam |
-| 5 | Ersten Wiederherstellungs-Drill fahren und § 10.8 ausfüllen — beantwortet zugleich Frage 2 aus § 11.5 | gemeinsam |
-| 6 | `scripts/db-migrate-guard.sh` auf `--db-url` umstellen | Agent |
-| 7 | Demo-Daten aus der Produktionsumgebung entfernen, bevor echte Daten hineinkommen | Betreiber |
+Nach der Entscheidung vom 2026-09-22 geht es **nicht** um einen Umzug, sondern
+darum, ihn jederzeit moeglich zu halten.
 
----
+| # | Schritt | Wer | Dringlichkeit |
+| --- | --- | --- | --- |
+| ~~1~~ | ~~Docker-Datei und `output: "standalone"`~~ | Agent | ✅ **erledigt 2026-09-22**, Container getestet |
+| ~~2~~ | ~~JWT-Hook in `infra/supabase/config.toml`~~ | Agent | ✅ **erledigt 2026-09-22** |
+| 3 | Zweites Supabase-Projekt fuer Entwicklung, `dev-web` und Browsertests darauf umstellen | Betreiber legt an, Agent stellt um | **jetzt der naechste Schritt** — unabhaengig vom Anbieter, verhindert Entwicklung gegen Live-Daten |
+| 4 | `scripts/db-migrate-guard.sh` auf `--db-url` vorbereiten | Agent | spaeter — erst beim Umzug noetig |
+| 5 | Die drei Fragen an Elestio (§ 11.5) | Betreiber | erst bei Ausloeser A–D |
+| 6 | Demo-Daten entfernen, bevor echte Daten hineinkommen | Betreiber | bei Ausloeser A |
 
 ## 11.10 Änderungshistorie
 
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-22 | Erstfassung. Entscheidungen 1–4 getroffen, 5–6 als Empfehlung mit offenen Fragen. Korrektur der Angabe „Supabase Inc. (US)" aus `02-architecture-deployment.md`. |
+| 2026-09-22 | Portabilitaet hergestellt und belegt: `apps/web/Dockerfile` (gebaut, gestartet, `HTTP 200`), `output: "standalone"` mit `outputFileTracingRoot`, JWT-Hook in `config.toml`. Alle vier Bedingungen aus § 11.3.3 erfuellt. |
+| 2026-09-22 | Entscheidung 6 getroffen: **supabase.com bleibt waehrend der Weiterentwicklung**, Elestio ist der vorbereitete Rueckfall. Vier Ausloeser definiert (§ 11.3.2) und vier nachpruefbare Portabilitaetsbedingungen (§ 11.3.3), damit der Vorbehalt belegbar bleibt und nicht wie der Juni-Entschluss liegenbleibt. |

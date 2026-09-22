@@ -119,31 +119,37 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   wesentlich erweitern.
 
 ## Next Logical Step
-1. Step: Die drei offenen Fragen an Elestio klaeren (Supabase-Version und
-   Update-Takt, ob die Sicherung den pgsodium-Wurzelschluessel enthaelt, ob die
-   Dateiablage auf Dateisystem oder S3 laeuft). Siehe `docs/11-betriebsmodell.md`
-   § 11.5.
-   Why: Die zweite Frage entscheidet, ob die Audit-Kette eine Wiederherstellung
-   uebersteht — die zentrale Zusage dieses Produkts. Ohne Antwort ist der Umzug
-   eine Wette.
-   Validation: Antworten in § 11.5 eintragen.
-2. Step: Zweites Supabase-Projekt fuer Entwicklung anlegen und `dev-web` sowie die
-   Browsertests darauf umstellen.
-   Why: Heute laeuft Entwicklung gegen dieselbe Datenbank, die spaeter Kundendaten
-   traegt. Das ist unabhaengig vom Anbieterwechsel zu beheben und kostet nichts.
-3. Step: Docker-Datei und `output: "standalone"` fuer die Web-App, lokal getestet.
-   Why: Notwendig fuer Scaleway — und zugleich das Gegenteil von Festlegung: ein
-   Container laeuft bei jedem Anbieter, auch bei einem kuenftigen deutschen.
-4. Step: Umzug durchfuehren, dabei den JWT-Hook in die Konfiguration aufnehmen
-   (`docs/11-betriebsmodell.md` § 11.7 — er existiert heute nur im Dashboard),
-   danach ersten Wiederherstellungs-Drill fahren und `docs/10-...` § 10.8
-   ausfuellen.
-5. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
+
+Erledigt am 2026-09-22: Die Portabilitaet ist hergestellt und belegt —
+`apps/web/Dockerfile` (gebaut, gestartet, HTTP 200), `output: "standalone"` mit
+`outputFileTracingRoot` und der JWT-Hook in `infra/supabase/config.toml`.
+Entscheidung 6 (Datenbank-Betreiber) ist bewusst **vertagt**, mit vier
+definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
+
+1. Step: Zweites Supabase-Projekt fuer Entwicklung anlegen und `dev-web` sowie
+   die Browsertests darauf umstellen.
+   Why: Heute laeuft Entwicklung gegen dieselbe Datenbank, die spaeter
+   Kundendaten tragen soll. Das ist unabhaengig von jeder Anbieterfrage zu
+   beheben, kostet nichts (zwei Free-Projekte sind erlaubt) und nimmt das
+   groesste vermeidbare Risiko aus dem Alltag.
+   Validation: `just e2e` laeuft gegen das Dev-Projekt, die Demo-Datenbank
+   bleibt unberuehrt.
+2. Step: Backup-Frage entscheiden, sobald echte Daten anstehen — Ausloeser A in
+   `docs/11-betriebsmodell.md` § 11.3.2. Bis dahin gilt die Regel in `AGENTS.md`:
+   keine echten Eigentuemerdaten in die Cloud-Datenbank.
+   Why: Der Free-Tarif hat kein Backup. Das ist vertretbar, solange nur
+   Demo-Daten drin sind, und nur dann.
+3. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
+   (freigabepflichtig) und einen vollstaendigen `just e2e`-Lauf dokumentieren.
+   Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
+4. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen, bevor
+   eine naechtliche Kettenpruefung eingerichtet wird — offen aus dem
+   Backup-Drill (`docs/10-...` § 10.6).
+5. Bei Ausloeser A–D: die drei Fragen an Elestio (§ 11.5), dann Umzug.
+   `scripts/db-migrate-guard.sh` ist dabei auf `--db-url` umzustellen.
+6. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
    Unterauftragsverarbeiter-Liste von Supabase besorgen), Meldeprozess nach
    Art. 33, Loeschkonzept.
-6. Offen aus dem Backup-Drill: das leere Forward-Fenster von
-   `audit_verify_chain()` untersuchen, bevor eine naechtliche Kettenpruefung
-   eingerichtet wird.
 
 ## Do Not Build Yet
 - Keine produktive RAG-Pipeline oder weitere Agent-Automation vor dem einfachen Selbstverwaltungs-Onboarding.

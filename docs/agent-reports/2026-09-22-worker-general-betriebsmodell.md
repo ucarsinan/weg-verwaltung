@@ -178,3 +178,71 @@ entscheidet, ob die Audit-Kette einen Ausfall uebersteht. Vor der Buchung klaere
 4. Umzug inkl. JWT-Hook in die Konfiguration.
 5. `scripts/db-migrate-guard.sh` auf `--db-url`.
 6. Leeres Forward-Fenster der Kettenpruefung (offen aus dem Backup-Slice).
+
+---
+
+## Nachtrag, selber Tag: Entscheidung 6 getroffen, Portabilitaet hergestellt
+
+Nach dem oben dokumentierten Stand hat der Betreiber Entscheidung 6 getroffen:
+**supabase.com bleibt waehrend der Weiterentwicklung** — unter dem Vorbehalt,
+spaeter ohne Umbau wechseln zu koennen. Elestio ist der vorbereitete Rueckfall.
+
+Damit aus dem Vorbehalt kein toter Satz wird, sind zwei Dinge ergaenzt worden:
+
+**Vier Ausloeser** (`docs/11-betriebsmodell.md` § 11.3.2), bei denen die Frage
+neu auf den Tisch kommt. Das Dokument traegt die Lehre aus der Juni-Notiz in
+`02-architecture-deployment.md`, die „ab erstem Vertrag\" sagte und sechs Monate
+lag.
+
+**Vier nachpruefbare Portabilitaetsbedingungen** (§ 11.3.3) — alle jetzt erfuellt:
+
+| Bedingung | Beleg |
+| --- | --- |
+| Datenbank laeuft ausserhalb von supabase.com | lokale DB ist dasselbe Abbild: 67 Migrationen, 324 Zusicherungen |
+| Daten herausholbar | `scripts/db-dump.sh`, ausgefuehrt |
+| Web-App im Container | **neu**: gebaut, gestartet, `HTTP 200` |
+| JWT-Hook im Repository | **neu**: `[auth.hook.custom_access_token]` in `config.toml` |
+
+### Zusaetzliche Findings
+
+**Finding 6 — `public/` existiert nicht**
+
+- Status: `SUPPORTED`, Prioritaet: `P3`
+- Die naheliegende `COPY .../public`-Zeile im Dockerfile haette den Build
+  zerlegt. Nur durch Ausfuehren aufgefallen. Im Dockerfile kommentiert, damit
+  ein spaeter hinzugefuegtes `public/` nicht still fehlt.
+
+**Finding 7 — Ohne `outputFileTracingRoot` faellt der Container erst zur Laufzeit um**
+
+- Status: `SUPPORTED`, Prioritaet: `P2`
+- Next verfolgt die Dateiabhaengigkeiten sonst nur ab `apps/web` und uebersieht
+  die im pnpm-Workspace verlinkten Pakete. Der Build laeuft durch, der Container
+  startet — und vermisst Module erst im Betrieb. In `next.config.ts` gesetzt und
+  begruendet.
+
+### Geaenderte Dateien (Nachtrag)
+
+- `apps/web/Dockerfile` — neu, mehrstufig, laeuft als Nicht-root.
+- `.dockerignore` — neu. Schliesst `.env*` und `backups/` aus; Testdateien
+  bewusst **nicht**, weil `next build` typprueft und tsconfig sie einbezieht.
+- `apps/web/next.config.ts` — `output: "standalone"` und `outputFileTracingRoot`.
+- `infra/supabase/config.toml` — JWT-Hook.
+- `docs/11-betriebsmodell.md` — § 11.1, 11.2, 11.3.1–11.3.3, 11.7, 11.9, Historie.
+- `PROJECT_REALITY.md` — Next Logical Step neu geordnet.
+
+### Ausgefuehrte Checks (Nachtrag)
+
+- `supabase init` in einem Wegwerf-Ordner, um die kanonischen
+  `config.toml`-Schluessel dieser CLI-Version zu lesen statt sie zu raten.
+  Ordner danach geloescht, das Projekt nicht beruehrt.
+- `just test-db-all` nach der Hook-Aenderung: `Files=16, Tests=324, PASS`.
+- `pnpm --filter @weg-verwaltung/web build` lokal.
+- `docker build` mit Platzhalterwerten fuer die `NEXT_PUBLIC_*`-Variablen, dann
+  `docker run` und `curl`: `HTTP 200`, Titel korrekt, `Ready in 0ms`.
+  Probe-Container und -Abbild anschliessend entfernt.
+- `./scripts/verify.sh` gruen.
+
+### Was bewusst NICHT passiert ist
+
+Kein Umzug, kein Konto, kein Anbieter gebucht, keine Verbindungsdaten geaendert.
+Die Anwendung laeuft weiter genau wie vorher.
