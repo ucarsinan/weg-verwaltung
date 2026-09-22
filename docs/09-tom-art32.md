@@ -164,7 +164,7 @@ sie die am besten belegte.
 
 | Maßnahme | Umsetzung | Nachweis | Status |
 | --- | --- | --- | --- |
-| Datenbankverträge als ausführbare Tests | 16 pgTAP-Verträge, 324 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
+| Datenbankverträge als ausführbare Tests | 17 pgTAP-Verträge, 330 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
 | Mandantentrennung katalogweit zugesichert | 5 Zusicherungen über `pg_class`/`pg_policy`, fixture-frei | `just test-security-db`, `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
 | Verträge blockieren die Auslieferung | CI-Job `db-regression (pgTAP)` läuft bei jedem Pull Request | `.github/workflows/ci.yml` | belegt |
 | Anwendungstests | 452 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
@@ -188,7 +188,7 @@ sie vorher geschlossen werden — nicht als Zusage.
 | Maßnahme | Warum sie fehlt | Vorschlag |
 | --- | --- | --- |
 | **Verfügbarkeit und Wiederherstellbarkeit** | Der Free-Plan enthält **keine** automatischen Backups (Supabase-Doku, 22.09.2026). Konzept, Exportskript und ein lokaler Drill liegen seit dem 22.09.2026 vor; es fehlen die Plan-Entscheidung, ein Export gegen die Cloud und ein Drill dagegen | [10-backup-und-wiederherstellung.md](./10-backup-und-wiederherstellung.md). Erste Priorität vor dem ersten Kunden — und der Drill hat gezeigt, dass ein logischer Restore die **Audit-Kette nicht** wiederherstellt |
-| **Nächtliche Prüfung der Audit-Kette** | Kein Scheduler eingerichtet — und die Funktion selbst meldete im Test durchgehend `warning: keine Zeilen im verifizierbaren Forward-Fenster`, obwohl Audit-Zeilen vorhanden waren | **Zuerst das leere Forward-Fenster untersuchen** (siehe [10-backup-und-wiederherstellung.md](./10-backup-und-wiederherstellung.md) § 10.6). Ein Job, der jede Nacht „keine Zeilen" meldet, sieht aus wie eine bestandene Prüfung und ist keine. Erst danach Supabase Cron oder externer Job |
+| **Nächtliche Prüfung der Audit-Kette** | Kein Scheduler eingerichtet. Der frühere Blocker — die Funktion meldete nie `intact` — ist behoben | Supabase Cron oder externer Job, der `audit_verify_chain()` je Mandant ruft und auf `status = 'intact'` prüft. Das ist seit `0068` eine belastbare Bedingung; vorher wäre sie dauerhaft rot gewesen (siehe [10-backup-und-wiederherstellung.md](./10-backup-und-wiederherstellung.md) § 10.6) |
 | **Löschkonzept** | Der Konflikt zwischen zehnjähriger Aufbewahrung im WEG-Recht und Art. 17 DSGVO ist beschrieben, aber nicht implementiert | `03-security-model.md` 3.2 nennt den Konflikt; es fehlt die Umsetzung |
 | **Pseudonymisierung vor KI-Aufrufen** | Geplant, nicht gebaut | Bis dahin organisatorisch: keine Klarnamen in Prompts |
 | **Authentifizierungshärtung** | Passwortrichtlinie, MFA, Schutz gegen geleakte Passwörter nicht aus dem Repo belegbar | Stand im Supabase-Projekt erheben und hier eintragen |
@@ -246,6 +246,7 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-20 | Erstfassung, Migrationsstand `0067` |
+| 2026-09-22 | § 9.7: Der Blocker vor der nächtlichen Kettenprüfung ist weg — `audit_verify_chain()` meldete nie `intact` (NULL-Falle in `0050`), behoben in `0068`. § 9.6 Zahlen auf 17 Verträge / 330 Zusicherungen. |
 | 2026-09-22 | § 9.8 präzisiert: Vertragspartner ist Supabase Pte. Ltd. (Singapur), Tochter einer US-Gesellschaft; Transfer über Standardvertragsklauseln, kein Angemessenheitsbeschluss, kein Data Privacy Framework. Entscheidung zum Umzug auf EU-Anbieter vermerkt (`docs/11-betriebsmodell.md`). |
 | 2026-09-22 | Backup-Konzept als § 10 ergänzt; 9.7 präzisiert: der Free-Plan hat gar keine Backups, und ein logischer Restore stellt die Audit-Kette nicht wieder her. Nachweis: `docs/10-backup-und-wiederherstellung.md`. |
 | 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |
