@@ -187,8 +187,8 @@ sie vorher geschlossen werden — nicht als Zusage.
 
 | Maßnahme | Warum sie fehlt | Vorschlag |
 | --- | --- | --- |
-| **Verfügbarkeit und Wiederherstellbarkeit** | Kein Backup-Regime, keine getestete Wiederherstellung, kein RPO/RTO | Ohne das ist Art. 32 Abs. 1 lit. b und c nicht erfüllt. Erste Priorität vor dem ersten Kunden |
-| **Nächtliche Prüfung der Audit-Kette** | Kein Scheduler eingerichtet | Supabase Cron oder externer Job, der `audit_verify_chain()` je Mandant ruft |
+| **Verfügbarkeit und Wiederherstellbarkeit** | Der Free-Plan enthält **keine** automatischen Backups (Supabase-Doku, 22.09.2026). Konzept, Exportskript und ein lokaler Drill liegen seit dem 22.09.2026 vor; es fehlen die Plan-Entscheidung, ein Export gegen die Cloud und ein Drill dagegen | [10-backup-und-wiederherstellung.md](./10-backup-und-wiederherstellung.md). Erste Priorität vor dem ersten Kunden — und der Drill hat gezeigt, dass ein logischer Restore die **Audit-Kette nicht** wiederherstellt |
+| **Nächtliche Prüfung der Audit-Kette** | Kein Scheduler eingerichtet — und die Funktion selbst meldete im Test durchgehend `warning: keine Zeilen im verifizierbaren Forward-Fenster`, obwohl Audit-Zeilen vorhanden waren | **Zuerst das leere Forward-Fenster untersuchen** (siehe [10-backup-und-wiederherstellung.md](./10-backup-und-wiederherstellung.md) § 10.6). Ein Job, der jede Nacht „keine Zeilen" meldet, sieht aus wie eine bestandene Prüfung und ist keine. Erst danach Supabase Cron oder externer Job |
 | **Löschkonzept** | Der Konflikt zwischen zehnjähriger Aufbewahrung im WEG-Recht und Art. 17 DSGVO ist beschrieben, aber nicht implementiert | `03-security-model.md` 3.2 nennt den Konflikt; es fehlt die Umsetzung |
 | **Pseudonymisierung vor KI-Aufrufen** | Geplant, nicht gebaut | Bis dahin organisatorisch: keine Klarnamen in Prompts |
 | **Authentifizierungshärtung** | Passwortrichtlinie, MFA, Schutz gegen geleakte Passwörter nicht aus dem Repo belegbar | Stand im Supabase-Projekt erheben und hier eintragen |
@@ -230,4 +230,5 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-20 | Erstfassung, Migrationsstand `0067` |
+| 2026-09-22 | Backup-Konzept als § 10 ergänzt; 9.7 präzisiert: der Free-Plan hat gar keine Backups, und ein logischer Restore stellt die Audit-Kette nicht wieder her. Nachweis: `docs/10-backup-und-wiederherstellung.md`. |
 | 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |

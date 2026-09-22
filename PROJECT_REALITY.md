@@ -82,11 +82,19 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Key uncertainty: Ob professionelle Verwalter den engen Workflow als dringlich und differenzierend genug bewerten, um Pilotzeit oder Budget zu geben.
 
 ## Gaps And Risks
-- Missing essentials: **Verfuegbarkeit und Wiederherstellbarkeit.** Es gibt kein
-  dokumentiertes Backup-Regime, keine getestete Wiederherstellung, kein RPO/RTO.
-  Art. 32 Abs. 1 lit. b und c sind damit nicht erfuellt — das ist die groesste
-  einzelne Luecke vor dem ersten zahlenden Kunden und wiegt schwerer als jede
-  weitere Funktion. Weiter offen: AVV und Art.-30-Verzeichnis (die TOM-Anlage
+- Missing essentials: **Verfuegbarkeit und Wiederherstellbarkeit.** Gemessen am
+  2026-09-22: das Projekt laeuft auf dem Supabase-Free-Plan, und der enthaelt laut
+  Supabase-Doku **keine** automatischen Backups — weder taeglich noch PITR. Fiele
+  die Datenbank heute aus, waere der Bestand weg. Konzept, Exportskript
+  (`scripts/db-dump.sh`) und ein lokaler Wiederherstellungs-Drill liegen seit dem
+  2026-09-22 in `docs/10-backup-und-wiederherstellung.md`; offen sind die
+  Plan-Entscheidung, RPO/RTO, ein Export gegen die Cloud und ein Drill dagegen.
+  **Befund aus dem Drill:** ein logischer Restore holt die Daten zurueck, aber
+  nicht die Verifizierbarkeit der Audit-Kette — `audit_verify_chain()` meldete
+  danach `row_hash_mismatch`, weil der `audit_hmac_key` je Umgebung neu erzeugt
+  wird (dokumentiert im Kopf von `0017`). Art. 32 Abs. 1 lit. b und c sind damit
+  weiterhin nicht erfuellt; das ist die groesste einzelne Luecke vor dem ersten
+  zahlenden Kunden. Weiter offen: AVV und Art.-30-Verzeichnis (die TOM-Anlage
   existiert jetzt), Billing-Adapter, verifizierter Mailabsender, Monitoring und
   Alarmierung, Meldeprozess nach Art. 33, Loeschkonzept. Die katalogweite
   RLS-Zusicherung ist seit 2026-09-22 geschlossen.
@@ -102,22 +110,30 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   wesentlich erweitern.
 
 ## Next Logical Step
-1. Step: Backup- und Wiederherstellungsregime festlegen und **einmal echt wiederherstellen**.
-   Ein Backup, das nie zurueckgespielt wurde, ist kein Backup. Betriebsentscheidung
-   (Supabase-Plan, RPO/RTO), deshalb nicht allein im Code loesbar.
-   Why: Art. 32 Abs. 1 lit. b und c sind ohne das nicht erfuellt. Es ist die letzte
-   grosse Luecke, die einem ehrlich unterschreibbaren AVV im Weg steht — und die
-   einzige, bei der ein Fehler nicht korrigierbar ist: verlorene Daten kommen nicht
-   zurueck.
-   Validation: dokumentierter Wiederherstellungslauf mit Datum, Dauer und Ergebnis,
-   eingetragen in `docs/09-tom-art32.md` § 9.7 und hier.
+1. Step: Plan-Entscheidung treffen und den ersten echten Export ziehen.
+   Konzept und Werkzeug stehen (`docs/10-backup-und-wiederherstellung.md`,
+   `scripts/db-dump.sh`); was fehlt, ist eine Entscheidung und ein Lauf.
+   Why: Der Free-Plan hat kein Backup. Nicht `schwer wiederherstellbar` — keines.
+   Das ist die einzige offene Luecke, bei der ein Fehler nicht korrigierbar ist.
+   Zu entscheiden sind RPO/RTO, der Plan und der Umgang mit dem `audit_hmac_key`:
+   nur ein physisches Backup bzw. PITR stellt die Audit-Kette verifizierbar wieder
+   her, ein logischer Export nicht.
+   Validation: Drill mit Datum, Dauer, Datenverlust und Ergebnis der Kettenpruefung
+   in `docs/10-backup-und-wiederherstellung.md` § 10.8 eintragen.
    Stop/continue rule: Solange keine getestete Wiederherstellung existiert, keine
    produktionsnahen Zusagen und keine echten Kundendaten.
 2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
    (freigabepflichtig) und das Ergebnis hier eintragen. Danach `just e2e` einmal
    vollstaendig laufen lassen und die Zahlen festhalten — der letzte dokumentierte
    Gesamtlauf stammt vom 2026-09-19.
-3. Danach organisatorisch, nicht im Code: AVV, Art.-30-Verzeichnis, Meldeprozess
+3. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen. Die
+   Funktion meldete im Test durchgehend `warning: keine Zeilen im verifizierbaren
+   Forward-Fenster`, obwohl Audit-Zeilen vorhanden waren und der Checkpoint
+   `valid_after_seq = null` trug — was laut `0045` alle Zeilen einschliesst.
+   Why: Die in der TOM-Liste vorgesehene naechtliche Kettenpruefung waere in diesem
+   Zustand wertlos: ein Job, der jede Nacht `keine Zeilen` meldet, sieht aus wie
+   eine bestandene Pruefung. Erst klaeren, dann den Scheduler bauen.
+4. Danach organisatorisch, nicht im Code: AVV, Art.-30-Verzeichnis, Meldeprozess
    nach Art. 33, Loeschkonzept.
 
 ## Do Not Build Yet
