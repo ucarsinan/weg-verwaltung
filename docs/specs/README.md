@@ -27,7 +27,8 @@ Inhalt.
 
 | Ort | Bedeutung |
 | --- | --- |
-| `docs/specs/` | versioniert, oeffentlich lesbar. Vor dem Commit gelesen |
+| `docs/specs/` | Entwuerfe. Versioniert, oeffentlich lesbar, vor dem Commit gelesen |
+| `docs/plans/` | Umsetzungsplaene zu diesen Entwuerfen. Ebenso versioniert |
 | `docs/superpowers/` | Arbeitsordner, ignoriert. Landet **nie** im Repository |
 
 **Kein `git add -f` aus `docs/superpowers/`.** Wenn ein Dokument dauerhaft
