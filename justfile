@@ -93,6 +93,16 @@ test-db-all:
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
     cd infra && supabase test db {{SECURITY_DB_TESTS}} {{AUDIT_DB_TESTS}} {{FINANCE_DB_TESTS}} {{SAAS_DB_TESTS}} --local
 
+# Logical backup export. --local is a harmless drill against the ephemeral
+# local DB; --linked pulls REAL personal data from Frankfurt onto this disk and
+# is approval-gated like db-migrate. Free-plan projects get no automatic
+# backups at all — see docs/10-backup-und-wiederherstellung.md.
+db-dump-local:
+    ./scripts/db-dump.sh --local
+
+db-dump:
+    ./scripts/db-dump.sh --linked
+
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
 # The login spec runs `seed-admin` first (idempotent).

@@ -363,7 +363,7 @@ Das verifizierbare Forward Window beginnt pro Tenant bei `seq > audit_writer.aud
 - Advisory-Lock-Serialisierung ist migrationsseitig und durch v2-Continuity-Tests indirekt abgesichert, aber noch nicht durch einen echten parallelen Zwei-Transaktions-Stresstest.
 - ~~Die neuen pgTAP-Regressionstests sind ausführbar, aber noch nicht als verpflichtendes CI-Gate nachgewiesen.~~ Erledigt: der CI-Job `db-regression (pgTAP)` führt `just test-db-all` bei jedem Pull Request aus (Stand 2026-09-22: 16 Verträge, 324 Zusicherungen).
 
-**Nächste empfohlene Aufgabe:** Verfügbarkeit und Wiederherstellbarkeit nach Art. 32 Abs. 1 lit. b und c — ein dokumentiertes Backup-Regime mit mindestens einem echten Wiederherstellungslauf. Siehe `docs/09-tom-art32.md` § 9.7.
+**Nächste empfohlene Aufgabe:** Verfügbarkeit und Wiederherstellbarkeit nach Art. 32 Abs. 1 lit. b und c. Konzept, Exportskript und ein lokaler Drill liegen seit dem 2026-09-22 in `docs/10-backup-und-wiederherstellung.md`; offen sind die Plan-Entscheidung und ein Drill gegen einen echten Export. **Befund aus dem Drill:** ein logischer Restore stellt die Daten wieder her, aber nicht die Verifizierbarkeit der Audit-Kette — der `audit_hmac_key` wird je Umgebung neu erzeugt (siehe Kopf von `0017`), sodass `row_hash` nicht mehr nachrechenbar ist.
 
 ---
 

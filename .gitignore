@@ -55,5 +55,10 @@ docs/superpowers/
 .playwright-cli/
 output/
 
+# Datenbank-Exporte (scripts/db-dump.sh) — enthalten personenbezogene Daten
+# und duerfen niemals committet werden. Das Skript bricht ab, wenn dieser
+# Eintrag fehlt.
+backups/
+
 # LLMOps / local traces
 .langfuse/

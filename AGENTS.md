@@ -44,6 +44,8 @@ just e2e           # Playwright/Chromium — Login-Flow gegen Cloud; nicht ohne 
 just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
 just db-migrate    # supabase db push --workdir infra (gegen Cloud!)
+just db-dump-local # logischer Export der lokalen DB (Uebung, harmlos)
+just db-dump       # logischer Export der CLOUD-DB (Freigabe! echte Daten auf Platte)
 ```
 
 Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im Entwicklungsbetrieb **remote-only** gegen Frankfurt. Ausnahme sind die lokalen pgTAP-Rezepte (`just test-db-all` sowie die fokussierten `test-audit-db`/`test-finance-db`/`test-saas-db`); sie nutzen eine ephemere lokale Supabase-Testdatenbank ohne `--linked` und brauchen deshalb eine lokale Container-Runtime. Welche Vertraege laufen, steht ausschliesslich im justfile (`AUDIT_DB_TESTS`/`FINANCE_DB_TESTS`/`SAAS_DB_TESTS`) — der CI-Job ruft `just test-db-all` auf und fuehrt bewusst keine zweite Liste. Cloud-Credentials liegen ausschließlich in lokaler Secret-Konfiguration.
@@ -93,6 +95,7 @@ Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im 
 - Finance Lifecycle: [docs/07-finance-lifecycle.md](./docs/07-finance-lifecycle.md)
 - Finance-Domänenmodell: [docs/08-finance-domain-model.md](./docs/08-finance-domain-model.md)
 - TOM nach Art. 32 DSGVO: [docs/09-tom-art32.md](./docs/09-tom-art32.md)
+- Backup und Wiederherstellung: [docs/10-backup-und-wiederherstellung.md](./docs/10-backup-und-wiederherstellung.md)
 
 ## Agentic-Arbeitsregel
 
@@ -129,7 +132,8 @@ Wenn etwas riskant oder fachlich unklar ist, triff keine gefaehrliche Annahme. F
 - Keine Aenderung an Audit-Chain, HMAC, Audit-Partitionen oder Append-only-Logik ohne klare Begruendung.
 - Keine Migration ohne Zweck, Risiko, betroffene Tabellen, RLS-Auswirkung, Teststrategie und Rollback-/Forward-Fix-Hinweis.
 - Keine Supabase-Remote-Aktion ohne ausdrueckliche Freigabe.
-- Kein `just db-migrate`, `supabase db push`, `seed-admin` oder Cloud-E2E ohne ausdrueckliche Freigabe.
+- Kein `just db-migrate`, `supabase db push`, `seed-admin`, `just db-dump` oder Cloud-E2E ohne ausdrueckliche Freigabe.
+- Ein Datenbank-Export enthaelt personenbezogene Daten. Er gehoert nie in einen Commit, nie in eine Fixture und nie in einen Bericht.
 - Tenant-Isolation ist nicht verhandelbar.
 - KI-Agenten bleiben suggestion-only; kritische Writes duerfen nicht durch Agenten ermoeglicht werden.
 - Vote-Logik referenziert `ownership_id`, niemals `person_id` oder `user_id`.
@@ -145,7 +149,7 @@ Der bevorzugte Abschlussbefehl ist:
 
 Wenn der volle Check nicht laufen kann, dokumentiere warum und fuehre eine kleinere passende Ersatzpruefung aus.
 
-Remote-/Cloud-nahe Checks wie `just e2e`, `just db-migrate`, `just seed-admin` und Supabase-Linked-Kommandos laufen nur mit ausdruecklicher Freigabe.
+Remote-/Cloud-nahe Checks wie `just e2e`, `just db-migrate`, `just db-dump`, `just seed-admin` und Supabase-Linked-Kommandos laufen nur mit ausdruecklicher Freigabe.
 
 ## PROJECT_REALITY.md aktuell halten
 
