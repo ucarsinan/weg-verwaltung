@@ -33,31 +33,51 @@ Mandanten, und kein Datensatz verlässt seinen Mandanten.
 | Maßnahme | Umsetzung | Nachweis | Status |
 | --- | --- | --- | --- |
 | Mandantenschlüssel auf jeder Tabelle | `tenant_id uuid not null default public.tenant_id()` | Migrationen `0001` ff., durchgängig in `infra/supabase/migrations/` | belegt |
-| Row Level Security je Tabelle | `enable row level security` + Policy `tenant_id = (select public.tenant_id())` | jede Tabellenmigration | teilweise |
-| Owner-Bypass geschlossen | `force row level security` | dito | teilweise |
+| Row Level Security je Tabelle | `enable row level security` + Policy `tenant_id = (select public.tenant_id())` | jede Tabellenmigration, katalogweit zugesichert in `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
+| Owner-Bypass geschlossen | `force row level security` | dito | belegt |
+| Keine Tabelle mit RLS ohne Policy | mindestens eine Policy je Nicht-Partition | `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
+| Schema `private` traegt keine Daten | nur Helferfunktionen, keine Tabellen | dito | belegt |
 | Mandant stammt aus dem Token, nicht aus der Eingabe | `public.tenant_id()` liest den JWT-Claim; die Anwendung liest ihn über `getClaims()` | `0001`, `apps/web/src/lib/supabase/` | belegt |
 | Strukturelle Sperre gegen mandantenübergreifende Verknüpfung | Composite Foreign Keys `(tenant_id, id)` statt `(id)` | z. B. `0061`, `0065`, `0067` | belegt |
 | Views umgehen RLS nicht | `with (security_invoker = on)` | `0061` `offener_posten`, `0062` `ruecklage_entwicklung`, `0063` `abrechnung_spitze` | belegt |
 | Audit-Tabelle und alle Partitionen isoliert | RLS + FORCE RLS auf Eltern und jeder Partition | `infra/supabase/tests/0046_least_privilege.sql` | belegt |
 
-**Warum „teilweise" bei RLS und FORCE RLS.** Der Zustand ist heute vollständig,
-die Absicherung fehlt.
+**Von „teilweise" auf „belegt" — und warum das ein Unterschied ist.**
 
-Gegen die lokale Datenbank auf Migrationsstand `0067` gemessen (20.09.2026):
-**61 von 61 Tabellen** in `public` tragen `relrowsecurity` **und**
-`relforcerowsecurity`. Keine Ausnahme.
+In der Erstfassung dieses Dokuments stand die Trennungskontrolle auf
+„teilweise". Der Zustand war vollständig, die Absicherung fehlte: gegen die
+lokale Datenbank auf Migrationsstand `0067` gemessen trugen **61 von 61
+Tabellen** in `public` `relrowsecurity` und `relforcerowsecurity` — aber kein
+Test ging den Katalog durch. `0046` prüft es für `audit_event` und dessen
+Partitionen, `0055` prüft EXECUTE-Grants auf Wrapper-Funktionen. Beides greift
+nicht für Tabelle 62.
 
-Es gibt aber **keinen Test, der den Katalog durchgeht**. `0046` prüft es für
-`audit_event` und dessen Partitionen, `0055` prüft EXECUTE-Grants auf
-Wrapper-Funktionen. Beides greift nicht für Tabelle 62. Eine künftige Tabelle
-ohne RLS fiele niemandem auf, bis jemand sie sucht — und bis dahin wäre die
-Mandantentrennung für diese Tabelle nicht wirksam.
+Seit dem 22. September 2026 schließt `infra/supabase/tests/0000_rls_katalog.sql`
+diese Lücke. Der Vertrag ist bewusst strenger als der ursprüngliche Vorschlag in
+9.7:
 
-Deshalb „teilweise": die Maßnahme ist umgesetzt, aber sie beruht auf Disziplin
-statt auf einer Prüfung.
+- Er prüft `relkind in ('r','p')` statt nur `'r'` und erfasst damit auch die
+  **partitionierten Elterntabellen**. Deren Policies schützen den Zugriff über
+  das Partition-Routing — sie dürfen am wenigsten fehlen. Die Messung wuchs
+  dadurch von 61 auf **63 von 63 Tabellen**.
+- Er prüft zusätzlich, dass jede Nicht-Partition **mindestens eine Policy** hat.
+  Eingeschaltetes RLS ohne Policy ist eine verschlossene Tür ohne Schloss.
+- Er prüft, dass im Schema `private` **keine Tabelle** liegt. `private` ist für
+  PostgREST nicht erreichbar und trägt deshalb keine Policies; eine Tabelle dort
+  wäre für jede Mandantenprüfung unsichtbar.
+- Er prüft **zuerst**, dass die Katalogabfrage überhaupt Tabellen sieht
+  (mindestens 60). Alle anderen Zusicherungen zählen Verstöße und erwarten `0` —
+  eine Abfrage, die ins Leere läuft, lieferte ebenfalls `0` und wäre still grün.
+  Ohne diese Untergrenze wäre der Vertrag genau der Schein-Test, den er
+  verhindern soll.
 
-Das ist die wichtigste offene Absicherung dieses Dokuments und in 9.7 als
-Maßnahme aufgeführt.
+Der Vertrag wurde gegen einen echten Verstoß geprüft, nicht nur gegen den
+Gutfall: eine testweise in `public` angelegte Tabelle ohne RLS ließ drei der
+fünf Zusicherungen fallen (RLS, FORCE RLS, fehlende Policy). Ein Test, der nie
+rot wird, ist Dekoration.
+
+Damit ist aus einer Konvention eine Invariante geworden: eine neue Tabelle ohne
+RLS macht die Suite rot, bevor sie ausgerollt werden kann.
 
 ---
 
@@ -144,7 +164,8 @@ sie die am besten belegte.
 
 | Maßnahme | Umsetzung | Nachweis | Status |
 | --- | --- | --- | --- |
-| Datenbankverträge als ausführbare Tests | 15 pgTAP-Verträge, 319 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
+| Datenbankverträge als ausführbare Tests | 16 pgTAP-Verträge, 324 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
+| Mandantentrennung katalogweit zugesichert | 5 Zusicherungen über `pg_class`/`pg_policy`, fixture-frei | `just test-security-db`, `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
 | Verträge blockieren die Auslieferung | CI-Job `db-regression (pgTAP)` läuft bei jedem Pull Request | `.github/workflows/ci.yml` | belegt |
 | Anwendungstests | 452 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
 | Browsertests gegen die echte Umgebung | Playwright-Suite | `just e2e` | belegt |
@@ -166,7 +187,6 @@ sie vorher geschlossen werden — nicht als Zusage.
 
 | Maßnahme | Warum sie fehlt | Vorschlag |
 | --- | --- | --- |
-| **Katalogweite RLS-Prüfung** | Kein Test geht alle Tabellen in `public` durch; heute sind 61 von 61 in Ordnung, aber nichts hält das fest | pgTAP-Vertrag, der `pg_class` gegen `relrowsecurity and relforcerowsecurity` prüft. Klein und hochwirksam — siehe unten. Gegen den aktuellen Stand gemessen: er wäre sofort grün |
 | **Verfügbarkeit und Wiederherstellbarkeit** | Kein Backup-Regime, keine getestete Wiederherstellung, kein RPO/RTO | Ohne das ist Art. 32 Abs. 1 lit. b und c nicht erfüllt. Erste Priorität vor dem ersten Kunden |
 | **Nächtliche Prüfung der Audit-Kette** | Kein Scheduler eingerichtet | Supabase Cron oder externer Job, der `audit_verify_chain()` je Mandant ruft |
 | **Löschkonzept** | Der Konflikt zwischen zehnjähriger Aufbewahrung im WEG-Recht und Art. 17 DSGVO ist beschrieben, aber nicht implementiert | `03-security-model.md` 3.2 nennt den Konflikt; es fehlt die Umsetzung |
@@ -175,28 +195,15 @@ sie vorher geschlossen werden — nicht als Zusage.
 | **Monitoring und Alarmierung** | Kein Nachweis | Gehört zum Betrieb, nicht zum Code |
 | **Meldeprozess bei Datenpannen** | Art. 33 verlangt 72 Stunden; es gibt keinen dokumentierten Ablauf | Organisatorisch, eine Seite genügt |
 
-### Vorschlag für die katalogweite RLS-Prüfung
+### Erledigt: die katalogweite RLS-Prüfung
 
-Der kleinste Schritt mit dem größten Effekt. Eine Zusicherung genügt:
+Dieser Abschnitt enthielt den Vorschlag für eine einzelne Zusicherung. Sie ist
+am 22. September 2026 als `infra/supabase/tests/0000_rls_katalog.sql` umgesetzt
+worden — in einer strengeren Fassung mit fünf Zusicherungen. Begründung und
+Nachweis stehen in 9.1.
 
-```sql
-select is(
-  (select count(*)::int
-     from pg_catalog.pg_class c
-     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relkind = 'r'
-      and not (c.relrowsecurity and c.relforcerowsecurity)),
-  0,
-  'jede Tabelle in public hat RLS und FORCE RLS'
-);
-```
-
-Damit wird aus der Konvention eine Invariante: eine neue Tabelle ohne RLS macht
-die Testsuite rot, bevor sie ausgerollt werden kann.
-
-Die Zusicherung wurde gegen den Stand `0067` gemessen und liefert heute `0` —
-sie ließe sich also einführen, ohne etwas reparieren zu müssen.
+Der Vertrag läuft im CI-Gate `db-regression (pgTAP)` und lokal über
+`just test-security-db`.
 
 ---
 
@@ -223,3 +230,4 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-20 | Erstfassung, Migrationsstand `0067` |
+| 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |

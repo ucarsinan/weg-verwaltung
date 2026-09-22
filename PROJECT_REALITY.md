@@ -39,14 +39,20 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `-gemischter-schluessel`). Seit 2026-09-20 existiert ausserdem eine TOM-Liste nach
   Art. 32 DSGVO mit Nachweis je Massnahme (`docs/09-tom-art32.md`), und die
   Landing-/Preisseite behauptet nur noch, was das Produkt kann (PR #20).
+  **Seit 2026-09-22 ist die Mandantentrennung katalogweit zugesichert:**
+  `infra/supabase/tests/0000_rls_katalog.sql` prueft fixture-frei ueber `pg_class`
+  und `pg_policy`, dass jede Tabelle in `public` RLS und FORCE RLS traegt, dass jede
+  Nicht-Partition mindestens eine Policy hat und dass im Schema `private` keine
+  Tabelle liegt. Gemessen: 63 von 63 Tabellen (inkl. der beiden partitionierten
+  Elterntabellen, die der urspruengliche Vorschlag uebersehen haette). Der Vertrag
+  wurde gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
+  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 16 Vertraege mit 324
+  Zusicherungen.
 - Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
   Bankabgleich, kein Mahnwesen, keine Dokumentenablage. Das ist bewusst und steht
-  so auf der Landingpage. **Mandantentrennung ist umgesetzt, aber nicht zugesichert:**
-  am 2026-09-20 gegen den lokalen Stand gemessen tragen 61 von 61 Tabellen in `public`
-  `relrowsecurity` und `relforcerowsecurity` — es gibt aber keinen Test, der den
-  Katalog durchgeht. Tabelle 62 ohne RLS wuerde gruen durchlaufen. `0001_rls_negative.sql`
-  sieht wie der fehlende Test aus, ist aber vollstaendig auskommentiert und in keinem
-  Rezept verdrahtet; ebenso `0039_sollstellung_option_b.sql`. Der SaaS-Slice hat
+  so auf der Landingpage. `0001_rls_negative.sql` sieht wie ein RLS-Test aus, ist aber
+  vollstaendig auskommentiert und in keinem Rezept verdrahtet; ebenso
+  `0039_sollstellung_option_b.sql`. Der SaaS-Slice hat
   weiterhin keinen Billing-Adapter; der Mailversand laeuft im Resend-Sandbox-Modus.
   RAG liefert bewusst `[]`; produktive Agent-Checkpoints und LLMOps-Gates fehlen.
 - Not verified: **Der Cloud-Migrationsstand.** `0061`-`0067` wurden am 2026-09-20 per
@@ -80,15 +86,13 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   dokumentiertes Backup-Regime, keine getestete Wiederherstellung, kein RPO/RTO.
   Art. 32 Abs. 1 lit. b und c sind damit nicht erfuellt — das ist die groesste
   einzelne Luecke vor dem ersten zahlenden Kunden und wiegt schwerer als jede
-  weitere Funktion. Zweitens fehlt die katalogweite RLS-Zusicherung (siehe
-  `docs/09-tom-art32.md` § 9.7): die Mandantentrennung beruht auf Disziplin statt
-  auf einer Pruefung. Weiter offen: AVV und Art.-30-Verzeichnis (die TOM-Anlage
+  weitere Funktion. Weiter offen: AVV und Art.-30-Verzeichnis (die TOM-Anlage
   existiert jetzt), Billing-Adapter, verifizierter Mailabsender, Monitoring und
-  Alarmierung, Meldeprozess nach Art. 33, Loeschkonzept.
+  Alarmierung, Meldeprozess nach Art. 33, Loeschkonzept. Die katalogweite
+  RLS-Zusicherung ist seit 2026-09-22 geschlossen.
 - Luftschloss/drift warnings: Die Heizkosten-Luecke ist mit `0067` geschlossen, damit
   entfaellt der bisher groesste fachliche Vorwand fuer neue Breite. Der naechste
-  Drift waere, weitere Fachfunktionen zu bauen, bevor Backup und RLS-Zusicherung
-  stehen. „KI-First" bleibt kein tragfaehiger Kaufgrund, solange kein messbarer
+  Drift waere, weitere Fachfunktionen zu bauen, bevor das Backup-Regime steht. „KI-First" bleibt kein tragfaehiger Kaufgrund, solange kein messbarer
   Zeit-/Fehlervorteil im Kernworkflow belegt ist.
 - Risks: Ein nicht verifizierter Cloud-Stand ist ein stiller Risikoposten — die
   Anwendung laeuft gegen Frankfurt, und die Annahme „Cloud = lokal" ist genau die
@@ -98,25 +102,23 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   wesentlich erweitern.
 
 ## Next Logical Step
-1. Step: Die katalogweite RLS-Zusicherung als pgTAP-Vertrag einziehen — ein `select is(...)`
-   ueber `pg_catalog.pg_class`, das zaehlt, wie viele Tabellen in `public` **nicht**
-   `relrowsecurity and relforcerowsecurity` tragen, und `0` erwartet. Wortlaut steht in
-   `docs/09-tom-art32.md` § 9.7.
-   Why: Die Mandantentrennung ist die zentrale Zusage dieses Produkts und heute die
-   einzige Kernzusage ohne Test. Gegen den Stand `0067` gemessen liefert die Zusicherung
-   `0` — sie laesst sich also einfuehren, ohne vorher etwas reparieren zu muessen. Danach
-   macht eine neue Tabelle ohne RLS die Suite rot, bevor sie ausgerollt werden kann.
-   Validation: `just test-db-all` gruen; anschliessend probeweise eine Tabelle ohne RLS
-   anlegen und pruefen, dass der Vertrag rot wird — sonst ist er nur Dekoration.
-   Stop/continue rule: Wird der Vertrag rot, zuerst die fehlende RLS ergaenzen, niemals
-   die Zusicherung aufweichen.
-2. Step: Backup- und Wiederherstellungsregime festlegen und **einmal echt wiederherstellen**.
+1. Step: Backup- und Wiederherstellungsregime festlegen und **einmal echt wiederherstellen**.
    Ein Backup, das nie zurueckgespielt wurde, ist kein Backup. Betriebsentscheidung
    (Supabase-Plan, RPO/RTO), deshalb nicht allein im Code loesbar.
-   Why: Art. 32 Abs. 1 lit. b und c. Ohne das ist kein AVV ehrlich unterschreibbar.
-   Validation: dokumentierter Wiederherstellungslauf mit Datum, Dauer und Ergebnis.
-3. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
-   (freigabepflichtig) und das Ergebnis hier eintragen.
+   Why: Art. 32 Abs. 1 lit. b und c sind ohne das nicht erfuellt. Es ist die letzte
+   grosse Luecke, die einem ehrlich unterschreibbaren AVV im Weg steht — und die
+   einzige, bei der ein Fehler nicht korrigierbar ist: verlorene Daten kommen nicht
+   zurueck.
+   Validation: dokumentierter Wiederherstellungslauf mit Datum, Dauer und Ergebnis,
+   eingetragen in `docs/09-tom-art32.md` § 9.7 und hier.
+   Stop/continue rule: Solange keine getestete Wiederherstellung existiert, keine
+   produktionsnahen Zusagen und keine echten Kundendaten.
+2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
+   (freigabepflichtig) und das Ergebnis hier eintragen. Danach `just e2e` einmal
+   vollstaendig laufen lassen und die Zahlen festhalten — der letzte dokumentierte
+   Gesamtlauf stammt vom 2026-09-19.
+3. Danach organisatorisch, nicht im Code: AVV, Art.-30-Verzeichnis, Meldeprozess
+   nach Art. 33, Loeschkonzept.
 
 ## Do Not Build Yet
 - Keine produktive RAG-Pipeline oder weitere Agent-Automation vor dem einfachen Selbstverwaltungs-Onboarding.

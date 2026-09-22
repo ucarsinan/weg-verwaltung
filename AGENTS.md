@@ -38,6 +38,7 @@ just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
 just test-db-all   # alle gruenen pgTAP-Vertraege gegen eine ephemere lokale DB (das CI-Gate)
+just test-security-db # nur der katalogweite RLS-Vertrag (0000_rls_katalog), fixture-frei
 just test-finance-db # nur die Finance-Vertraege (0056, 0060-0067), nicht Cloud
 just e2e           # Playwright/Chromium — Login-Flow gegen Cloud; nicht ohne explizite Freigabe im Audit laufen lassen
 just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)

@@ -15,6 +15,7 @@
 #     project grants audit_writer more than `supabase db reset` does. Tracked in
 #     AGENTS.md; do not add them here before they are green.
 # ---------------------------------------------------------------------------
+SECURITY_DB_TESTS := "supabase/tests/0000_rls_katalog.sql"
 AUDIT_DB_TESTS := "supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0059_tenant_audit_emitter.sql"
 FINANCE_DB_TESTS := "supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql supabase/tests/0061_zahlung_und_offene_posten.sql supabase/tests/0062_ausgabe_und_ruecklage.sql supabase/tests/0063_jahresabrechnung.sql supabase/tests/0064_null_safe_writer_guards.sql supabase/tests/0065_vermoegensbericht.sql supabase/tests/0066_abrechnung_entwurf_loeschbar.sql supabase/tests/0067_gemischte_verteilungsschluessel.sql"
 SAAS_DB_TESTS := "supabase/tests/0057_self_managed_saas_foundation.sql"
@@ -51,6 +52,15 @@ test-agent:
     uv sync --project apps/agent --extra dev --quiet
     apps/agent/.venv/bin/pytest --rootdir apps/agent apps/agent/tests
 
+# Run the catalogue-wide security contract against an ephemeral local Supabase DB.
+# Fixture-free and read-only: it asserts that every table in `public` carries RLS
+# and FORCE RLS, that every non-partition has at least one policy, and that
+# `private` holds no tables at all. See infra/supabase/tests/0000_rls_katalog.sql.
+test-security-db:
+    supabase db start --workdir infra
+    supabase db reset --workdir infra --local --no-seed
+    cd infra && supabase test db {{SECURITY_DB_TESTS}} --local
+
 # Run audit pgTAP regressions against an ephemeral local Supabase DB.
 # This intentionally never uses --linked and must not target the Frankfurt cloud.
 test-audit-db:
@@ -81,7 +91,7 @@ test-db-all:
     supabase db start --workdir infra
     supabase db reset --workdir infra --local --no-seed
     cd infra && supabase db query --file supabase/ci/audit_regression_bootstrap.sql --local
-    cd infra && supabase test db {{AUDIT_DB_TESTS}} {{FINANCE_DB_TESTS}} {{SAAS_DB_TESTS}} --local
+    cd infra && supabase test db {{SECURITY_DB_TESTS}} {{AUDIT_DB_TESTS}} {{FINANCE_DB_TESTS}} {{SAAS_DB_TESTS}} --local
 
 # Playwright e2e against the live Cloud Frankfurt project. Boots the Next.js
 # dev server itself (webServer config) — does not need `just dev-web` running.
