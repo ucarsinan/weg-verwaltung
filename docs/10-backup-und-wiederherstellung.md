@@ -161,7 +161,7 @@ Komfortargument. Es ist der einzige Weg, auf dem die Audit-Kette einen Ausfall
 
 ---
 
-## 10.6 Nebenbefund: die Kettenprüfung meldete nie „ok"
+## 10.6 Nebenbefund: die Kettenprüfung meldete nie „ok" — behoben am 22.09.2026
 
 Beim Versuch, eine saubere Kontrollmessung zu bekommen, lieferte
 `public.audit_verify_chain()` auf der frischen lokalen Datenbank durchgehend:
@@ -183,10 +183,38 @@ Zwei Dinge folgen daraus:
    Schlüsselerzeugung aus `0017`, nicht auf einen A/B-Vergleich. Das ist
    belastbar, aber es ist kein Laborbeweis, und so steht es hier.
 2. **Wichtiger:** Die in `09-tom-art32.md` § 9.7 vorgeschlagene nächtliche
-   Kettenprüfung wäre in diesem Zustand wertlos. Ein Job, der jede Nacht
-   „keine Zeilen im Fenster" meldet, sieht aus wie eine bestandene Prüfung und
-   ist keine. Das gehört untersucht, **bevor** der Scheduler eingerichtet wird —
-   als eigener Slice, nicht nebenbei.
+   Kettenprüfung wäre in diesem Zustand wertlos gewesen. Ein Job, der jede
+   Nacht „keine Zeilen im Fenster" meldet, sieht aus wie eine bestandene
+   Prüfung und ist keine.
+
+### Ursache und Behebung (22.09.2026)
+
+Untersucht wie angekündigt als eigener Slice. **Es war eine NULL-Falle**, und
+zwar dieselbe Klasse wie in `0064`:
+
+`0045` zählte das zu prüfende Fenster mit
+`(c.valid_after_seq is null or ae.seq > c.valid_after_seq)`. `0050` hat die
+Funktion neu gebaut und den NULL-Zweig verloren:
+`(not v_checkpoint_found or ae.seq > v_valid_after_seq)`.
+
+Der Reparatur-Checkpoint wird **faul** angelegt und trägt dabei
+`valid_after_seq = NULL` — laut `0045` bedeutet das „ab der Genesis-Zeile
+gültig", also **alle** Zeilen. Genau in diesem Normalfall ergibt
+`ae.seq > NULL` den Wert NULL, `false or NULL` ist NULL, und jede Zeile fällt
+aus dem Fenster.
+
+Gemessen: zwei Audit-Zeilen, `verify_chain_repaired()` meldete **0**
+Bruchstellen — und `audit_verify_chain()` trotzdem `warning`,
+`rows_checked = 0`, `seq_from = NULL`.
+
+Behoben in `0068_audit_verify_chain_null_window.sql`, abgesichert durch
+`infra/supabase/tests/0068_audit_verify_chain_window.sql` (6 Zusicherungen,
+vor der Migration 4 davon rot). Das CI-Gate umfasst damit 17 Verträge mit 330
+Zusicherungen.
+
+**Damit ist auch die Kontrollmessung nachgeholt**, die in 10.4 fehlte: eine
+ungebrochene Kette wird jetzt als `intact` gemeldet. Der Restore-Befund aus
+10.5 bleibt davon unberührt — er betraf den Schlüssel, nicht das Fenster.
 
 ---
 
@@ -275,4 +303,5 @@ Art. 32 Abs. 1 lit. c nicht stattgefunden.
 | Datum | Änderung |
 | --- | --- |
 | 2026-09-22 | Erstfassung. Free-Plan-Befund, Exportskript, lokaler Drill mit dem Audit-Ketten-Befund |
+| 2026-09-22 | § 10.6 aufgelöst: das leere Forward-Fenster war eine NULL-Falle in `0050`; behoben in `0068` samt pgTAP-Vertrag. Eine intakte Kette wird jetzt als `intact` gemeldet. |
 | 2026-09-22 | Präzisierung: eine Wiederherstellung **im selben Projekt** erhält den Verschlüsselungsschlüssel, die Audit-Kette überlebt; nur eine Wiederherstellung in eine **neue** Umgebung bricht sie. Damit genügt bereits ein Tarif mit täglichen Backups — PITR ist dafür nicht erforderlich. Betreiberoption Elestio ergänzt |

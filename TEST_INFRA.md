@@ -113,7 +113,7 @@
 - **Total Minimum**: 60 E2E test cases
 
 ## Current Status
-- Local migrations: `0001–0067`.
+- Local migrations: `0001–0068`.
 - Cloud migrations: not verified in this audit.
 - Audit forward-repair is represented locally through `0045` and `0046`; prior Cloud/runtime validation is documented elsewhere, but was not repeated here.
 - Finance lifecycle is represented locally through `0047` and `0048`.
@@ -122,7 +122,7 @@
 - Advisor grant and RLS initplan hardening is represented locally through `0055`.
 - Finance allocation foundation is represented locally through `0056`; position-level allocation through `0060`.
 - The statutory § 28 WEG chain is represented locally through `0061`-`0067`: payments and open items (`0061`), expenses and the Erhaltungsruecklage (`0062`), Jahresabrechnung (`0063`), NULL-safe writer guards (`0064`), Vermoegensbericht (`0065`), deletable draft (`0066`), mixed allocation keys with the HeizkostenV corridor (`0067`).
-- pgTAP: 21 contract files exist under `infra/supabase/tests/`, 16 of them are wired into the justfile lists and therefore into the CI gate (324 assertions). Not wired: `0001_rls_negative.sql` (entirely commented out — a documented shape, not a runnable suite), `0039_sollstellung_option_b.sql`, and the three red contracts `0050`/`0052`/`0054` (see the `AGENTS.md` backlog).
+- pgTAP: 22 contract files exist under `infra/supabase/tests/`, 17 of them are wired into the justfile lists and therefore into the CI gate (330 assertions). Not wired: `0001_rls_negative.sql` (entirely commented out — a documented shape, not a runnable suite), `0039_sollstellung_option_b.sql`, and the three red contracts `0050`/`0052`/`0054` (see the `AGENTS.md` backlog).
 - **Catalogue-wide RLS is asserted** since 2026-09-22 by `infra/supabase/tests/0000_rls_katalog.sql` (`just test-security-db`, also part of `just test-db-all`). Five fixture-free assertions over `pg_class`/`pg_policy`: RLS on, FORCE RLS on, at least one policy per non-partition, no tables in schema `private`, and a lower bound proving the catalogue query sees anything at all. Measured against local `0067`: 63 of 63 tables (`relkind in ('r','p')`, including the two partitioned parents) are covered. Verified to fail, not only to pass — a probe table without RLS drops three of the five assertions.
 - Audit cold-storage archive/detach/drop is intentionally non-destructive in active tenant UI tests; destructive execution stays disabled until a privileged export + manifest + HMAC-verify job exists.
 - Finanzen create/edit/delete exists locally. Direct `sollstellung` writes are treated as blocked by the migration contract; controlled generation is insert-only and tied to the Wirtschaftsplan flow.

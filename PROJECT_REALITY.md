@@ -20,7 +20,7 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Success criteria: Ein Nutzer kann ohne Hilfe eine WEG anlegen, Eigentuemer einladen und den ersten gemeinsamen Workflow abschliessen; die WEG bleibt tenant-isoliert und die Produktgrenzen bleiben ehrlich.
 
 ## Current State
-- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0067`
+- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0068`
   lokal, RLS-/Audit-/Agent-Guardrails, WEG/Einheiten/Personen/Eigentuemerschaft,
   Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Vorgangszentrale,
   Audit-Konsole und die Self-Managed-SaaS-Foundation (30-Tage-Trial, Registrierung,
@@ -33,7 +33,9 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   HeizkostenV-Korridor (`0067`). `0064` schliesst eine NULL-Falle in zwei
   Writer-Guards, `0066` macht einen Abrechnungsentwurf wieder loeschbar (die
   Kaskaden-Falle aus `0063`). Jede dieser Migrationen hat einen eigenen
-  pgTAP-Vertrag im CI-Gate; die Finance-Liste umfasst neun Vertraege. Sieben
+  pgTAP-Vertrag im CI-Gate; die Finance-Liste umfasst neun Vertraege. Seit
+  `0068` meldet `public.audit_verify_chain()` eine ungebrochene Kette auch als
+  `intact` — vorher war das wegen einer NULL-Falle in `0050` unmoeglich. Sieben
   E2E-Specs decken den Finanzbereich browser-gefuehrt ab (`finanzen`, `-positionen`,
   `-zahlungen`, `-ausgaben`, `-abrechnung`, `-vermoegensbericht`,
   `-gemischter-schluessel`). Seit 2026-09-20 existiert ausserdem eine TOM-Liste nach
@@ -140,9 +142,13 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
 2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
    (freigabepflichtig) und einen vollstaendigen `just e2e`-Lauf dokumentieren.
    Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
-3. Step: Das leere Forward-Fenster von `audit_verify_chain()` untersuchen, bevor
-   eine naechtliche Kettenpruefung eingerichtet wird — offen aus dem
-   Backup-Drill (`docs/10-...` § 10.6).
+3. Erledigt am 2026-09-22: Das leere Forward-Fenster von `audit_verify_chain()`
+   war eine NULL-Falle in `0050`, derselben Klasse wie `0064`. `0045` pruefte
+   `valid_after_seq is null or seq > valid_after_seq`; `0050` verlor den
+   NULL-Zweig, und der faul angelegte Checkpoint traegt genau NULL. Behoben in
+   `0068` samt pgTAP-Vertrag (6 Zusicherungen, vorher 4 rot). Eine intakte Kette
+   wird jetzt als `intact` gemeldet; damit ist die naechtliche Kettenpruefung
+   ueberhaupt erst sinnvoll baubar.
 4. Bei Ausloeser A–D: die drei Fragen an Elestio (§ 11.5), dann Umzug.
    `scripts/db-migrate-guard.sh` ist dabei auf `--db-url` umzustellen.
 5. Danach organisatorisch: AVV, Art.-30-Verzeichnis (dafuer die
