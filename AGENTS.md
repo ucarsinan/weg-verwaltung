@@ -4,7 +4,7 @@
 
 Verwaltungssoftware für Wohnungseigentümergemeinschaften (WEG) — Multi-Tenant SaaS für Profi-Hausverwalter, KI-First, sicher von Anfang an. Portfolio-Piece in Profi-Qualität.
 
-**Aktueller Stand (belegt, September 2026):** Cloud-DB-Ziel ist das lokal verlinkte Supabase-Frankfurt-Projekt. Der Cloud-Migrationsstand wurde am 2026-09-19 per `supabase migration list --linked` verifiziert und deckt sich exakt mit dem lokalen Stand (`0060`). Lokal liegen Migrationen `0001–0060`: Dokumente/Personen/Eigentümerschaft bis `0033`, Audit-Hotfix/Forward-Repair und Least-Privilege-Hardening bis `0046`, Finance Lifecycle bis `0048`, Meeting/Resolution-Hardening in `0049`, Audit-Console-Read-API in `0050`, Actor-Guard-DELETE-Fix in `0051`, Vorgangszentrale-Foundation in `0052`, Settings-Audit-Trigger in `0053`, Agent-Suggestion-Vorgangsanker in `0054`, Advisor-Grant-/RLS-InitPlan-Hardening in `0055`, Finance-Allocation-Foundation in `0056`, Self-Managed-SaaS-Foundation in `0057`, Audit-Writer-Vault-Decrypt-Grant in `0058`, Tenant-Audit-Emitter-Repair in `0059` und Wirtschaftsplan-Positions-Allokation in `0060`. Next.js-16-Web-App und FastAPI/LangGraph-Agent sind vorhanden. RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Embedding-Datenpipeline und Eval-Gates stehen. Die E2E-Suite lief zuletzt am 2026-09-19 browser-gefuehrt gegen die Cloud (76 passed / 2 skipped / 0 failed); die neuen Finance-Routen (`verteilungsschluessel`, `positionen`) deckt sie noch nicht ab. Produktives Hosting für Web-App und Agent ist aus dem Repo nicht belegt. Vote referenziert `ownership_id`, niemals `person_id` oder `user_id`; Co-Eigentümer zählen als eine Stimme pro Ownership.
+**Aktueller Stand (belegt, September 2026):** Cloud-DB-Ziel ist das lokal verlinkte Supabase-Frankfurt-Projekt. Lokal liegen Migrationen `0001–0067`: Dokumente/Personen/Eigentümerschaft bis `0033`, Audit-Hotfix/Forward-Repair und Least-Privilege-Hardening bis `0046`, Finance Lifecycle bis `0048`, Meeting/Resolution-Hardening in `0049`, Audit-Console-Read-API in `0050`, Actor-Guard-DELETE-Fix in `0051`, Vorgangszentrale-Foundation in `0052`, Settings-Audit-Trigger in `0053`, Agent-Suggestion-Vorgangsanker in `0054`, Advisor-Grant-/RLS-InitPlan-Hardening in `0055`, Finance-Allocation-Foundation in `0056`, Self-Managed-SaaS-Foundation in `0057`, Audit-Writer-Vault-Decrypt-Grant in `0058`, Tenant-Audit-Emitter-Repair in `0059`, Wirtschaftsplan-Positions-Allokation in `0060`, Zahlungseingänge und offene Posten in `0061`, Ausgaben und Erhaltungsrücklage in `0062`, Jahresabrechnung (§ 28 Abs. 2 WEG) in `0063`, NULL-sichere Writer-Guards in `0064`, Vermögensbericht (§ 28 Abs. 4 WEG) in `0065`, löschbarer Abrechnungsentwurf in `0066` und gemischte Verteilungsschlüssel mit HeizkostenV in `0067`. Damit ist die Pflichtkette aus § 28 WEG — Wirtschaftsplan, Jahresabrechnung, Vermögensbericht — im Datenmodell vollständig. **Der Cloud-Migrationsstand ist nicht neu verifiziert:** `0061`–`0067` wurden am 2026-09-20 per `just db-migrate` ausgerollt, ein `supabase migration list --linked` lief seither nicht. Vor produktionsnahen Aussagen erst verifizieren — freigabepflichtig. Next.js-16-Web-App und FastAPI/LangGraph-Agent sind vorhanden. RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Embedding-Datenpipeline und Eval-Gates stehen. Die E2E-Suite umfasst 19 Specs, davon sieben für den Finanzbereich (`finanzen`, `-positionen`, `-zahlungen`, `-ausgaben`, `-abrechnung`, `-vermoegensbericht`, `-gemischter-schluessel`); die Zahlen des letzten vollständigen Laufs sind hier nicht belegt. Produktives Hosting für Web-App und Agent ist aus dem Repo nicht belegt. Vote referenziert `ownership_id`, niemals `person_id` oder `user_id`; Co-Eigentümer zählen als eine Stimme pro Ownership.
 
 ## Stack
 
@@ -38,7 +38,7 @@ just test-web      # Vitest unit + jest-axe
 just typecheck     # tsc + mypy --strict
 just lint          # eslint + ruff
 just test-db-all   # alle gruenen pgTAP-Vertraege gegen eine ephemere lokale DB (das CI-Gate)
-just test-finance-db # nur die Finance-Vertraege (0056/0060), nicht Cloud
+just test-finance-db # nur die Finance-Vertraege (0056, 0060-0067), nicht Cloud
 just e2e           # Playwright/Chromium — Login-Flow gegen Cloud; nicht ohne explizite Freigabe im Audit laufen lassen
 just seed-admin    # Tenant + tenant_admin via Supabase Admin-API (idempotent)
 just codegen       # OpenAPI → packages/shared-types (agent muss laufen)
@@ -90,6 +90,7 @@ Kein manuelles `supabase start` / Remote-`db-reset` mehr — das Projekt ist im 
 - Projektstatus: [PROJECT.md](./PROJECT.md)
 - Test-Infrastruktur: [TEST_INFRA.md](./TEST_INFRA.md)
 - Finance Lifecycle: [docs/07-finance-lifecycle.md](./docs/07-finance-lifecycle.md)
+- Finance-Domänenmodell: [docs/08-finance-domain-model.md](./docs/08-finance-domain-model.md)
 - TOM nach Art. 32 DSGVO: [docs/09-tom-art32.md](./docs/09-tom-art32.md)
 
 ## Agentic-Arbeitsregel

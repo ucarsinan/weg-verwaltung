@@ -158,25 +158,35 @@ weil eine Einheit spaeter verkauft wurde.
      MEA einer WEG auf 1 summieren; ohne Normalisierung bliebe ein Teil des
      Positionsbetrags unverteilt. § 16 Abs. 2 WEG verteilt "im Verhaeltnis der
      Miteigentumsanteile", und der Plan muss vollstaendig finanziert sein.
-3. Offener Folge-Slice: `gemischt`
-   - `gemischt` ist in 0056 modelliert, wird von 0060 aber fail-closed mit
-     `0A000` abgelehnt. Grund: `verteilungsschluessel_basiswert` ist eindeutig
-     ueber `(tenant_id, version_id, unit_id, gueltig_ab)` und hat keine Spalte
-     fuer die Zugehoerigkeit zu einem Teil der Regel — eine 70/30-Regel kann
-     Verbrauch UND Flaeche einer Einheit deshalb nicht speichern.
-   - Praxisrelevanz: Heiz- und Warmwasserkosten muessen nach HeizKV zwingend
-     gemischt verteilt werden (30-50 % Grundkosten nach Flaeche, 50-70 % nach
-     Verbrauch). Solange dieser Slice offen ist, lassen sich Heizkosten nicht
-     positionsgenau planen.
-   - Zu entscheiden: Diskriminator-Spalte am Basiswert vs. Komposition aus
-     referenzierten Sub-Versionen. Das ist eine Schema-/Produktentscheidung,
-     keine stille Annahme im Geldpfad.
-4. Danach
-   - Forderungen/Open Items,
-   - Zahlungen,
-   - Belege/Buchungen,
-   - Jahresabrechnungs-Snapshots,
-   - Ruecklagen/Vermoegensbericht.
+3. `0067_gemischte_verteilungsschluessel.sql` (umgesetzt, 2026-09-20)
+   - Entschieden wurde **Komposition statt Diskriminator-Spalte**: eine neue
+     Tabelle `verteilungsschluessel_teil (version_id, teil_version_id, gewicht)`
+     setzt einen `gemischt`-Schluessel aus vorhandenen einfachen Schluesseln
+     zusammen. Keine bestehende Tabelle wurde angefasst; der Flaechenschluessel
+     wird einmal gepflegt und dient allen gemischten Regeln.
+   - Verschachtelung ist per Trigger verboten — ein Teil darf nicht selbst
+     `gemischt` sein. Damit ist die Aufloesung genau eine Ebene tief und kein
+     Zyklus baubar.
+   - Der HeizkostenV-Korridor haengt an `verteilungsschluessel_version.parameter`
+     (`->> 'regelwerk'`), nicht als Check-Constraint an `gewicht`: 50-70 % gilt
+     fuer Heizkosten, nicht fuer gemischte Regeln ueberhaupt. `heizkv_waerme` und
+     `heizkv_warmwasser` erzwingen den Korridor nach § 7 Abs. 1 S. 1 / § 8 Abs. 1
+     HeizkostenV, `heizkv_waerme_70` die starren 70 % aus § 7 Abs. 1 S. 2; der
+     Rest muss nach Flaeche gehen (§ 7 Abs. 1 S. 5).
+   - Summenpruefung als **statement-level Trigger** mit Transition-Tables, nicht
+     als `deferrable initially deferred` Constraint-Trigger: gemessen liess sich
+     dessen Fehlerpfad mit `throws_ok` nicht abfangen, jede Fehlerbedingung waere
+     ungetestet geblieben.
+   - Damit ist die Heizkosten-Luecke geschlossen; `0A000` bleibt als Zweig fuer
+     kuenftige, noch unbekannte Typen stehen.
+4. Danach (Stand 2026-09-22 groesstenteils umgesetzt)
+   - Forderungen/Open Items und Zahlungen: `0061_zahlung_und_offene_posten.sql`,
+   - Belege/Ausgaben und Erhaltungsruecklage: `0062_ausgabe_und_ruecklage.sql`,
+   - Jahresabrechnungs-Snapshots mit Abrechnungsspitze (§ 28 Abs. 2 WEG):
+     `0063_jahresabrechnung.sql`, Entwurf loeschbar seit `0066`,
+   - Vermoegensbericht zum 31.12. (§ 28 Abs. 4 WEG): `0065_vermoegensbericht.sql`.
+   - Offen bleibt bewusst: Bankanbindung, Mahnwesen, Dokumentenablage — so steht
+     es auch auf der Landingpage.
 
 ## Teststrategie
 

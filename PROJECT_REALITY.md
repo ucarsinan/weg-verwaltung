@@ -1,10 +1,12 @@
 # PROJECT_REALITY
 
-Last audit: 2026-09-19
+Last audit: 2026-09-22
 Recommendation: continue
-Confidence: high — Cloud-Schemastand am 2026-09-19 verifiziert (`0060`, deckungs-
-gleich mit lokal), Cloud-E2E am selben Tag gruen (76/2/0). Offen bleibt, dass die
-neuen Finance-Routen noch keinen eigenen E2E-Spec haben.
+Confidence: medium — der lokale Codestand ist belegt (`0001`-`0067`, 15 gruene
+pgTAP-Vertraege im CI-Gate, `./scripts/verify.sh` gruen am 2026-09-20). Gesunken
+gegenueber dem letzten Audit ist die Sicherheit ueber die **Cloud**: `0061`-`0067`
+wurden am 2026-09-20 ausgerollt, aber `supabase migration list --linked` lief
+seither nicht. Der Cloud-Stand ist damit plausibel, nicht belegt.
 
 Freshness ist maschinell pruefbar: `./scripts/check-project-reality-freshness.sh`
 (git-only, keine Secrets) zaehlt Produktcode-Commits seit dem letzten Refresh
@@ -18,10 +20,54 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Success criteria: Ein Nutzer kann ohne Hilfe eine WEG anlegen, Eigentuemer einladen und den ersten gemeinsamen Workflow abschliessen; die WEG bleibt tenant-isoliert und die Produktgrenzen bleiben ehrlich.
 
 ## Current State
-- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0060` (lokal und Cloud deckungsgleich, verifiziert 2026-09-19), RLS-/Audit-/Agent-Guardrails, WEG/Einheiten/Personen/Eigentuemerschaft, Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Vorgangszentrale (inkl. Sidebar-Sub-Navigation), Audit-Konsole, Finance-Allocation-Foundation und Self-Managed-SaaS-Foundation: 30-Tage-Trial, `tenant_subscription`/`tenant_invitation`, Kaufseite `/preise`, Registrierung `/registrieren`, Onboarding-Wizard, Einladungs-Versand (`create_tenant_invitation` + Resend-E-Mail, best-effort) UND Einladungs-Annahme-Seite `/einladung/[token]` gegen `accept_tenant_invitation`. Settings sind in Unterseiten mit eigener Sub-Navigation aufgeteilt. Seit 2026-07-14 ist die E2E-Suite **erstmals vollstaendig browser-gefuehrt gegen die Frankfurt-Cloud gelaufen**: 76 passed / 2 skipped / 0 failed (inkl. `saas-onboarding.spec.ts` Ende-zu-Ende); dabei gefundene Fixes sind committed (Onboarding-Wizard submittete nur den letzten Schritt `d1dd032`; Resend-Sandbox wird als „nicht konfiguriert" statt als Stoerung gemeldet `ef7039e`; `registerAction` loggt Fehler statt sie zu verschlucken `d6691c8`). Die frueher als Schein-Tests markierten RLS-/Audit-Specs pruefen jetzt echte Tenant-Scopes statt `ok()||404`-Tautologien (`2968c2b`/`7fde366`/`166a962`). Seit 2026-07-19 ist die Architektur-Deepening-Arbeit committed und via PR #5 in `main` (Domain-Module `identity`/`versammlung`/`agent-bridge`/`action-kernel`, generierte `shared-types`, E2E-Fixture-Modul, CI-Job `codegen-drift`) — der frueher hier als „nicht committed" gefuehrte Stand ist erledigt. Seit 2026-09-18/19 liest der Sollstellungs-Generator Planpositionen (`0060`): Verteilungsschluessel mit Versionierung und Rechtsgrundlage (§ 16 Abs. 2 WEG), Basiswerte je Einheit, Kostenpositionen je Wirtschaftsplan, neues Domain-Modul `modules/finanzen`, vier neue Routen unter `/wegs/[id]/finanzen`. Ein Plan ohne Positionen behaelt die Vor-0060-Arithmetik byte-identisch (per Migrations-Texttest gegen `0047` gepinnt).
-- Partially implemented: Finanzbereich deckt Wirtschaftsplan, Sollstellung und positionsgenaue Verteilung ab, aber keine belegte vollstaendige Jahresabrechnung, Ruecklagenverwaltung, Vermoegensbericht, Zahlungsabgleich oder Mahnwesen. Innerhalb der Verteilung fehlt der Typ `gemischt`: er ist in `0056` modelliert, wird von `0060` aber fail-closed mit `0A000` abgelehnt, weil `verteilungsschluessel_basiswert` keine Spalte fuer die Zugehoerigkeit zu einem Teil der Regel hat. Praktische Folge: Heiz- und Warmwasserkosten, die nach HeizKV zwingend 30/70 aufgeteilt werden muessen, lassen sich noch nicht positionsgenau planen — als eigener Slice in `docs/08-finance-domain-model.md` § Migrationsstrategie dokumentiert. SaaS-Slice ist jetzt Ende-zu-Ende browser-verifiziert, hat aber weiterhin keinen Billing-Adapter; der E-Mail-Versand laeuft im Resend-Sandbox-Modus (kein verifizierter Absender — Link-Einladung funktioniert und ist E2E-belegt, direkter Mailversand nicht). RAG liefert bewusst `[]`; produktive Agent-Checkpoints, LLMOps-Gates und Betriebsautomation fehlen. Die E2E-Suite ist reihenfolgeabhaengig fragil (belegt: `finanzen` vor `cross-feature`/`scenarios` laesst 3 Tests fehlschlagen; Standardreihenfolge ist gruen — dokumentiert in `docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md`).
-- Not verified: **Die neuen Finance-Routen haben keinen E2E-Spec.** `/finanzen/verteilungsschluessel`, deren Detailseite und `/finanzen/[planId]/positionen` wurden nie in einem Browser bedient — weder das Basiswert-Sammelformular noch die Positionsanlage. Der Cloud-E2E-Lauf vom 2026-09-19 (76/2/0) belegt nur, dass `0060` den **bestehenden** Sollstellungs-Pfad nicht gebrochen hat; er fasst die neue UI nicht an. Damit ist der Positionen-Pfad zwar per pgTAP gegen echtes Postgres belegt, aber die Kette Formular → Server Action → Generator ist nur unit-getestet. Ebenfalls unveraendert: E2E-Testdaten bleiben nach dem Lauf in der Cloud liegen (bekanntes Residuen-Thema, vgl. `f096733`). Advisors zeigen weiterhin 7x `auth_rls_initplan`-WARN und 1x `duplicate_index`-WARN (im `AGENTS.md`-Backlog). Produktives Web-/Agent-Hosting, Backup/Restore und Incident-Runbook, AVV/TOM/Subprozessoren, Support/SLA, Onboarding/Datenimport, Pricing/Zahlungsbereitschaft und echte Nutzerakzeptanz bleiben offen.
-- Last stopping point: `0060` ist via PR #6 (Squash `653fe0e`) in `main` und seit 2026-09-19 in der Frankfurt-Cloud ausgerollt; `supabase migration list --linked` zeigt `0060 | 0060 | 0060`. Der Rollout-Tag umfasste ausserdem: Docker lokal hergestellt (colima), `just test-finance-db` erstmals ausgefuehrt (`Result: PASS`, 50 Assertions) und ein voller Cloud-E2E-Lauf (76 passed / 2 skipped / 0 failed, 3,2 min, Standardreihenfolge) — darunter `finanz-wp-unaligned-mea`, `sollstellung-partial-year`, `sollstellung-round-off` und `scenario-correction-of-financial-plan`, also genau die Tests, die den von `0060` angefassten Generator durchspielen. Historie davor: der Branch trug drei Commits ueber `origin/main` (`b6f064c` Tooling-Fix, `7da6bce` Finance-Slice `0060`, `709153a` nachgezogener Protokoll-Report). PR #4 (die Vorgaengerfassung von `0060`) wurde bewusst geschlossen und neu gebaut, weil ihre Server Actions am `action-kernel` vorbeigingen und ihr `mea`-Zweig die Anteile unnormalisiert verteilte — bei einer MEA-Summe ungleich 1 waere ein Teil des Positionsbetrags still unverteilt geblieben. Verwaiste Branches und Worktrees sind entfernt, `main` ist auf `origin/main`. `./scripts/verify.sh` lief am 2026-09-19 auf dem committeten Stand komplett gruen: eslint (0 Fehler, 4 Warnungen), tsc, mypy `--strict` (40 Dateien), 281 Vitest-Tests in 44 Dateien, 80 Agent-Tests, Build. Nebenbefund dieses Audits: `just lint`/`just typecheck` griffen auf frischer venv auf systemweite `ruff`/`mypy` zurueck (fehlendes `--extra dev`), `ruff` meldete dadurch gruen aus einem fremden Binary — behoben in `b6f064c`, lokal und CI pruefen jetzt dasselbe. Ebenfalls am 2026-09-19: die lokale Docker-Faehigkeit wurde hergestellt (colima statt Docker Desktop, weil letzteres Admin-Rechte braucht) und `just test-finance-db` erstmals ausgefuehrt — `0060` laesst sich auf den vollen Migrationsstand anwenden, beide Finance-pgTAP-Dateien sind gruen (50 Assertions, `Result: PASS`). Der erste Lauf deckte einen `plan(17)`-Zaehlfehler bei 18 Assertions auf; die Assertions selbst bestanden alle.
+- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0067`
+  lokal, RLS-/Audit-/Agent-Guardrails, WEG/Einheiten/Personen/Eigentuemerschaft,
+  Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Vorgangszentrale,
+  Audit-Konsole und die Self-Managed-SaaS-Foundation (30-Tage-Trial, Registrierung,
+  Onboarding-Wizard, Einladung per Link inkl. Annahmeseite).
+  **Die Pflichtkette aus § 28 WEG ist seit dem 2026-09-20 im Datenmodell vollstaendig:**
+  Wirtschaftsplan mit positionsgenauer Verteilung (`0060`), Zahlungseingaenge und
+  offene Posten (`0061`), Ausgaben und Erhaltungsruecklage (`0062`), Jahresabrechnung
+  mit Abrechnungsspitze nach § 28 Abs. 2 WEG (`0063`), Vermoegensbericht zum 31.12.
+  nach § 28 Abs. 4 WEG (`0065`) und gemischte Verteilungsschluessel mit erzwungenem
+  HeizkostenV-Korridor (`0067`). `0064` schliesst eine NULL-Falle in zwei
+  Writer-Guards, `0066` macht einen Abrechnungsentwurf wieder loeschbar (die
+  Kaskaden-Falle aus `0063`). Jede dieser Migrationen hat einen eigenen
+  pgTAP-Vertrag im CI-Gate; die Finance-Liste umfasst neun Vertraege. Sieben
+  E2E-Specs decken den Finanzbereich browser-gefuehrt ab (`finanzen`, `-positionen`,
+  `-zahlungen`, `-ausgaben`, `-abrechnung`, `-vermoegensbericht`,
+  `-gemischter-schluessel`). Seit 2026-09-20 existiert ausserdem eine TOM-Liste nach
+  Art. 32 DSGVO mit Nachweis je Massnahme (`docs/09-tom-art32.md`), und die
+  Landing-/Preisseite behauptet nur noch, was das Produkt kann (PR #20).
+- Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
+  Bankabgleich, kein Mahnwesen, keine Dokumentenablage. Das ist bewusst und steht
+  so auf der Landingpage. **Mandantentrennung ist umgesetzt, aber nicht zugesichert:**
+  am 2026-09-20 gegen den lokalen Stand gemessen tragen 61 von 61 Tabellen in `public`
+  `relrowsecurity` und `relforcerowsecurity` — es gibt aber keinen Test, der den
+  Katalog durchgeht. Tabelle 62 ohne RLS wuerde gruen durchlaufen. `0001_rls_negative.sql`
+  sieht wie der fehlende Test aus, ist aber vollstaendig auskommentiert und in keinem
+  Rezept verdrahtet; ebenso `0039_sollstellung_option_b.sql`. Der SaaS-Slice hat
+  weiterhin keinen Billing-Adapter; der Mailversand laeuft im Resend-Sandbox-Modus.
+  RAG liefert bewusst `[]`; produktive Agent-Checkpoints und LLMOps-Gates fehlen.
+- Not verified: **Der Cloud-Migrationsstand.** `0061`-`0067` wurden am 2026-09-20 per
+  `just db-migrate` ausgerollt; seither lief kein `supabase migration list --linked`.
+  Der Abgleich ist freigabepflichtig und sollte vor der naechsten produktionsnahen
+  Aussage laufen. Ebenfalls nicht belegt: die Zahlen des letzten vollstaendigen
+  E2E-Laufs (einzelne Specs liefen gezielt, ein dokumentierter Gesamtlauf fehlt seit
+  dem 2026-09-19), produktives Web-/Agent-Hosting, Backup/Restore und
+  Incident-Runbook, AVV und Art.-30-Verzeichnis, Support/SLA, Pricing-Akzeptanz.
+  Advisors zeigen unveraendert 7x `auth_rls_initplan`-WARN und 1x `duplicate_index`-WARN
+  (im `AGENTS.md`-Backlog). In der Frankfurt-Cloud liegen seit dem 2026-09-21 bewusst
+  stehengelassene Demo-Daten.
+- Last stopping point: Elf Produktcode-Commits zwischen dem 2026-09-19 und dem
+  2026-09-20 (PRs #9 bis #21) haben die Finanzkette fertiggestellt, ohne dass diese
+  Datei nachgezogen wurde — die Frische-Pruefung meldete am 2026-09-22 folgerichtig
+  `STALE` mit 11 undokumentierten Commits bei Schwelle 8. Gleichzeitig nannte
+  `AGENTS.md` weiterhin Stand `0060`. Dieser Refresh schliesst den Rueckstand und ist
+  der Anlass fuer die neue globale Dokumentationspflicht: betroffene `.md`-Dateien
+  gehoeren in denselben Commit wie die Aenderung. Zuletzt gemerged: PR #22
+  (TOM-Liste, Squash `68b227c`). `./scripts/verify.sh` lief am 2026-09-20 komplett
+  gruen (452 Vitest-Tests in 58 Dateien, 0 Lint-Fehler, Build sauber).
 
 ## Reality Findings
 - Local evidence: Das System ist ein technisch ernstzunehmendes Portfolio-Produkt mit starkem Sicherheitskern, aber noch kein kaufbares SaaS-Angebot. Im Repo wurden keine operativen Artefakte fuer Pricing/Billing, Pilot-Onboarding, Support, AVV/TOM, Subprozessoren, Backup/Restore oder produktives Deployment gefunden.
@@ -30,16 +76,47 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Key uncertainty: Ob professionelle Verwalter den engen Workflow als dringlich und differenzierend genug bewerten, um Pilotzeit oder Budget zu geben.
 
 ## Gaps And Risks
-- Missing essentials: Heiz-/Warmwasserkosten sind nicht positionsgenau planbar, solange `gemischt` fail-closed bleibt — fuer ein WEG-Produkt eine spuerbare Luecke, nicht nur ein Randfall. Billing-Adapter fehlt weiterhin. E-Mail-Versand hat keinen verifizierten Absender (Resend-Sandbox) — bewusste Nutzerentscheidung, Link-Einladung traegt den Flow. Produktiver Betrieb mit Monitoring, Backup/Restore, Incident-Prozess und Support; AVV/TOM/Subprozessor-Register und belastbare Datenschutz-/Claim-Pruefung fehlen weiterhin.
-- Luftschloss/drift warnings: Weitere RAG-, Agent-, Cold-Storage-, Bank- oder Full-Finance-Features vor dem einfachen Selbstverwaltungs-Onboarding waeren Drift. „KI-First“ ist kein tragfaehiger Kaufgrund, solange kein messbarer Zeit-/Fehlervorteil im Kernworkflow belegt ist.
-- Risks: Ein Full-Suite-Claim erzeugt falsche Erwartungen. Remote-only Cloud-State und Legacy-Audit-Fenster begrenzen Produktionsclaims. Echter Zahlungsverkehr oder Rechtsberatung wuerden die Produkt- und Compliance-Grenzen wesentlich erweitern.
+- Missing essentials: **Verfuegbarkeit und Wiederherstellbarkeit.** Es gibt kein
+  dokumentiertes Backup-Regime, keine getestete Wiederherstellung, kein RPO/RTO.
+  Art. 32 Abs. 1 lit. b und c sind damit nicht erfuellt — das ist die groesste
+  einzelne Luecke vor dem ersten zahlenden Kunden und wiegt schwerer als jede
+  weitere Funktion. Zweitens fehlt die katalogweite RLS-Zusicherung (siehe
+  `docs/09-tom-art32.md` § 9.7): die Mandantentrennung beruht auf Disziplin statt
+  auf einer Pruefung. Weiter offen: AVV und Art.-30-Verzeichnis (die TOM-Anlage
+  existiert jetzt), Billing-Adapter, verifizierter Mailabsender, Monitoring und
+  Alarmierung, Meldeprozess nach Art. 33, Loeschkonzept.
+- Luftschloss/drift warnings: Die Heizkosten-Luecke ist mit `0067` geschlossen, damit
+  entfaellt der bisher groesste fachliche Vorwand fuer neue Breite. Der naechste
+  Drift waere, weitere Fachfunktionen zu bauen, bevor Backup und RLS-Zusicherung
+  stehen. „KI-First" bleibt kein tragfaehiger Kaufgrund, solange kein messbarer
+  Zeit-/Fehlervorteil im Kernworkflow belegt ist.
+- Risks: Ein nicht verifizierter Cloud-Stand ist ein stiller Risikoposten — die
+  Anwendung laeuft gegen Frankfurt, und die Annahme „Cloud = lokal" ist genau die
+  Annahme, die `0045`/`0058`/`0059` schon einmal widerlegt haben (siehe Memory
+  „Cloud Schema Drift"). Ein Full-Suite-Claim erzeugt falsche Erwartungen. Echter
+  Zahlungsverkehr oder Rechtsberatung wuerden Produkt- und Compliance-Grenzen
+  wesentlich erweitern.
 
 ## Next Logical Step
-1. Step: Einen E2E-Spec fuer den Positionen-Pfad schreiben, bevor neue Breite (Billing-Adapter, Rollen-UI, Jahresabrechnung) angegangen wird: Verteilungsschluessel anlegen → Basiswerte fuer alle Einheiten pflegen → Position am Wirtschaftsplan → aktivieren → Sollstellungsbetraege pruefen. Muster: `apps/web/e2e/helpers/fixtures.ts` fuer die Vorbedingungen, UI-Bedienung nur fuer den eigentlichen Testgegenstand.
-   Why: Der Positionen-Pfad ist die einzige Stelle im Produkt, an der ein Formulareingabefehler unmittelbar in unveraenderliche Geldbetraege muendet. pgTAP deckt die SQL-Seite ab, Unit-Tests die Actions — aber nicht die Kette dazwischen. Genau dort sass auch der Onboarding-Wizard-Bug aus dem Juli (submittete nur den letzten Schritt), den erst ein Browser-Lauf gefunden hat.
-   Validation: neuer Spec gruen in Standardreihenfolge, danach Ergebnis hierher zurueckschreiben.
-   Stop/continue rule: Weicht ein pgTAP- oder E2E-Betrag vom erwarteten ab, zuerst die Migration bzw. die Action korrigieren — nicht den Test anpassen. Bei jeder RLS-, Audit- oder Rolleninkonsistenz zuerst den Sicherheitsvertrag reparieren. Echte Abrechnung, Bank und Live-Billing bleiben weiterhin ausserhalb dieses Slices.
-2. Danach zu entscheiden (Produktfrage, kein Implementierungsdetail): `gemischt`/HeizKV. Ohne diesen Slice lassen sich Heizkosten — typischerweise die groesste Position einer WEG — nicht positionsgenau planen. Optionen und Trade-off stehen in `docs/08-finance-domain-model.md` § Migrationsstrategie 3.
+1. Step: Die katalogweite RLS-Zusicherung als pgTAP-Vertrag einziehen — ein `select is(...)`
+   ueber `pg_catalog.pg_class`, das zaehlt, wie viele Tabellen in `public` **nicht**
+   `relrowsecurity and relforcerowsecurity` tragen, und `0` erwartet. Wortlaut steht in
+   `docs/09-tom-art32.md` § 9.7.
+   Why: Die Mandantentrennung ist die zentrale Zusage dieses Produkts und heute die
+   einzige Kernzusage ohne Test. Gegen den Stand `0067` gemessen liefert die Zusicherung
+   `0` — sie laesst sich also einfuehren, ohne vorher etwas reparieren zu muessen. Danach
+   macht eine neue Tabelle ohne RLS die Suite rot, bevor sie ausgerollt werden kann.
+   Validation: `just test-db-all` gruen; anschliessend probeweise eine Tabelle ohne RLS
+   anlegen und pruefen, dass der Vertrag rot wird — sonst ist er nur Dekoration.
+   Stop/continue rule: Wird der Vertrag rot, zuerst die fehlende RLS ergaenzen, niemals
+   die Zusicherung aufweichen.
+2. Step: Backup- und Wiederherstellungsregime festlegen und **einmal echt wiederherstellen**.
+   Ein Backup, das nie zurueckgespielt wurde, ist kein Backup. Betriebsentscheidung
+   (Supabase-Plan, RPO/RTO), deshalb nicht allein im Code loesbar.
+   Why: Art. 32 Abs. 1 lit. b und c. Ohne das ist kein AVV ehrlich unterschreibbar.
+   Validation: dokumentierter Wiederherstellungslauf mit Datum, Dauer und Ergebnis.
+3. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
+   (freigabepflichtig) und das Ergebnis hier eintragen.
 
 ## Do Not Build Yet
 - Keine produktive RAG-Pipeline oder weitere Agent-Automation vor dem einfachen Selbstverwaltungs-Onboarding.
