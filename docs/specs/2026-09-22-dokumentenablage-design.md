@@ -238,6 +238,25 @@ Schlägt der Datenbank-Eintrag nach erfolgreichem Upload fehl, wird die Datei
 wieder entfernt; scheitert auch das, protokolliert die Action es, statt zu
 schweigen.
 
+**Bekanntes Restrisiko: gleichzeitige "neue Version".** `neueVersionAction`
+liest die höchste vorhandene `version_no` und schreibt `version_no + 1` —
+zwischen Lesen und Schreiben liegt kein Lock. Laden zwei Personen im selben
+Moment eine neue Version desselben Dokuments hoch, können beide dieselbe
+Nummer berechnen. Das ist akzeptiert, kein offener Fehler: `unique (tenant_id,
+document_id, version_no)` (0015, Zeile 77) lässt die zweite, unterlegene
+Version mit `23505` scheitern, statt beide unbemerkt nebeneinander stehen zu
+lassen; die Action fängt das wie jeden anderen Datenbankfehler ab, entfernt
+die schon hochgeladene Datei wieder (Kompensation, siehe oben) und meldet dem
+Nutzer einen Fehler. Es geht dabei nichts verloren und nichts wird still
+überschrieben — das Fenster schließt fail-closed, nicht fail-silent.
+
+Ein echter Fix (eine `SECURITY DEFINER`-RPC, die `select max(version_no) …
+for update` und den Insert in derselben Transaktion sperrt) wäre eine neue
+Migration und ein neuer Vertrag für einen Fall, den dieses Produkt nicht hat:
+zwei Personen, die dasselbe Dokument in derselben Sekunde versionieren. Wird
+das je real (z. B. Co-Verwaltung mit geteiltem Zugriff), ist das der Weg
+dorthin — nicht vorher bauen.
+
 ## Tests
 
 ### pgTAP `0069`

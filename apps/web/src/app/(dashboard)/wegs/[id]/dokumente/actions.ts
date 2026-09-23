@@ -302,7 +302,9 @@ export async function loescheDokumentAction(
         if (error) {
           logPostgrestError("loescheDokument", error);
           return {
-            errors: { errors: { _form: ["Löschen fehlgeschlagen."] } },
+            errors: {
+              errors: { _form: ["Entfernen aus der Liste fehlgeschlagen."] },
+            },
           };
         }
 

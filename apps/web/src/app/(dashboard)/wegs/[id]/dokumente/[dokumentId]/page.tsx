@@ -16,6 +16,7 @@ import type {
   FristHerkunft,
 } from "@/lib/supabase/database.types";
 import NeueVersionForm from "./neue-version-form";
+import EntferneDokumentButton from "./entferne-dokument-button";
 
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type DokumentUebersichtRow = Database["public"]["Views"]["dokument_uebersicht"]["Row"];
@@ -152,17 +153,22 @@ export default async function DokumentDetailPage({
             ← Zurück zu den Dokumenten
           </Link>
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {dokument.titel}
-        </h1>
-        <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-          {DOC_TYP_LABEL[dokument.doc_typ as DocTyp]} · Dokumentdatum{" "}
-          {formatDatumDE(dokument.dokument_datum)} · Aufbewahrung{" "}
-          {formatAufbewahrung(
-            dokument.aufzubewahren_bis,
-            dokument.frist_herkunft as FristHerkunft,
-          )}
-        </p>
+        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-semibold tracking-tight">
+              {dokument.titel}
+            </h1>
+            <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
+              {DOC_TYP_LABEL[dokument.doc_typ as DocTyp]} · Dokumentdatum{" "}
+              {formatDatumDE(dokument.dokument_datum)} · Aufbewahrung{" "}
+              {formatAufbewahrung(
+                dokument.aufzubewahren_bis,
+                dokument.frist_herkunft as FristHerkunft,
+              )}
+            </p>
+          </div>
+          <EntferneDokumentButton wegId={wegId} dokumentId={dokumentId} />
+        </div>
       </header>
 
       <Card>
