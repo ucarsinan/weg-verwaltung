@@ -4,6 +4,7 @@ import {
   parseDokumentForm,
   parseLoescheDokumentForm,
   parseNeueVersionForm,
+  parseRegelForm,
 } from "../form";
 
 function fd(entries: Record<string, string | File>): FormData {
@@ -120,6 +121,70 @@ describe("parseNeueVersionForm", () => {
     );
     expect("errors" in r).toBe(true);
     if ("errors" in r) expect(r.errors.errors?._form).toBeDefined();
+  });
+});
+
+describe("parseRegelForm", () => {
+  // Testfaelle wortgetreu aus dem Task-4-Brief — die Mehrdeutigkeit von "0"
+  // ist der Kern dieser Funktion: Number("") ist 0, ohne die Leerstring-
+  // Pruefung zuerst wuerde ein leeres Feld unbemerkt als "0 Jahre" durchgehen
+  // und die Frist stillschweigend auf sofort setzen, statt auf dauerhaft.
+  it("nimmt eine Jahreszahl an", () => {
+    const r = parseRegelForm(fd({ doc_typ: "rechnung", jahre: "10" }));
+    expect("input" in r).toBe(true);
+    if ("input" in r) expect(r.input.jahre).toBe(10);
+  });
+
+  it("deutet ein leeres Feld als dauerhaft", () => {
+    const r = parseRegelForm(fd({ doc_typ: "protokoll", jahre: "" }));
+    expect("input" in r).toBe(true);
+    if ("input" in r) expect(r.input.jahre).toBeNull();
+  });
+
+  it("lehnt 0 ab statt sie als dauerhaft zu deuten", () => {
+    const r = parseRegelForm(fd({ doc_typ: "rechnung", jahre: "0" }));
+    expect("errors" in r).toBe(true);
+  });
+
+  it("lehnt eine unsinnig lange Frist ab", () => {
+    expect(
+      "errors" in parseRegelForm(fd({ doc_typ: "rechnung", jahre: "500" })),
+    ).toBe(true);
+  });
+
+  it("lehnt eine unbekannte Dokumentart ab", () => {
+    const r = parseRegelForm(fd({ doc_typ: "quittung", jahre: "10" }));
+    expect("errors" in r).toBe(true);
+  });
+
+  it("deutet fehlende Rechtsgrundlage/Notiz als null, nicht als leerer String", () => {
+    const r = parseRegelForm(fd({ doc_typ: "rechnung", jahre: "10" }));
+    expect("input" in r).toBe(true);
+    if ("input" in r) {
+      expect(r.input.rechtsgrundlage).toBeNull();
+      expect(r.input.notiz).toBeNull();
+    }
+  });
+
+  it("nimmt Rechtsgrundlage und Notiz an, wenn beide ausgefuellt sind", () => {
+    const r = parseRegelForm(
+      fd({
+        doc_typ: "rechnung",
+        jahre: "8",
+        rechtsgrundlage: "§ 147 Abs. 3 Nr. 4 AO",
+        notiz: "Standardfrist uebernommen",
+      }),
+    );
+    expect("input" in r).toBe(true);
+    if ("input" in r) {
+      expect(r.input.rechtsgrundlage).toBe("§ 147 Abs. 3 Nr. 4 AO");
+      expect(r.input.notiz).toBe("Standardfrist uebernommen");
+    }
+  });
+
+  it("lehnt eine nicht-ganzzahlige Jahresangabe ab", () => {
+    const r = parseRegelForm(fd({ doc_typ: "rechnung", jahre: "10.5" }));
+    expect("errors" in r).toBe(true);
   });
 });
 

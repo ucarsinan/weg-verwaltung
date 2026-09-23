@@ -154,3 +154,68 @@ export function parseLoescheDokumentForm(
 
   return { input: { wegId, dokumentId } };
 }
+
+export interface RegelFormState {
+  errors?: {
+    doc_typ?: string[];
+    jahre?: string[];
+    _form?: string[];
+  };
+  success?: string;
+}
+
+export interface RegelInput {
+  docTyp: DocTyp;
+  /** null bedeutet dauerhaft — wie in public.aufbewahrungsregel.jahre (0069). */
+  jahre: number | null;
+  rechtsgrundlage: string | null;
+  notiz: string | null;
+}
+
+/**
+ * Exportiert, damit die Mehrdeutigkeit von "0" ohne Datenbank testbar ist:
+ * `Number("")` ist `0`, ein leeres Feld muss also VOR dem Parsen erkannt
+ * werden — sonst würde es unbemerkt als "0 Jahre" durchgehen und die Frist
+ * stillschweigend auf sofort setzen, statt auf dauerhaft (Ruling zu Task 4).
+ *
+ * Die Grenzen 1..100 spiegeln exakt den CHECK aus 0069
+ * (`jahre is null or jahre between 1 and 100`) — eine unsinnig lange Frist
+ * wird hier abgewiesen, bevor die Datenbank es müsste.
+ */
+export function parseRegelForm(
+  formData: FormData,
+): ParseResult<RegelInput, RegelFormState> {
+  const errors: NonNullable<RegelFormState["errors"]> = {};
+
+  const docTyp = String(formData.get("doc_typ") ?? "");
+  const jahreRaw = String(formData.get("jahre") ?? "");
+  const rechtsgrundlage = String(formData.get("rechtsgrundlage") ?? "").trim();
+  const notiz = String(formData.get("notiz") ?? "").trim();
+
+  if (!DOC_TYPEN.includes(docTyp as DocTyp)) {
+    errors.doc_typ = ["Unbekannte Dokumentart."];
+  }
+
+  let jahre: number | null = null;
+  if (jahreRaw !== "") {
+    const parsed = Number(jahreRaw);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+      errors.jahre = [
+        "Bitte eine ganze Zahl zwischen 1 und 100 Jahren angeben, oder das Feld für dauerhaft leer lassen.",
+      ];
+    } else {
+      jahre = parsed;
+    }
+  }
+
+  if (Object.keys(errors).length > 0) return { errors: { errors } };
+
+  return {
+    input: {
+      docTyp: docTyp as DocTyp,
+      jahre,
+      rechtsgrundlage: rechtsgrundlage.length > 0 ? rechtsgrundlage : null,
+      notiz: notiz.length > 0 ? notiz : null,
+    },
+  };
+}

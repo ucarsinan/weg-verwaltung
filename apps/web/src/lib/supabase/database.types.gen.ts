@@ -3512,6 +3512,16 @@ export type Database = {
           },
         ]
       }
+      aufbewahrung_effektiv: {
+        Row: {
+          doc_typ: string | null
+          herkunft: string | null
+          jahre: number | null
+          notiz: string | null
+          rechtsgrundlage: string | null
+        }
+        Relationships: []
+      }
       dokument_uebersicht: {
         Row: {
           aufzubewahren_bis: string | null

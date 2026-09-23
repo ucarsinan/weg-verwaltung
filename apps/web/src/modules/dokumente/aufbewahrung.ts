@@ -51,3 +51,21 @@ export function formatAufbewahrung(
 
   return herkunft === "gesetzlicher_rueckfall" ? `${basis} (Vorschlag)` : basis;
 }
+
+/**
+ * Formatiert eine reine Jahresangabe — für `public.aufbewahrung_effektiv`
+ * (0071), die pro Dokumentart nur "wie viele Jahre" liefert, kein aus einem
+ * konkreten Dokumentdatum abgeleitetes Enddatum (das gibt es ohne ein Dokument
+ * nicht). Anders als `formatAufbewahrung` oben, das ein absolutes Fristende
+ * formatiert.
+ */
+export function formatJahreLabel(jahre: number | null): string {
+  if (jahre === null) return "dauerhaft";
+  return jahre === 1 ? "1 Jahr" : `${jahre} Jahre`;
+}
+
+/** Anzeige-Label für `frist_herkunft` bzw. `aufbewahrung_effektiv.herkunft`. */
+export const FRIST_HERKUNFT_LABEL: Record<FristHerkunft, string> = {
+  mandantenregel: "Mandantenregel",
+  gesetzlicher_rueckfall: "Gesetzlicher Rückfall",
+};

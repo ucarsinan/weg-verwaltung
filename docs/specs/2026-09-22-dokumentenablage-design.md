@@ -152,13 +152,52 @@ Die letzte Zeile ist ausdrücklich eine Setzung. Zu lange aufzubewahren ist
 wegen Art. 17 DSGVO kein risikofreier Default — genau deshalb ist die Regel
 bearbeitbar und ihre Herkunft in der Anzeige sichtbar.
 
+### 0071 — der Rückfall zieht in eine eigene Sicht: `public.aufbewahrung_effektiv`
+
+**Anlass:** Die Einstellungen-Seite `/einstellungen/aufbewahrung` (Task 4) muss
+für **alle sieben** Dokumentarten zeigen, welche Frist gerade gilt und woher
+sie stammt — auch für Arten, zu denen noch kein einziges Dokument existiert.
+`dokument_uebersicht` kann das nicht: sie hat nur Zeilen für tatsächlich
+vorhandene Dokumente. Eine Dokumentart ohne Beleg taucht dort nie auf, obwohl
+für sie sehr wohl schon eine Frist gilt (der Rückfall).
+
+**Lösung:** Der komplette Rückfall-`CASE` aus dem vorigen Abschnitt zieht in
+eine eigene Sicht, `public.aufbewahrung_effektiv` — `security_invoker = on`,
+eine Zeile je Dokumentart (`unnest(array[...])`, alle sieben, immer),
+`left join public.aufbewahrungsregel`. Spalten: `doc_typ`, `jahre` (NULL =
+dauerhaft), `herkunft`, sowie `rechtsgrundlage`/`notiz` als Passthrough der
+Mandantenregel (bei einem Rückfall beide NULL — es gibt keine vom Mandanten
+hinterlegte Begründung für einen Wert, den er nicht gesetzt hat).
+`dokument_uebersicht` liest `jahre`/`herkunft` jetzt von dort, statt sie
+selbst zu berechnen — **der gesetzliche Rückfall ist damit an genau einer
+Stelle in der gesamten Codebase kodiert**, nicht an zwei sich potentiell
+widersprechenden.
+
+Dieselbe Begründung wie im vorigen Abschnitt gilt unverändert weiter: kein
+Schema `private`, keine `SECURITY DEFINER`-Funktion, kein `tenant_id`-
+Parameter. `aufbewahrung_effektiv` hat selbst keine `tenant_id`-Spalte —
+`unnest()` ist mandantenlos —, die Mandantentrennung kommt ausschließlich über
+die RLS von `public.aufbewahrungsregel`, an die die Sicht per
+`security_invoker` gebunden bleibt, auch ohne eine treibende Tabelle mit
+eigener `tenant_id`. Ob eine Mandantenregel existiert, entscheidet weiterhin
+`r.id is not null`, nie `coalesce(r.jahre, ...)` — aus demselben Grund wie
+oben: eine Mandantenregel mit `jahre = null` muss von der statutarisch
+dauerhaften Rückfall-Zeile (z. B. `protokoll`) unterscheidbar bleiben, obwohl
+beide `jahre = null` tragen.
+
+`dokument_uebersicht` ändert dadurch weder ihre Ausgabespalten noch deren
+Semantik — nur die interne Herleitung von `aufzubewahren_bis`/`frist_herkunft`
+wechselt von einem eingebetteten `CASE` zu einem Join auf
+`aufbewahrung_effektiv`. `infra/supabase/tests/0069_dokumentenablage.sql`
+bleibt deshalb unverändert gültig.
+
 ### Neu: `public.dokument_uebersicht`
 
 `security_invoker = on`, wie `offener_posten` (0061), `ruecklage_entwicklung`
 (0062) und `abrechnung_spitze` (0063). Liefert Dokument, aktuelle Version,
 `aufzubewahren_bis` und `frist_herkunft` — Mandantenregel und gesetzlicher
-Rückfall sind direkt in der Sicht eingebettet (siehe oben), keine eigene
-Funktion.
+Rückfall werden seit `0071` aus `public.aufbewahrung_effektiv` gelesen (siehe
+oben), nicht mehr selbst berechnet.
 
 Rechenweg: `make_date(extract(year from dokument_datum), 12, 31) + jahre Jahre`.
 Bei `jahre is null` bleibt `aufzubewahren_bis` NULL — dauerhaft, ohne eigenen
@@ -288,14 +327,31 @@ Dazu:
   `frist_herkunft = 'mandantenregel'` erkennbar — nicht mit dem gesetzlichen
   Rückfall zu verwechseln (12 Zusicherungen insgesamt)
 
+### pgTAP `0071`
+
+`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 10 Zusicherungen:
+`aufbewahrung_effektiv` liefert immer alle sieben Dokumentarten (auch ganz
+ohne Mandantenregel und ohne Dokument), der gesetzliche Rückfall greift ohne
+Regel, eine Mandantenregel schlägt ihn bei Jahren **und** Herkunft, eine
+Mandantenregel mit `jahre = null` bleibt von der statutarisch dauerhaften
+Rückfall-Zeile (`protokoll`) unterscheidbar, und ein fremder Mandant sieht
+seine eigenen Werte, nie die des anderen — geprüft unter
+`set local role authenticated`, nicht als `postgres` (Table-Owner mit
+BYPASSRLS, sonst wäre die Zusicherung vakuos).
+
 ### Modultests
 
 Formularvalidierung (Datum, Pflichtfelder, erlaubte Dateitypen, Größengrenze),
 Anzeigelogik „dauerhaft" statt eines Datums, Migrations-Texttest nach dem Muster
-von `0064` und `0067`.
+von `0064` und `0067`. Task 4 ergänzt `parseRegelForm`: ein leeres Jahresfeld
+bedeutet dauerhaft (`null`), `"0"` wird abgelehnt — `Number("")` ist `0`, ohne
+die Leerstring-Prüfung zuerst wäre das nicht unterscheidbar.
 
 Die Fristrechnung wird **nicht** in TypeScript gespiegelt. Sie hat genau eine
-Heimat, und das ist die Datenbank.
+Heimat, und das ist die Datenbank. Dasselbe gilt für die Rückfallwerte selbst
+(8/6/10/dauerhaft je Dokumentart): sie stehen ausschließlich in
+`public.aufbewahrung_effektiv` (0071). Die Einstellungen-Seite formatiert nur,
+was die Sicht liefert (`formatJahreLabel`), sie berechnet nichts nach.
 
 ### E2E `dokumente.spec.ts`
 
@@ -343,6 +399,12 @@ war. Zusaetzlich spart es einen Schreibpfad in der Mandantenanlage.
 
 In der Oberflaeche steht dann „gesetzlicher Rueckfall" — ehrlicher als eine
 vorbelegte Zahl, die wie eine Entscheidung des Verwalters aussieht.
+
+**Konsequenz fuer Task 4 (0071):** Genau diese Entscheidung ist der Grund,
+warum die Einstellungen-Seite den Rueckfall nicht aus `dokument_uebersicht`
+lesen kann (die hat nur Zeilen fuer vorhandene Dokumente) und warum
+`aufbewahrung_effektiv` als eigene Sicht entstand, die alle sieben Arten
+immer liefert — siehe „0071 — der Rueckfall zieht in eine eigene Sicht" oben.
 
 ### Specs liegen in `docs/specs/`, nicht in `docs/superpowers/`
 

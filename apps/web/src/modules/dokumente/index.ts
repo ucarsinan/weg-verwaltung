@@ -1,6 +1,8 @@
 export {
   DOC_TYP_LABEL,
+  FRIST_HERKUNFT_LABEL,
   formatAufbewahrung,
+  formatJahreLabel,
   istDauerhaft,
 } from "./aufbewahrung";
 export {
@@ -14,6 +16,7 @@ export {
   parseDokumentForm,
   parseLoescheDokumentForm,
   parseNeueVersionForm,
+  parseRegelForm,
 } from "./form";
 export type {
   DokumentFormState,
@@ -22,4 +25,6 @@ export type {
   LoescheDokumentInput,
   NeueVersionFormState,
   NeueVersionInput,
+  RegelFormState,
+  RegelInput,
 } from "./form";
