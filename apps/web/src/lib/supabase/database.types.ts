@@ -117,6 +117,22 @@ export type VerteilungsschluesselQuelle =
   | "beschluss"
   | "manuell";
 
+/** Dokumentart (Migration 0069). Bestimmt die Aufbewahrungsfrist. */
+export type DocTyp =
+  | "beschluss"
+  | "protokoll"
+  | "doku"
+  | "rechnung"
+  | "vertrag"
+  | "bescheid"
+  | "korrespondenz";
+
+/**
+ * Herkunft der Aufbewahrungsfrist in `dokument_uebersicht` (Migration 0069):
+ * eine gepflegte Mandantenregel oder der gesetzliche Rueckfallwert.
+ */
+export type FristHerkunft = "mandantenregel" | "gesetzlicher_rueckfall";
+
 export type Json =
   | string
   | number
