@@ -168,8 +168,8 @@ export default async function DokumentDetailPage({
         <CardHeader>
           <CardTitle>Versionen</CardTitle>
           <CardDescription>
-            Jede Version bleibt lesbar — eine neue Version ersetzt keine
-            vorhandene Datei, sie ergänzt die Liste.
+            Jede hochgeladene Version bleibt erhalten und einzeln
+            herunterladbar — keine überschreibt eine vorhandene Datei.
           </CardDescription>
         </CardHeader>
         <CardContent>
