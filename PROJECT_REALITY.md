@@ -2,11 +2,19 @@
 
 Last audit: 2026-09-22 (zweiter Durchgang: Betriebsmodell)
 Recommendation: continue
-Confidence: medium — der lokale Codestand ist belegt (`0001`-`0067`, 15 gruene
-pgTAP-Vertraege im CI-Gate, `./scripts/verify.sh` gruen am 2026-09-20). Gesunken
-gegenueber dem letzten Audit ist die Sicherheit ueber die **Cloud**: `0061`-`0067`
-wurden am 2026-09-20 ausgerollt, aber `supabase migration list --linked` lief
-seither nicht. Der Cloud-Stand ist damit plausibel, nicht belegt.
+Confidence: medium — der lokale Codestand ist belegt (`0001`-`0071`, 19 gruene
+pgTAP-Vertraege im CI-Gate mit 355 Zusicherungen, `./scripts/verify.sh` gruen am
+2026-09-23). Gesunken gegenueber dem letzten Audit ist die Sicherheit ueber die
+**Cloud**: `0061`-`0067` wurden am 2026-09-20 ausgerollt, aber `supabase
+migration list --linked` lief seither nicht. Der Cloud-Stand ist damit
+plausibel, nicht belegt.
+
+*(Migrationsspanne, Vertragszahlen und das `verify.sh`-Laufdatum am 2026-09-23
+auf den tatsaechlichen Codestand korrigiert — reine Faktenwerte, kein neuer
+Audit-Durchgang. Das 2026-09-23-Datum belegt nur, dass `verify.sh` an diesem
+Tag gegen genau diesen Codestand gruen lief, es ist kein neues Audit-Datum.
+`Recommendation`, `Confidence` und die Begruendung dahinter stammen weiterhin
+vom 2026-09-22-Audit und wurden nicht neu bewertet.)*
 
 Freshness ist maschinell pruefbar: `./scripts/check-project-reality-freshness.sh`
 (git-only, keine Secrets) zaehlt Produktcode-Commits seit dem letzten Refresh
@@ -20,11 +28,21 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Success criteria: Ein Nutzer kann ohne Hilfe eine WEG anlegen, Eigentuemer einladen und den ersten gemeinsamen Workflow abschliessen; die WEG bleibt tenant-isoliert und die Produktgrenzen bleiben ehrlich.
 
 ## Current State
-- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0068`
+- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0071`
   lokal, RLS-/Audit-/Agent-Guardrails, WEG/Einheiten/Personen/Eigentuemerschaft,
   Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Vorgangszentrale,
   Audit-Konsole und die Self-Managed-SaaS-Foundation (30-Tage-Trial, Registrierung,
   Onboarding-Wizard, Einladung per Link inkl. Annahmeseite).
+  **Seit 2026-09-23 gibt es eine Dokumentenablage** (`0069`-`0071`): der Verwalter
+  legt Unterlagen je WEG ab, versioniert sie und sieht die geltende
+  Aufbewahrungsfrist samt Herkunft — Mandantenregel oder gesetzlicher Rueckfall,
+  einstellbar unter `/einstellungen/aufbewahrung`. **Kein Eigentuemerportal** und
+  **kein** Erfuellungsweg fuer das Einsichtsrecht nach § 18 Abs. 4 WEG (Rechtsprechung:
+  Einsicht beim Verwalter, keine Pflicht zur digitalen Uebersendung) — die Landingpage
+  nennt diese Grenze jetzt ausdruecklich. Details: `docs/specs/2026-09-22-dokumentenablage-design.md`.
+  Der zugehoerige E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und per
+  `playwright test --list` statisch geprueft, aber **noch nie ausgefuehrt** — er
+  laeuft gegen die Cloud und ist freigabepflichtig (siehe „Next Logical Step").
   **Die Pflichtkette aus § 28 WEG ist seit dem 2026-09-20 im Datenmodell vollstaendig:**
   Wirtschaftsplan mit positionsgenauer Verteilung (`0060`), Zahlungseingaenge und
   offene Posten (`0061`), Ausgaben und Erhaltungsruecklage (`0062`), Jahresabrechnung
@@ -45,24 +63,29 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `infra/supabase/tests/0000_rls_katalog.sql` prueft fixture-frei ueber `pg_class`
   und `pg_policy`, dass jede Tabelle in `public` RLS und FORCE RLS traegt, dass jede
   Nicht-Partition mindestens eine Policy hat und dass im Schema `private` keine
-  Tabelle liegt. Gemessen: 63 von 63 Tabellen (inkl. der beiden partitionierten
-  Elterntabellen, die der urspruengliche Vorschlag uebersehen haette). Der Vertrag
-  wurde gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
-  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 16 Vertraege mit 324
+  Tabelle liegt. Gemessen (Stand `0071`): 64 von 64 Tabellen (inkl. der beiden
+  partitionierten Elterntabellen, die der urspruengliche Vorschlag uebersehen
+  haette, und der seit `0069` neuen `aufbewahrungsregel`). Der Vertrag wurde
+  gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
+  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 19 Vertraege mit 355
   Zusicherungen.
 - Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
-  Bankabgleich, kein Mahnwesen, keine Dokumentenablage. Das ist bewusst und steht
-  so auf der Landingpage. `0001_rls_negative.sql` sieht wie ein RLS-Test aus, ist aber
+  Bankabgleich, kein Mahnwesen. Das ist bewusst und steht so auf der Landingpage;
+  die Dokumentenablage ist seit 2026-09-23 keine Grenze mehr, sondern ein
+  Implemented-Eintrag (oben). `0001_rls_negative.sql` sieht wie ein RLS-Test aus, ist aber
   vollstaendig auskommentiert und in keinem Rezept verdrahtet; ebenso
   `0039_sollstellung_option_b.sql`. Der SaaS-Slice hat
   weiterhin keinen Billing-Adapter; der Mailversand laeuft im Resend-Sandbox-Modus.
   RAG liefert bewusst `[]`; produktive Agent-Checkpoints und LLMOps-Gates fehlen.
 - Not verified: **Der Cloud-Migrationsstand.** `0061`-`0067` wurden am 2026-09-20 per
   `just db-migrate` ausgerollt; seither lief kein `supabase migration list --linked`.
-  Der Abgleich ist freigabepflichtig und sollte vor der naechsten produktionsnahen
-  Aussage laufen. Ebenfalls nicht belegt: die Zahlen des letzten vollstaendigen
+  `0068`-`0071` (inkl. der kompletten Dokumentenablage) sind lokal gebaut und
+  pgTAP-gruen, aber noch nie ausgerollt. Der Abgleich ist freigabepflichtig und
+  sollte vor der naechsten produktionsnahen Aussage laufen. Ebenfalls nicht belegt: die Zahlen des letzten vollstaendigen
   E2E-Laufs (einzelne Specs liefen gezielt, ein dokumentierter Gesamtlauf fehlt seit
-  dem 2026-09-19), produktives Web-/Agent-Hosting, Backup/Restore und
+  dem 2026-09-19) — **`apps/web/e2e/dokumente.spec.ts` wurde noch kein einziges Mal
+  ausgefuehrt**, nur `playwright test --list` bestaetigt, dass die drei Faelle
+  geparst werden —, produktives Web-/Agent-Hosting, Backup/Restore und
   Incident-Runbook, AVV und Art.-30-Verzeichnis, Support/SLA, Pricing-Akzeptanz.
   Advisors zeigen unveraendert 7x `auth_rls_initplan`-WARN und 1x `duplicate_index`-WARN
   (im `AGENTS.md`-Backlog). In der Frankfurt-Cloud liegen seit dem 2026-09-21 bewusst
@@ -140,7 +163,10 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
    Umgebungstrennung, Backup und Betreiberwahl faellig — oder es bleiben
    Demo-Daten.
 2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
-   (freigabepflichtig) und einen vollstaendigen `just e2e`-Lauf dokumentieren.
+   (freigabepflichtig), `0068`-`0071` per `just db-migrate` ausrollen (freigabepflichtig)
+   und einen vollstaendigen `just e2e`-Lauf dokumentieren — inklusive des ersten
+   jemals ausgefuehrten Laufs von `apps/web/e2e/dokumente.spec.ts` (bisher nur
+   `--list`-geprueft, nie gegen eine echte Umgebung gelaufen).
    Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
 3. Erledigt am 2026-09-22: Das leere Forward-Fenster von `audit_verify_chain()`
    war eine NULL-Falle in `0050`, derselben Klasse wie `0064`. `0045` pruefte

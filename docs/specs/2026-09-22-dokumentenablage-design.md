@@ -1,8 +1,11 @@
 # Dokumentenablage Design
 
 Datum: 2026-09-22
-Status: entworfen, nicht umgesetzt
-Migration: `0069`
+Status: umgesetzt (Tasks 1–6, abgeschlossen 2026-09-23) — Migrationen `0069`-`0071` lokal
+gebaut und pgTAP-gruen, Cloud-Rollout steht noch aus (freigabepflichtig). Der
+E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und `--list`-geprueft,
+aber noch nie ausgefuehrt.
+Migration: `0069` (erweitert um `0070`, `0071`)
 
 ## Ziel
 
@@ -345,7 +348,10 @@ Dazu:
 
 ### pgTAP `0071`
 
-`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 12 Zusicherungen:
+`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 13 Zusicherungen (nach
+Fix Round 2/5 in Task 4 — eine Zusicherung, die den Tenant-Abgleich unter
+BYPASSRLS deutlich testet, kam nach der ersten Fassung mit 12 dazu; siehe
+„Fix Round 1 (Review)" unten für den vorangegangenen Fix):
 `aufbewahrung_effektiv` liefert immer alle sieben Dokumentarten (auch ganz
 ohne Mandantenregel und ohne Dokument), der gesetzliche Rückfall greift ohne
 Regel, eine Mandantenregel schlägt ihn bei Jahren **und** Herkunft, eine
@@ -353,12 +359,18 @@ Mandantenregel mit `jahre = null` bleibt von der statutarisch dauerhaften
 Rückfall-Zeile (`protokoll`) unterscheidbar, und ein fremder Mandant sieht
 seine eigenen Werte, nie die des anderen — geprüft unter
 `set local role authenticated`, nicht als `postgres` (Table-Owner mit
-BYPASSRLS, sonst wäre die Zusicherung vakuos). Zwei der zwölf gehen
-zusätzlich den vollen Zwei-Hop-Pfad durch `dokument_uebersicht` selbst (nicht
-nur durch `aufbewahrung_effektiv` direkt): zwei Mandanten, derselbe `doc_typ`
-(`rechnung`), dasselbe Dokumentdatum, je eine eigene Regel bzw. keine — jeder
-sieht über `dokument_uebersicht` nur seine eigene Frist (Fix Round 1, siehe
-oben).
+BYPASSRLS, sonst wäre die Zusicherung vakuos). Drei der 13 gehen zusätzlich
+den vollen Zwei-Hop-Pfad durch `dokument_uebersicht` selbst (nicht nur durch
+`aufbewahrung_effektiv` direkt — im Vertrag nachgezählt, nicht geschätzt):
+zwei davon (Fix Round 1, Abschnitte 3b/6b) mit zwei Mandanten, derselbe
+`doc_typ` (`rechnung`), dasselbe Dokumentdatum, je eine eigene Regel bzw.
+keine — jeder sieht über `dokument_uebersicht` nur seine eigene Frist. Die
+dritte (Fix Round 2, Abschnitt 7, siehe oben) läuft bewusst als `postgres`
+(BYPASSRLS) und liest ebenfalls über `dokument_uebersicht`: sie beweist, dass
+ausschließlich der explizite `ae.tenant_id = d.tenant_id`-Abgleich eine
+Mandantenregel (Marker `jahre = 77`) davor bewahrt, auf das gleichartige
+Dokument eines fremden Mandanten durchzuschlagen, wenn RLS auf `document`
+selbst nicht mehr filtert.
 
 ### Modultests
 

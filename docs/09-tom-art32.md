@@ -164,10 +164,10 @@ sie die am besten belegte.
 
 | Maßnahme | Umsetzung | Nachweis | Status |
 | --- | --- | --- | --- |
-| Datenbankverträge als ausführbare Tests | 17 pgTAP-Verträge, 330 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
+| Datenbankverträge als ausführbare Tests | 19 pgTAP-Verträge, 355 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
 | Mandantentrennung katalogweit zugesichert | 5 Zusicherungen über `pg_class`/`pg_policy`, fixture-frei | `just test-security-db`, `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
 | Verträge blockieren die Auslieferung | CI-Job `db-regression (pgTAP)` läuft bei jedem Pull Request | `.github/workflows/ci.yml` | belegt |
-| Anwendungstests | 452 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
+| Anwendungstests | 524 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
 | Browsertests gegen die echte Umgebung | Playwright-Suite | `just e2e` | belegt |
 | Migrationsnummern lückenlos und reviewt | CI-Job `sql-lint` | `.github/workflows/ci.yml` | belegt |
 | Ausrollen nur aus geprüftem Stand | `scripts/db-migrate-guard.sh`: nichts Uncommittetes, `HEAD` = `origin/main`, getippte Bestätigung | Migration in `justfile`, Skript im Repo | belegt |
@@ -250,3 +250,4 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | 2026-09-22 | § 9.8 präzisiert: Vertragspartner ist Supabase Pte. Ltd. (Singapur), Tochter einer US-Gesellschaft; Transfer über Standardvertragsklauseln, kein Angemessenheitsbeschluss, kein Data Privacy Framework. Entscheidung zum Umzug auf EU-Anbieter vermerkt (`docs/11-betriebsmodell.md`). |
 | 2026-09-22 | Backup-Konzept als § 10 ergänzt; 9.7 präzisiert: der Free-Plan hat gar keine Backups, und ein logischer Restore stellt die Audit-Kette nicht wieder her. Nachweis: `docs/10-backup-und-wiederherstellung.md`. |
 | 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |
+| 2026-09-23 | § 9.6 auf 19 pgTAP-Verträge / 355 Zusicherungen und 524 Anwendungstests nachgezogen — Migrationen `0069`-`0071` (Dokumentenablage, Aufbewahrungsfristen) brachten zwei neue Verträge hinzu. Migrationsstand jetzt `0071`, lokal; noch nicht in der Cloud ausgerollt. |

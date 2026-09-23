@@ -10,12 +10,107 @@
 
 **Spec:** [`docs/specs/2026-09-22-dokumentenablage-design.md`](../specs/2026-09-22-dokumentenablage-design.md)
 
+## Abweichungen zwischen Plan und Umsetzung
+
+**Status: umgesetzt (Tasks 1–6, 2026-09-23).** Dieser Plan beschreibt den Stand
+*vor* der Implementierung. Wo er von dem abweicht, was tatsächlich gebaut und
+committet wurde, steht das hier — nicht, weil der Plan falsch war (Pläne sind
+Annahmen, keine Zusagen), sondern weil ein Leser sonst etwas glaubt, das der
+Code nicht mehr tut. Details je Task: `.superpowers/sdd/2026-09-22-dokumentenablage/task-{1..6}-report.md`
+und `progress.md` im selben Verzeichnis (Rulings 1–26).
+
+Maßgeblich für das WAS ist weiterhin `docs/specs/2026-09-22-dokumentenablage-design.md`
+(dort laufend nachgezogen); dieser Abschnitt korrigiert nur den Plan.
+
+1. **`private._aufbewahrung_jahre` gibt es nicht.** Task 1 (Schritt 3 und 5,
+   unten) plant eine `SECURITY DEFINER`-Funktion in Schema `private`, aufgerufen
+   per `cross join lateral` aus `dokument_uebersicht`, plus (implizit, um sie
+   für `authenticated` nutzbar zu machen) ein `grant usage on schema private to
+   authenticated`. Beides wurde beim Bauen verworfen (Ruling 5, Review-Runde
+   Task 1): ein schemaweites `USAGE`-Grant hätte die bewusste Abschottung von
+   Schema `private` aus `0039`, `0042` (Security-Hotfix) und `0047` für **alle**
+   privaten Funktionen aufgeweicht, nicht nur für diese eine. Tatsächlich
+   umgesetzt: der gesetzliche Rückfall ist **inline per `left join
+   public.aufbewahrungsregel`** in die Sicht eingebaut — RLS auf
+   `aufbewahrungsregel` erledigt die Mandantentrennung von selbst, ganz ohne
+   Grant, `SECURITY DEFINER` oder handgeschriebenen `tenant_id`-Guard. Seit
+   `0071` (siehe Punkt 7) lebt dieser Rückfall in einer eigenen Sicht
+   `public.aufbewahrung_effektiv`, die `dokument_uebersicht` joint.
+2. **`0069` hat 12 Zusicherungen, nicht 11.** Der Plan schreibt `select
+   plan(11)` und erwartet elf Zusicherungen (Schritt 3, 4, 6, 8 unten). Die
+   tatsächliche Migration `infra/supabase/tests/0069_dokumentenablage.sql`
+   zählt `select plan(12)` — eine zusätzliche Zusicherung aus dem Review kam
+   dazu (Mandantenregel mit `jahre = null` bleibt von „dauerhaft" per
+   Rückfall unterscheidbar). `0071` zählt inzwischen `plan(13)`.
+3. **`baueStoragePfad` trägt ein Versionssegment.** Der Plan (Task 2, Schritt
+   5) baut `<tenant>/<weg>/<doc_typ>/<dokumentId>.<ext>`. Tatsächlich:
+   `<tenant>/<weg>/<doc_typ>/<dokumentId>-v<version_no>-<eindeutig>.<ext>` —
+   ohne Versionssegment hätte eine zweite Version denselben Storage-Pfad
+   getroffen wie die erste, und `weg-docs` vergibt keine UPDATE-Policy
+   (`0015:265-273`); Versionierung wäre strukturell unmöglich gewesen (Ruling
+   10, Task 3). `eindeutig` macht zusätzlich einen Retry nach einem
+   gescheiterten Insert kollisionsfrei.
+4. **Die Upload-Reihenfolge ist umgedreht.** Der Plan (Task 3, Schritt 5)
+   legt zuerst die `document`-Zeile an und lädt danach hoch. Tatsächlich:
+   erst **hochladen**, dann `document`, dann `document_version` — mit der
+   `document`-ID per `randomUUID()` in der Action erzeugt, nicht aus einem
+   `insert …returning`. Grund (Ruling 11, Task 3): `document` hat laut `0015`
+   keine DELETE-Policy (nur Soft-Delete); bei „Dokumentzeile zuerst" hätte ein
+   fehlgeschlagener Upload eine unlöschbare Dokumentzeile ohne Datei
+   hinterlassen. Mit der tatsächlichen Reihenfolge schreibt der häufigste
+   Fehlerfall (schlechte Datei, Storage-Problem) gar keine Datenbankzeile.
+5. **Die Kompensation, die eine hochgeladene Datei entfernt, existiert
+   nicht und kann nicht existieren.** Der Plan (Task 3, Schritt 5) ruft bei
+   einem gescheiterten `document_version`-Insert `storage.from("weg-docs").remove([pfad])`
+   auf. `weg-docs` vergibt laut `0015:265-273` bewusst **weder** eine
+   UPDATE- **noch** eine DELETE-Policy auf `storage.objects` — „if a real
+   delete is ever needed, it goes through a SECURITY DEFINER admin function
+   with audit log entry. No app-side path." Dieser Aufruf hätte im echten
+   Betrieb immer mit einem Berechtigungsfehler fehlgeschlagen (Ruling 16,
+   Review Task 3, als Critical eingestuft — schlimmer als gemeldet: der
+   deterministische Pfad ohne Zufallsanteil hätte bei einem fehlgeschlagenen
+   Insert die gesamte Versionskette eines Dokuments eingefroren). Tatsächlich:
+   keine Kompensation. Die verwaiste Datei wird auf Error-Level mit vollem
+   Pfad und Dokument-ID protokolliert, damit sie über die
+   `SECURITY DEFINER`-Admin-Funktion aus `0015` von Hand entfernt werden kann.
+6. **`parseDokumentForm` (und `parseRegelForm`) leben nicht in `actions.ts`.**
+   Der Plan (Task 3, Schritt 5; Task 4, Schritt 1) exportiert sie direkt aus
+   der `"use server"`-Datei. Next.js verlangt, dass eine `"use server"`-Datei
+   ausschließlich `async`-Funktionen exportiert — ein synchrones
+   `parseDokumentForm` bricht den Build. Tatsächlich: die reine
+   Formularvalidierung liegt in `modules/dokumente/form.ts`, `actions.ts`
+   importiert sie (Ruling 1, Vorab-Scan). Muster wie
+   `modules/finanzen/verteilungsschluessel.ts` (`pruefeTeile`).
+7. **Task 4 brachte eine eigene Migration, `0071`.** Der Plan listet für
+   Task 4 keine Migrationsdatei (nur Seite, Formular, Actions, Tests). Ruling
+   20 (vor Task 4 entdeckt) zeigte: die Einstellungsseite muss für **alle
+   sieben** Dokumentarten die geltende Frist samt Herkunft zeigen — auch für
+   Arten ganz ohne Dokument. `dokument_uebersicht` (Task 1) hat aber nur
+   Zeilen für tatsächlich vorhandene Dokumente. Ohne eine eigene Sicht hätte
+   die Seite die Rückfallwerte in TypeScript duplizieren müssen — genau der
+   Festwert, den die Nutzervorgabe „keine Festwerte" verbietet. Migration
+   `0071` zieht den kompletten Rückfall-`CASE` aus `0069` in
+   `public.aufbewahrung_effektiv`; `dokument_uebersicht` liest seither von
+   dort statt selbst zu rechnen.
+8. **Das Upload-Limit steht im Plan bereits korrekt bei 10 MB.** Zur
+   Vollständigkeit gegen die Liste der bekannten Abweichungen geprüft: dieser
+   Plan selbst nennt an keiner Stelle 25 MB (nur `docs/specs/…-design.md`
+   dokumentiert ausdrücklich und korrekt, dass ursprünglich 25 MB vorgesehen
+   waren und warum auf 10 MB gesenkt wurde). Keine Korrektur nötig — hier zur
+   Nachvollziehbarkeit vermerkt, damit diese Liste nicht unvollständig
+   aussieht.
+
+**Was NICHT abweicht:** `DocTyp`, `FristHerkunft`, `formatAufbewahrung`,
+`pruefeDatei`/`DateiPruefung`, `MAX_UPLOAD_BYTES` (10 MB, an den geplanten drei
+Stellen), die Routen unter `/wegs/[id]/dokumente` und
+`/einstellungen/aufbewahrung`, und die Migrationsnummer `0069` selbst.
+
 ## Global Constraints
 
 - **Migrationsnummer `0069`.** Erste Zeile exakt: `-- WEG-Verwaltung migration 0069: <Beschreibung>`. `sql-lint` erzwingt Header und lückenlose Nummerierung.
 - **Jede neue Tabelle in `public`** trägt `enable row level security` **und** `force row level security` und mindestens eine Policy — sonst wird `infra/supabase/tests/0000_rls_katalog.sql` rot.
 - **Keine Tabelle in `private`.** Derselbe Vertrag.
-- **Fachliche Werte gehören als Daten in die Datenbank**, nicht als Konstante in den Code. Einzige Ausnahme hier: der gesetzliche Rückfall in `private._aufbewahrung_jahre`, und die Sicht meldet ihn als solchen.
+- **Fachliche Werte gehören als Daten in die Datenbank**, nicht als Konstante in den Code. Einzige Ausnahme hier: der gesetzliche Rückfall in `private._aufbewahrung_jahre`, und die Sicht meldet ihn als solchen. **Abweichung 1:** Diese Funktion wurde nicht gebaut — der Rückfall ist inline in der Sicht (seit `0071` in `public.aufbewahrung_effektiv`), siehe „Abweichungen zwischen Plan und Umsetzung" oben.
 - **Upload-Grenze 10 MB**, an genau zwei Stellen und mit derselben Zahl: `serverActions.bodySizeLimit` in `apps/web/next.config.ts` und `file_size_limit` des Buckets `weg-docs`.
 - **Sicherheitsinvarianten bleiben hart:** RLS, Append-only auf `document_version`, Agent-Schreibsperre. Nicht konfigurierbar machen.
 - **Dokumentationspflicht:** Betroffene `.md`-Dateien im selben Commit nachziehen, nicht später.
@@ -26,19 +121,22 @@
 
 | Datei | Verantwortung |
 | --- | --- |
-| `infra/supabase/migrations/0069_dokumentenablage.sql` | Schema-Erweiterung, Regeltabelle, Rückfall-Funktion, Sicht, Audit-Emitter |
-| `infra/supabase/tests/0069_dokumentenablage.sql` | pgTAP-Vertrag, rechnet die Frist von Hand nach |
+| `infra/supabase/migrations/0069_dokumentenablage.sql` | Schema-Erweiterung, Regeltabelle, ~~Rückfall-Funktion~~ (inline in der Sicht, Abweichung 1), Sicht, Audit-Emitter |
+| `infra/supabase/tests/0069_dokumentenablage.sql` | pgTAP-Vertrag (12 Zusicherungen, Abweichung 2), rechnet die Frist von Hand nach |
+| `infra/supabase/migrations/0070_weg_docs_bucket_limit.sql` | **nicht im Plan vorgesehen** — Bucket-Grenze `weg-docs` auf 10 MB (Task 3) |
+| `infra/supabase/migrations/0071_aufbewahrung_effektiv.sql` + `infra/supabase/tests/0071_aufbewahrung_effektiv.sql` | **nicht im Plan vorgesehen** — eigenständige Rückfall-Sicht (Abweichung 7), 13 Zusicherungen |
 | `apps/web/src/lib/supabase/database.types.gen.ts` | neu erzeugt |
 | `apps/web/src/lib/supabase/database.types.ts` | `DocTyp`, `FristHerkunft` von Hand ergänzt |
 | `apps/web/src/modules/dokumente/aufbewahrung.ts` | Anzeigelogik der Frist — **keine** Fristrechnung |
-| `apps/web/src/modules/dokumente/upload.ts` | Dateivalidierung (Typ, Größe), Pfadbildung |
+| `apps/web/src/modules/dokumente/upload.ts` | Dateivalidierung (Typ, Größe), Pfadbildung (mit Versionssegment, Abweichung 3) |
+| `apps/web/src/modules/dokumente/form.ts` | **nicht im Plan vorgesehen** — reine Formularvalidierung (`parseDokumentForm`, `parseNeueVersionForm`, `parseLoescheDokumentForm`), ausgelagert aus `actions.ts` (Abweichung 6) |
 | `apps/web/src/modules/dokumente/index.ts` | Barrel |
-| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/page.tsx` | Liste mit Filter |
-| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/actions.ts` | Hochladen, neue Version, Soft-Delete |
+| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/page.tsx` | Liste **ohne** Filter (der Brief gab nur Struktur vor, kein Filter-UI — siehe Spec-Fußnote) |
+| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/actions.ts` | Hochladen, neue Version, aus der Liste entfernen (Reihenfolge und Kompensation abweichend, Abweichung 4+5) |
 | `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/neu/page.tsx` + `upload-form.tsx` | Hochladen |
-| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/[dokumentId]/page.tsx` | Versionen, Herunterladen |
+| `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/[dokumentId]/page.tsx` + `neue-version-form.tsx` + `entferne-dokument-button.tsx` | Versionen, Herunterladen, neue Version, Entfernen (die beiden Formulare fehlten im Plan) |
 | `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/page.tsx` + `regel-form.tsx` + `actions.ts` | Fristregeln bearbeiten |
-| `apps/web/e2e/dokumente.spec.ts` | der Beweis, dass die Regel Daten sind |
+| `apps/web/e2e/dokumente.spec.ts` | der Beweis, dass die Regel Daten ist — geschrieben, **nie ausgeführt** (freigabepflichtig, Ruling 2/25) |
 
 ---
 
@@ -50,8 +148,14 @@
 - Modify: `justfile` (Vertrag in `AUDIT_DB_TESTS` aufnehmen — er prüft auch den Audit-Emitter)
 
 **Interfaces:**
-- Produces: `public.aufbewahrungsregel(tenant_id, doc_typ, jahre, rechtsgrundlage, notiz)`; `private._aufbewahrung_jahre(uuid, text) returns table(jahre int, herkunft text)`; `public.dokument_uebersicht(tenant_id, weg_id, dokument_id, titel, doc_typ, dokument_datum, version_no, storage_path, mime_type, file_size_bytes, aufzubewahren_bis, frist_herkunft)`
+- Produces: `public.aufbewahrungsregel(tenant_id, doc_typ, jahre, rechtsgrundlage, notiz)`; ~~`private._aufbewahrung_jahre(uuid, text) returns table(jahre int, herkunft text)`~~ (nicht gebaut, Abweichung 1); `public.dokument_uebersicht(tenant_id, weg_id, dokument_id, titel, doc_typ, dokument_datum, version_no, storage_path, mime_type, file_size_bytes, aufzubewahren_bis, frist_herkunft)`
 - Consumes: `public.document`, `public.document_version` aus `0015`; `audit_writer.tg_emit_audit_event()` aus `0026`; `public.tg_finance_allocation_block_agent_writes()` aus `0056`
+
+> **Der folgende Vertrags- und Migrationstext (Schritt 3 und 5) zeigt den Stand
+> vor Ruling 5.** Er wurde nicht so gebaut — siehe „Abweichungen zwischen Plan
+> und Umsetzung" oben (Punkte 1 und 2) für das, was tatsächlich in
+> `infra/supabase/migrations/0069_dokumentenablage.sql` und
+> `infra/supabase/tests/0069_dokumentenablage.sql` steht.
 
 - [ ] **Step 1: Voraussetzung prüfen — Nummer noch frei?**
 
@@ -512,7 +616,8 @@ cd infra && supabase db reset --local
 supabase test db supabase/tests/0069_dokumentenablage.sql --local
 ```
 
-Erwartet: `Result: PASS`, 11 Zusicherungen.
+Erwartet: `Result: PASS`, 11 Zusicherungen. **Tatsächlich: 12** (Abweichung 2) —
+der gebaute Vertrag ist ohnehin anders aufgebaut, siehe Warnhinweis oben.
 
 - [ ] **Step 7: Vertrag in das CI-Gate hängen**
 
@@ -529,6 +634,9 @@ just test-db-all
 ```
 
 Erwartet: `Files=18, Tests=341, Result: PASS` (17 + 1 Datei, 330 + 11 Zusicherungen).
+**Tatsächlich nach allen sechs Tasks: `Files=19, Tests=355`** — zwei neue
+Vertragsdateien (`0069` mit 12, `0071` mit 13 Zusicherungen), nicht eine; siehe
+„Abweichungen" oben, Punkte 2 und 7.
 
 - [ ] **Step 9: Commit**
 
@@ -799,6 +907,11 @@ export function pruefeDatei(datei: File): DateiPruefung {
   return { ok: true };
 }
 
+// Abweichung 3: Diese erste Fassung hat kein Versionssegment. Task 3 fügte
+// eines hinzu (versionNo, eindeutig) — ohne wäre eine zweite Version auf
+// denselben Pfad wie die erste getroffen, und weg-docs vergibt keine
+// UPDATE-Policy (0015:265-273). Siehe „Abweichungen" oben, Punkt 3, für die
+// tatsächliche Signatur in modules/dokumente/upload.ts.
 /**
  * Pfadmuster aus 0015: <tenant>/<weg>/<doc_typ>/<uuid>.<ext>
  *
@@ -1035,6 +1148,13 @@ Erwartet: FAIL, `parseDokumentForm` existiert nicht.
 
 - [ ] **Step 5: `actions.ts` schreiben**
 
+> **Dieser Code-Block wurde nicht so gebaut.** Drei Punkte weichen ab —
+> Reihenfolge (Abweichung 4), die Kompensation ruft eine Storage-Löschung auf,
+> die es nicht geben kann (Abweichung 5), und `parseDokumentForm` steht hier
+> statt in `modules/dokumente/form.ts` (Abweichung 6). Siehe „Abweichungen"
+> oben für Details und Begründung; die tatsächliche Datei ist
+> `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/actions.ts`.
+
 ```ts
 "use server";
 
@@ -1265,16 +1385,25 @@ git commit -m "feat(docs): upload, list and version routes for the document stor
 
 ### Task 4: Einstellungen für die Fristregeln
 
+> **Abweichung 7:** Diese Dateiliste fehlt eine Migration. Tatsächlich brachte
+> Task 4 `infra/supabase/migrations/0071_aufbewahrung_effektiv.sql` samt
+> `infra/supabase/tests/0071_aufbewahrung_effektiv.sql` (13 Zusicherungen) —
+> ohne die neue Sicht `aufbewahrung_effektiv` hätte die Seite die
+> Rückfallwerte in TypeScript duplizieren müssen. Details: „Abweichungen"
+> oben.
+
 **Files:**
 - Create: `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/page.tsx`
 - Create: `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/regel-form.tsx`
 - Create: `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/actions.ts`
 - Create: `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/__tests__/actions.test.ts`
-- Modify: `apps/web/src/app/(dashboard)/einstellungen/page.tsx` (Verweis ergänzen)
+- Modify: `apps/web/src/app/(dashboard)/einstellungen/page.tsx` (Verweis ergänzen) — **tatsächlich `modules/settings/settings-nav.ts` (`SETTINGS_SUBNAV`)**, weil `einstellungen/page.tsx` nur eine Weiterleitung ohne Platz für einen Link ist
+- Create: `infra/supabase/migrations/0071_aufbewahrung_effektiv.sql` (Abweichung 7, im Plan ursprünglich nicht vorgesehen)
+- Create: `infra/supabase/tests/0071_aufbewahrung_effektiv.sql`
 
 **Interfaces:**
 - Consumes: `DOC_TYP_LABEL` aus Task 2
-- Produces: `speichereRegelAction(prev: RegelFormState, formData: FormData)`
+- Produces: `speichereRegelAction(prev: RegelFormState, formData: FormData)`; `public.aufbewahrung_effektiv(doc_typ, jahre, herkunft, rechtsgrundlage, notiz, tenant_id)` (Abweichung 7)
 
 - [ ] **Step 1: Test zuerst — die Mehrdeutigkeit von „0" ist der Kern**
 

@@ -278,7 +278,7 @@ export default function LandingPage() {
       </section>
 
       <section className="border-t border-[color:var(--color-border)] bg-[color:var(--color-secondary)]">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 sm:px-8 md:grid-cols-2 lg:px-10">
+        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 sm:px-8 md:grid-cols-3 lg:px-10">
           <div className="flex gap-3">
             <LockKeyhole className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
             <div>
@@ -287,10 +287,17 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex gap-3">
+            <FileText className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
+            <div>
+              <h2 className="text-sm font-semibold">Dokumentenablage für die Verwaltung</h2>
+              <p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Unterlagen je WEG ablegen, versionieren und mit Aufbewahrungsfrist führen. Kein Eigentümerportal — die Einsicht nach § 18 Abs. 4 WEG gewährt weiterhin der Verwalter.</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
             <Scale className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" />
             <div>
               <h2 className="text-sm font-semibold">Ehrlich auf das Wesentliche fokussiert</h2>
-              <p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung.</p>
+              <p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, kein Mahnwesen und keine Rechtsberatung.</p>
             </div>
           </div>
         </div>
