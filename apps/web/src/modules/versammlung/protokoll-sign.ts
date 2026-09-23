@@ -103,10 +103,15 @@ export async function executeSignProtokoll(
     throw new Error("Nicht authentifiziert — bitte neu einloggen.");
   }
 
-  // 4. Format datum (German locale)
-  const datum = formatDatumDE(
-    meeting.termin_von ? new Date(meeting.termin_von) : now(),
-  );
+  // 4. Determine the document's own date — the meeting's date, not "when we
+  // clicked sign". Same source for both formats: German for the rendered
+  // PDF, ISO (YYYY-MM-DD) for document.dokument_datum (0069), which is a
+  // `date` column and the start of the § 147 Abs. 4 AO retention clock.
+  const dokumentDatumSource = meeting.termin_von
+    ? new Date(meeting.termin_von)
+    : now();
+  const datum = formatDatumDE(dokumentDatumSource);
+  const dokumentDatum = dokumentDatumSource.toISOString().slice(0, 10);
 
   // 5. Render PDF
   const pdfBuffer = await renderPdf({
@@ -142,6 +147,7 @@ export async function executeSignProtokoll(
       weg_id: meeting.weg_id,
       doc_typ: "protokoll",
       titel: `Protokoll ${meeting.titel}`,
+      dokument_datum: dokumentDatum,
       created_by: user.id,
     })
     .select("id")

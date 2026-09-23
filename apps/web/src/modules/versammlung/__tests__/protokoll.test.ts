@@ -142,6 +142,9 @@ describe("executeSignProtokoll", () => {
       doc_typ: "protokoll",
       weg_id: "weg-1",
       created_by: "user-1",
+      // 0069: dokument_datum is NOT NULL — must carry the meeting's own date
+      // (termin_von), not the signing timestamp.
+      dokument_datum: "2026-06-01",
     });
     expect(inserted.document_version[0]).toMatchObject({
       document_id: "doc-1",

@@ -11,10 +11,19 @@
 -- Die Fristrechnung wird von Hand nachgerechnet, nicht auf "laeuft durch"
 -- geprueft: Rechnung vom 15.03.2019 mit 8 Jahren ergibt 2027-12-31, weil die
 -- Frist erst zum Schluss des Kalenderjahrs 2019 beginnt.
+--
+-- Fix Round 1 (Review): private._aufbewahrung_jahre wurde entfernt und in
+-- public.dokument_uebersicht eingebettet (kein schemaweites Grant auf
+-- "private", kein SECURITY DEFINER, kein Parameter-Guard mehr noetig — RLS
+-- auf aufbewahrungsregel filtert selbst). Die frueheren Assertions 4-6 riefen
+-- die Funktion direkt auf; sie pruefen dieselben drei Fakten jetzt ueber die
+-- Sicht. Assertion 11 ist neu (Review Minor 9): eine Mandantenregel mit
+-- jahre = null muss als "dauerhaft" UND als "mandantenregel" erkennbar
+-- bleiben — ein coalesce(r.jahre, ...) haette das verwechselt.
 
 begin;
 
-select plan(11);
+select plan(12);
 
 -- ===========================================================================
 -- Fixtures
@@ -77,28 +86,35 @@ select throws_ok(
 );
 
 -- ===========================================================================
--- 2. Der gesetzliche Rueckfall
+-- 2. Der gesetzliche Rueckfall, ueber die Sicht (nicht mehr per Funktion)
 -- ===========================================================================
 
+-- Fixture fuer Test 6 (dauerhafte Aufbewahrung): das Protokoll wird hier
+-- schon angelegt, weil es in dieser Sektion gebraucht wird.
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccc69'::uuid,
+        'protokoll', 'Versammlung 2019', date '2019-06-01');
+
 select is(
-  (select r.jahre from private._aufbewahrung_jahre(
-     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid, 'rechnung') as r),
-  8,
+  (select u.aufzubewahren_bis from public.dokument_uebersicht as u
+    where u.titel = 'Heizungswartung 2019'),
+  date '2027-12-31',
   'ohne Mandantenregel gilt der gesetzliche Rueckfall von 8 Jahren'
 );
 
 select is(
-  (select r.herkunft from private._aufbewahrung_jahre(
-     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid, 'rechnung') as r),
+  (select u.frist_herkunft from public.dokument_uebersicht as u
+    where u.titel = 'Heizungswartung 2019'),
   'gesetzlicher_rueckfall',
-  'die Herkunft benennt den Rueckfall ausdruecklich'
+  'die Sicht benennt den Rueckfall ausdruecklich'
 );
 
 select is(
-  (select r.jahre from private._aufbewahrung_jahre(
-     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid, 'protokoll') as r),
+  (select u.aufzubewahren_bis from public.dokument_uebersicht as u
+    where u.titel = 'Versammlung 2019'),
   null,
-  'Versammlungsprotokolle sind dauerhaft aufzubewahren (jahre is null)'
+  'Versammlungsprotokolle sind dauerhaft aufzubewahren (jahre ist im Rueckfall null)'
 );
 
 -- ===========================================================================
@@ -114,11 +130,6 @@ select is(
   date '2027-12-31',
   'die Frist rechnet ab dem Jahresende des Dokumentdatums, nicht ab dem Hochladen'
 );
-
-insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
-values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid,
-        'cccccccc-cccc-4ccc-8ccc-cccccccccc69'::uuid,
-        'protokoll', 'Versammlung 2019', date '2019-06-01');
 
 select is(
   (select u.aufzubewahren_bis from public.dokument_uebersicht as u
@@ -150,7 +161,31 @@ select is(
 );
 
 -- ===========================================================================
--- 5. Mandantentrennung der Regeltabelle
+-- 5. Eine Mandantenregel mit jahre = null bedeutet dauerhaft (Review Minor 9)
+-- ===========================================================================
+
+-- 'vertrag' faellt ohne Regel unter den Rueckfall von 10 Jahren (gegriffen).
+-- Ein coalesce(r.jahre, <rueckfall>) wuerde diese Zeile mit dem Rueckfall
+-- verwechseln, weil beide "null-oder-nicht" nicht unterscheiden koennen —
+-- deshalb entscheidet r.id (Existenz der Regelzeile), nicht r.jahre.
+insert into public.aufbewahrungsregel (tenant_id, doc_typ, jahre, rechtsgrundlage)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid, 'vertrag', null,
+        'Verwalter-Entscheid: Vertraege dauerhaft aufbewahren');
+
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69'::uuid,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccc69'::uuid,
+        'vertrag', 'Dauervertrag Hausmeister', date '2020-01-01');
+
+select ok(
+  (select u.aufzubewahren_bis is null and u.frist_herkunft = 'mandantenregel'
+     from public.dokument_uebersicht as u
+    where u.titel = 'Dauervertrag Hausmeister'),
+  'eine Mandantenregel mit jahre = null bedeutet dauerhaft und bleibt als Mandantenregel erkennbar, nicht als Rueckfall'
+);
+
+-- ===========================================================================
+-- 6. Mandantentrennung der Regeltabelle
 -- ===========================================================================
 
 select pg_catalog.set_config(

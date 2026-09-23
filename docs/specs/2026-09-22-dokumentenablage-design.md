@@ -101,14 +101,45 @@ Dokumentdatum; der Rückstand ist inhaltlich korrekt.
 nachweispflichtige Entscheidung. Agent-Schreibsperre: die KI ändert keine
 Fristen.
 
-### Neu: `private._aufbewahrung_jahre(p_tenant_id uuid, p_doc_typ text)`
+### Der gesetzliche Rückfall — eingebettet in `public.dokument_uebersicht`, keine eigene Funktion
 
-Liefert `(jahre int, herkunft text)`. Erst die Mandantenregel, sonst der
-gesetzliche Rückfall mit `herkunft = 'gesetzlicher_rueckfall'`. Der Rückfall ist
-der einzige fest kodierte Wert im Entwurf und deshalb in der Anzeige als solcher
-kenntlich — kein getarnter Festwert.
+**Revidiert in Fix Round 1 (Review).** Ursprünglich als eigene Funktion
+`private._aufbewahrung_jahre(p_tenant_id uuid, p_doc_typ text)` entworfen,
+`SECURITY DEFINER`, per `cross join lateral` aus der Sicht aufgerufen. Zwei
+Probleme zeigten sich erst bei der Implementierung:
 
-Rückfallwerte — **ein konservativer Vorschlag, keine Rechtsauskunft**:
+1. Die Sicht ist `security_invoker`, ruft die Funktion aber direkt auf — dafür
+   hätte die aufrufende Rolle `USAGE` auf Schema `private` **und** `EXECUTE`
+   auf der Funktion gebraucht. Schema `private` ist in `0039`, `0042`
+   (expliziter Security-Hotfix) und `0047` bewusst abgeschottet; ein
+   schemaweites `USAGE`-Grant für eine einzelne Funktion hätte diese
+   Abschottung für **alle** privaten Funktionen aufgeweicht und den impliziten
+   Backstop entwertet, der jedes einzelne `revoke` dort erst nicht
+   load-bearing macht.
+2. Die Funktion nahm `tenant_id` als freien Parameter entgegen. Ein direkter
+   Aufruf an der Sicht vorbei hätte mit einer fremden `tenant_id` die
+   Aufbewahrungsjahre und Herkunft eines fremden Mandanten ausgelesen — ein
+   Bruch der Mandantentrennung, den nur ein zusätzlicher, von Hand
+   geschriebener Parameter-Guard geschlossen hätte.
+
+**Lösung:** keine Funktion, kein Grant, kein `SECURITY DEFINER`, kein Guard.
+Die Mandantenregel wird per `left join public.aufbewahrungsregel` direkt in
+`dokument_uebersicht` eingebettet. Die Sicht ist `security_invoker`, RLS auf
+`aufbewahrungsregel` setzt die Mandantentrennung also selbst durch — ganz ohne
+Parameter, der missbraucht werden könnte.
+
+Ein `left join` (nicht `cross join lateral` einer Funktion) ist hier
+Pflicht: fehlt eine Mandantenregel, muss das Dokument mit `aufzubewahren_bis
+is null`-Rückfall trotzdem in der Sicht erscheinen, nie verschwinden.
+
+Ob eine Mandantenregel existiert, entscheidet `r.id is not null` — **nicht**
+`r.jahre is not null` bzw. `coalesce(r.jahre, …)`. Eine Mandantenregel mit
+`jahre = null` bedeutet „dauerhaft" und muss von „keine Regel vorhanden"
+unterscheidbar bleiben; ein `coalesce` würde beide Fälle verwechseln und den
+Rückfall statt der bewusst gesetzten Dauerhaftigkeit anzeigen.
+
+Rückfallwerte — **ein konservativer Vorschlag, keine Rechtsauskunft**,
+`herkunft = 'gesetzlicher_rueckfall'` gegenüber `'mandantenregel'`:
 
 | Art | Jahre | woran angelehnt |
 | --- | --- | --- |
@@ -125,10 +156,15 @@ bearbeitbar und ihre Herkunft in der Anzeige sichtbar.
 
 `security_invoker = on`, wie `offener_posten` (0061), `ruecklage_entwicklung`
 (0062) und `abrechnung_spitze` (0063). Liefert Dokument, aktuelle Version,
-`aufzubewahren_bis` und `frist_herkunft`.
+`aufzubewahren_bis` und `frist_herkunft` — Mandantenregel und gesetzlicher
+Rückfall sind direkt in der Sicht eingebettet (siehe oben), keine eigene
+Funktion.
 
 Rechenweg: `make_date(extract(year from dokument_datum), 12, 31) + jahre Jahre`.
-Bei `jahre is null` bleibt `aufzubewahren_bis` NULL — dauerhaft.
+Bei `jahre is null` bleibt `aufzubewahren_bis` NULL — dauerhaft, ohne eigenen
+`is null`-Zweig: `make_interval(years => null)` liefert `null`, eine Addition
+mit einem `null`-Interval liefert ebenfalls `null` (empirisch geprüft), die
+Dauerhaftigkeit propagiert also von selbst bis zur Ausgabespalte.
 
 ### Nebenbefund, mit aufgenommen
 
@@ -211,6 +247,9 @@ Dazu:
 - Agent-Writes auf `aufbewahrungsregel` blockiert (`42501`)
 - Audit-Emitter feuert beim Anlegen eines Dokuments und beim Ändern einer Frist
 - Mandantenregel schlägt Rückfall; `frist_herkunft` benennt, welche griff
+- eine Mandantenregel mit `jahre = null` bleibt als „dauerhaft" **und** als
+  `frist_herkunft = 'mandantenregel'` erkennbar — nicht mit dem gesetzlichen
+  Rückfall zu verwechseln (12 Zusicherungen insgesamt)
 
 ### Modultests
 

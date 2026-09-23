@@ -32,20 +32,25 @@
 --   uebrigen Fachtabellen. Die Sicht ist security_invoker, die RLS der
 --   Basistabellen bleibt also in Kraft.
 --
--- Nebenbefund aus dem Entwurf: fehlende Grants und ein ungeschuetzter
--- SECURITY-DEFINER-Parameter.
---   Ohne "grant usage on schema private" und "grant execute ... to
---   authenticated" wirft jede Abfrage von public.dokument_uebersicht als
---   authenticated "permission denied" (empirisch geprueft) — die Sicht waere
---   fuer die App unbenutzbar gewesen. Eine blanke Freigabe haette aber einen
---   Seitenkanal geoeffnet: private._aufbewahrung_jahre ist SECURITY DEFINER
---   und nimmt tenant_id als Parameter entgegen, ein direkter Aufruf an der
---   Sicht vorbei haette also mit einer fremden tenant_id die Aufbewahrungs-
---   jahre und Herkunft eines fremden Mandanten ausgelesen. Deshalb pruefen
---   beide Zweige der Funktion zusaetzlich p_tenant_id = public.tenant_id().
+-- Nebenbefund aus dem Entwurf: kein privates Schema-Grant fuer eine Sicht.
+--   Ein frueherer Entwurf las die Regel ueber eine SECURITY-DEFINER-Funktion
+--   in Schema "private" (cross join lateral). Die Sicht ist aber
+--   security_invoker — dafuer haette die aufrufende Rolle USAGE auf dem
+--   Schema UND EXECUTE auf der Funktion gebraucht. "private" ist in 0039,
+--   0042 (expliziter Security-Hotfix) und 0047 bewusst dicht: ein
+--   schemaweites USAGE-Grant fuer eine einzelne Funktion haette diese
+--   Abschottung fuer ALLE privaten Funktionen aufgeweicht und den impliziten
+--   Backstop entwertet, der jedes einzelne "revoke" dort erst nicht
+--   load-bearing macht. Dazu kam ein zweites Problem: die Funktion nahm
+--   tenant_id als Parameter entgegen, ein direkter Aufruf an der Sicht
+--   vorbei haette mit einer fremden tenant_id fremde Regeln ausgelesen.
+--   Loesung: keine Funktion, keine Grants, keine SECURITY DEFINER — die
+--   Mandantenregel wird direkt per LEFT JOIN in die Sicht eingebettet.
+--   security_invoker sorgt dafuer, dass RLS auf aufbewahrungsregel die
+--   Mandantentrennung selbst durchsetzt, ganz ohne Parameter-Guard.
 --
 -- Teststrategie:
---   infra/supabase/tests/0069_dokumentenablage.sql, 11 Zusicherungen. Die
+--   infra/supabase/tests/0069_dokumentenablage.sql, 12 Zusicherungen. Die
 --   Fristrechnung wird von Hand nachgerechnet.
 --
 -- Rollback / Forward-Fix:
@@ -114,7 +119,7 @@ create table if not exists public.aufbewahrungsregel (
 );
 
 comment on table public.aufbewahrungsregel is
-  'Aufbewahrungsfrist je Dokumentart, bearbeitbar je Mandant. Fehlt eine Zeile, greift der gesetzliche Rueckfall aus private._aufbewahrung_jahre — die Frist ist also nie undefiniert.';
+  'Aufbewahrungsfrist je Dokumentart, bearbeitbar je Mandant. Fehlt eine Zeile, greift der in public.dokument_uebersicht eingebettete gesetzliche Rueckfall — die Frist ist also nie undefiniert.';
 
 comment on column public.aufbewahrungsregel.jahre is
   'NULL bedeutet dauerhaft aufzubewahren.';
@@ -170,72 +175,7 @@ create trigger document_audit_emit
   for each row execute function audit_writer.tg_emit_audit_event();
 
 -- ---------------------------------------------------------------------------
--- 5. Der gesetzliche Rueckfall
--- ---------------------------------------------------------------------------
-
-create or replace function private._aufbewahrung_jahre(
-  p_tenant_id uuid,
-  p_doc_typ   text
-)
-returns table (jahre int, herkunft text)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select r.jahre, 'mandantenregel'::text
-    from public.aufbewahrungsregel as r
-   where r.tenant_id = p_tenant_id
-     and r.doc_typ = p_doc_typ
-     -- Guard: die Funktion ist SECURITY DEFINER und nimmt den Mandanten als
-     -- Parameter entgegen. Ohne diesen Abgleich koennte ein authentifizierter
-     -- Nutzer sie mit einer fremden tenant_id direkt aufrufen (an der Sicht
-     -- vorbei) und so Jahre/Herkunft eines fremden Mandanten auslesen — ein
-     -- Bruch der Mandantentrennung. Ueber die Sicht ist d.tenant_id ohnehin
-     -- schon RLS-gefiltert, der Guard ist dort ein No-Op.
-     and p_tenant_id = public.tenant_id()
-  union all
-  -- Rueckfall: ein konservativer Vorschlag, keine Rechtsauskunft.
-  --   protokoll/beschluss  dauerhaft (Praxis, nicht AO)
-  --   rechnung             8  (§ 147 Abs. 3 Nr. 4 AO, Buchungsbeleg)
-  --   korrespondenz        6  (§ 147 Abs. 3, Handels- und Geschaeftsbriefe)
-  --   bescheid/vertrag/doku 10 (gegriffen, NICHT aus einer Vorschrift)
-  -- Zu lange aufzubewahren ist wegen Art. 17 DSGVO kein risikofreier Default —
-  -- genau deshalb ist die Regel bearbeitbar und die Herkunft sichtbar.
-  select
-    case p_doc_typ
-      when 'protokoll'     then null
-      when 'beschluss'     then null
-      when 'rechnung'      then 8
-      when 'korrespondenz' then 6
-      else 10
-    end,
-    'gesetzlicher_rueckfall'::text
-  where p_tenant_id = public.tenant_id()
-    and not exists (
-    select 1 from public.aufbewahrungsregel as r
-     where r.tenant_id = p_tenant_id
-       and r.doc_typ = p_doc_typ
-  )
-$$;
-
-comment on function private._aufbewahrung_jahre(uuid, text) is
-  'Aufbewahrungsjahre je Dokumentart: erst die Mandantenregel, sonst ein konservativer gesetzlicher Rueckfall. Die zweite Spalte benennt, welche von beiden gegriffen hat — der Rueckfall darf in der Anzeige nicht wie eine Entscheidung des Verwalters aussehen. p_tenant_id muss dem eigenen Mandanten entsprechen (siehe Guard im Funktionskoerper), sonst liefert die Funktion keine Zeile.';
-
-revoke all on function private._aufbewahrung_jahre(uuid, text) from public;
-
--- Nebenbefund aus dem Entwurf: die Sicht ist security_invoker, ruft die
--- Funktion aber direkt im FROM-Klausel auf — dafuer braucht die aufrufende
--- Rolle USAGE auf dem Schema UND EXECUTE auf der Funktion, sonst schlaegt
--- jede Abfrage von authenticated gegen dokument_uebersicht mit "permission
--- denied" fehl. Der obige Guard macht den direkten Aufruf (an der Sicht
--- vorbei) fuer fremde Mandanten wirkungslos, deshalb ist die Freigabe hier
--- sicher.
-grant usage on schema private to authenticated;
-grant execute on function private._aufbewahrung_jahre(uuid, text) to authenticated;
-
--- ---------------------------------------------------------------------------
--- 6. Die Sicht
+-- 5. Die Sicht — Mandantenregel und gesetzlicher Rueckfall direkt eingebettet
 -- ---------------------------------------------------------------------------
 
 create or replace view public.dokument_uebersicht
@@ -255,20 +195,57 @@ select
   v.file_size_bytes,
   -- § 147 Abs. 4 AO: die Frist beginnt zum Schluss des Kalenderjahrs, in dem
   -- das Dokument entstanden ist. jahre is null bedeutet dauerhaft.
+  --
+  -- Kein coalesce(r.jahre, ...): eine Mandantenregel mit jahre = null
+  -- ("dauerhaft") waere sonst nicht von "keine Mandantenregel" zu
+  -- unterscheiden. Deshalb entscheidet r.id (die Existenz der Zeile), nicht
+  -- r.jahre (ihr Wert).
+  --
+  -- Kein "when ... is null then null"-Zweig: make_interval(years => null)
+  -- liefert null, eine Addition mit einem null-Interval liefert ebenfalls
+  -- null (empirisch geprueft) — "dauerhaft" propagiert also von selbst bis
+  -- zu aufzubewahren_bis, ohne eigene Fallunterscheidung.
+  (
+    pg_catalog.make_date(pg_catalog.date_part('year', d.dokument_datum)::int, 12, 31)
+    + pg_catalog.make_interval(years =>
+        case
+          when r.id is not null then r.jahre
+          -- Rueckfall: ein konservativer Vorschlag, keine Rechtsauskunft.
+          --   protokoll/beschluss  dauerhaft (Praxis, nicht AO)
+          --   rechnung             8  (§ 147 Abs. 3 Nr. 4 AO, Buchungsbeleg)
+          --   korrespondenz        6  (§ 147 Abs. 3, Handels- und Geschaeftsbriefe)
+          --   bescheid/vertrag/doku 10 (gegriffen, NICHT aus einer Vorschrift)
+          -- Zu lange aufzubewahren ist wegen Art. 17 DSGVO kein risikofreier
+          -- Default — genau deshalb ist die Regel bearbeitbar und die
+          -- Herkunft sichtbar.
+          else case d.doc_typ
+            when 'protokoll'     then null
+            when 'beschluss'     then null
+            when 'rechnung'      then 8
+            when 'korrespondenz' then 6
+            else 10
+          end
+        end
+      )
+  )::date            as aufzubewahren_bis,
   case
-    when f.jahre is null then null
-    else pg_catalog.make_date(
-           pg_catalog.date_part('year', d.dokument_datum)::int, 12, 31
-         ) + pg_catalog.make_interval(years => f.jahre)
-  end::date          as aufzubewahren_bis,
-  f.herkunft         as frist_herkunft
+    when r.id is not null then 'mandantenregel'
+    else 'gesetzlicher_rueckfall'
+  end                as frist_herkunft
 from public.document as d
 left join public.document_version as v
   on v.tenant_id = d.tenant_id
  and v.id = d.current_version_id
-cross join lateral private._aufbewahrung_jahre(d.tenant_id, d.doc_typ) as f;
+-- LEFT JOIN, nicht cross join lateral einer Funktion (frueherer Entwurf):
+-- eine fehlende Mandantenregel darf das Dokument nie aus der Sicht
+-- verschwinden lassen. Die Sicht ist security_invoker, RLS auf
+-- aufbewahrungsregel filtert also selbst nach Mandant — kein Grant, kein
+-- SECURITY DEFINER, kein Parameter-Guard mehr noetig.
+left join public.aufbewahrungsregel as r
+  on r.tenant_id = d.tenant_id
+ and r.doc_typ = d.doc_typ;
 
 comment on view public.dokument_uebersicht is
-  'Dokument mit aktueller Version und abgeleiteter Aufbewahrungsfrist. security_invoker haelt die RLS der Basistabellen in Kraft. aufzubewahren_bis ist NULL, wenn dauerhaft aufzubewahren ist.';
+  'Dokument mit aktueller Version und abgeleiteter Aufbewahrungsfrist. security_invoker haelt die RLS der Basistabellen (inkl. aufbewahrungsregel) in Kraft. aufzubewahren_bis ist NULL, wenn dauerhaft aufzubewahren ist. frist_herkunft unterscheidet Mandantenregel von gesetzlichem Rueckfall anhand der Existenz der Regelzeile, nicht ihres jahre-Werts.';
 
 grant select on public.dokument_uebersicht to authenticated;
