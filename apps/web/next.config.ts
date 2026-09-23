@@ -21,6 +21,18 @@ const nextConfig: NextConfig = {
   // startet dann mit fehlenden Modulen — und zwar erst zur Laufzeit, nicht
   // beim Bauen.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+
+  // 10 MB. Der Standardwert ist 1 MB und hat einen Sicherheitszweck — die
+  // Next.js-Doku nennt "excessive server resources in parsing large amounts of
+  // data" und "potential DDoS attacks". Von einem sicheren Standard weicht man
+  // so weit ab wie noetig und nicht weiter: eingescannte Protokolle und
+  // Rechnungen liegen praktisch immer unter 10 MB.
+  //
+  // Dieselbe Zahl steht in modules/dokumente/upload.ts und als
+  // file_size_limit am Bucket weg-docs (Migration 0070).
+  experimental: {
+    serverActions: { bodySizeLimit: "10mb" },
+  },
 };
 
 export default nextConfig;

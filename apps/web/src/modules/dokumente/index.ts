@@ -10,3 +10,5 @@ export {
   pruefeDatei,
 } from "./upload";
 export type { DateiPruefung } from "./upload";
+export { parseDokumentForm } from "./form";
+export type { DokumentFormState, DokumentInput } from "./form";

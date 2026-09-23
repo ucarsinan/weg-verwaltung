@@ -176,13 +176,24 @@ auditiert. `0069` hängt den Standard-Emitter aus `0026` an `document`.
 
 | Route | Inhalt |
 | --- | --- |
-| `/wegs/[id]/dokumente` | Liste, Filter nach Art und Jahr |
+| `/wegs/[id]/dokumente` | Liste[^t3] |
 | `/wegs/[id]/dokumente/neu` | Hochladen |
-| `/wegs/[id]/dokumente/[dokumentId]` | Versionen, neue Version, Herunterladen |
+| `/wegs/[id]/dokumente/[dokumentId]` | Versionen, Herunterladen[^t3] |
 | `/einstellungen/aufbewahrung` | Fristregeln bearbeiten |
 
 Dokumente hängen an der WEG, die Fristregeln am Mandanten — deshalb die
 getrennten Orte.
+
+[^t3]: Task 3 hat die Liste ohne Filter nach Art/Jahr gebaut und die
+    Detailseite ohne „neue Version hochladen" — der Task-Brief gab für beide
+    Seiten nur Struktur und tragende Abfrage vor, keine Formularfelder oder
+    Fehlerzustände für diese beiden Funktionen. Bevor eine „neue Version"
+    ergänzt wird, muss zudem `baueStoragePfad` (`modules/dokumente/upload.ts`,
+    Task 2) um die Versionsnummer erweitert werden: der Pfad hängt bisher nur
+    von `dokumentId` ab, eine zweite Version mit gleicher Dateiendung würde
+    also denselben Storage-Pfad treffen wie die erste — `weg-docs` erlaubt laut
+    0015 aber kein Overwrite (keine UPDATE-Policy auf `storage.objects`), der
+    Upload schlüge fehl. Details: `task-3-report.md`.
 
 Neues Modul `modules/dokumente` nach dem Muster von `modules/finanzen`:
 `index.ts` als Barrel, Fachlogik daneben, `__tests__`. Server Actions über
