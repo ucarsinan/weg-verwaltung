@@ -60,12 +60,42 @@ export async function uploadDokumentAction(
       guardError: (message) => ({ errors: { _form: [message] } }),
       parse: parseDokumentForm,
       execute: async (ctx, input) => {
-        // Reihenfolge bewusst umgedreht gegenüber einer naiven "Zeile zuerst"-
-        // Implementierung: erst hochladen, dann schreiben. `document` hat laut
-        // 0015 keine DELETE-Policy (nur Soft-Delete) — ein Dokument ohne Datei
-        // wäre also unlöschbar hängen geblieben, wenn der Upload danach
-        // scheitert. Der häufigste Fehler (schlechte Datei, Storage-Problem)
-        // hinterlässt so gar keine Datenbankzeile.
+        // 0. WEG muss existieren und zum Mandanten des Aufrufers gehören —
+        // ein reiner Read, KEIN Schreibvorgang, und deshalb kein Widerspruch
+        // zur Reihenfolge weiter unten ("Storage vor Dokumentzeile"). Die
+        // RLS-Policy `weg_select_own_tenant` (0008) filtert bereits nach
+        // `tenant_id`, eine fremde WEG ist hier also ununterscheidbar von
+        // einer nicht existierenden — dieselbe Fehlermeldung für beide Fälle
+        // verrät nichts über fremde Mandanten. Ohne diesen Read könnte jeder
+        // authentifizierte Tenant-User mit einer erfundenen oder fremden
+        // `weg_id` einen bis zu 10 MB großen Storage-Eintrag anlegen, den
+        // niemand mehr entfernen kann: `weg-docs` vergibt laut 0015 keine
+        // DELETE-Policy auf `storage.objects`, verwaiste Objekte werden nur
+        // protokolliert (`protokolliereVerwaisteDatei`), nie automatisch
+        // gelöscht — und ohne diesen Check wäre das Objekt für eine WEG, die
+        // es nie gab, das Ergebnis von jedem einzelnen Versuch.
+        const { data: weg, error: wegError } = await ctx.supabase
+          .from("weg")
+          .select("id")
+          .eq("id", input.wegId)
+          .single();
+
+        if (wegError || !weg) {
+          logPostgrestError("uploadDokument.weg", wegError ?? {});
+          return {
+            errors: { errors: { _form: ["WEG wurde nicht gefunden."] } },
+          };
+        }
+
+        // Reihenfolge ab hier bewusst umgedreht gegenüber einer naiven "Zeile
+        // zuerst"-Implementierung: erst hochladen, dann schreiben. `document`
+        // hat laut 0015 keine DELETE-Policy (nur Soft-Delete) — ein Dokument
+        // ohne Datei wäre also unlöschbar hängen geblieben, wenn der Upload
+        // danach scheitert. Der häufigste Fehler (schlechte Datei,
+        // Storage-Problem) hinterlässt so gar keine Datenbankzeile. Der
+        // WEG-Check oben verletzt das nicht: er liest, schreibt aber nichts,
+        // verzögert also nur den ersten Schreibschritt (den Upload) um eine
+        // Prüfung, die ihn im Fehlerfall verhindert.
         const documentId = randomUUID();
         // Macht einen Retry nach einem gescheiterten Insert kollisionsfrei —
         // siehe Doc-Kommentar von baueStoragePfad.

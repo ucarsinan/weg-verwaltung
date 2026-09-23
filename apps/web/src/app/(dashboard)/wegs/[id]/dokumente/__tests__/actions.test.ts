@@ -131,6 +131,33 @@ function rpcEntferntFails(error: { code?: string } = { code: "500" }) {
   return { data: null, error };
 }
 
+/**
+ * `.from("weg").select("id").eq("id", wegId).single()` — der Read-Check, der
+ * seit diesem Fix vor jedem Storage-Upload steht (uploadDokumentAction).
+ * RLS (`weg_select_own_tenant`, 0008) filtert bereits nach tenant_id, ein
+ * `null`-Ergebnis deckt sowohl "existiert nicht" als auch "gehört einem
+ * anderen Mandanten" ab.
+ */
+function wegLookupOk() {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: WEG_ID }, error: null }),
+      }),
+    }),
+  };
+}
+
+function wegLookupFails(error: { code?: string } = { code: "PGRST116" }) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: null, error }),
+      }),
+    }),
+  };
+}
+
 /** `.select("id, doc_typ").eq("id", ...).eq("weg_id", ...).single()`. */
 function documentLookupOk(docTyp = "rechnung") {
   return {
@@ -243,8 +270,60 @@ describe("uploadDokumentAction", () => {
     expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
+  it(
+    "rejects a well-formed WEG id that doesn't resolve for this tenant, " +
+      "before Storage receives any bytes",
+    async () => {
+      // RLS (weg_select_own_tenant, 0008) macht eine fremde WEG von einer
+      // nicht existierenden ununterscheidbar — beide liefern hier `null`.
+      mockFrom.mockReturnValueOnce(wegLookupFails());
+
+      const state = await uploadDokumentAction({}, dokumentFormData());
+
+      expect(state.errors?._form).toBeDefined();
+      expect(mockStorageUpload).not.toHaveBeenCalled();
+      // Nur der WEG-Check — kein document-Insert-Versuch für eine WEG, die
+      // es (für diesen Mandanten) gar nicht gibt.
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it(
+    "checks that the WEG exists for this tenant strictly before the Storage " +
+      "upload — an order assertion, not just a call count",
+    async () => {
+      // Eine reine "upload wurde nicht aufgerufen"-Assertion würde auch dann
+      // gruen bleiben, wenn jemand den Upload wieder VOR den WEG-Check
+      // schiebt und der Check danach zufällig noch fehlschlägt. Deshalb hier
+      // die tatsächliche Aufrufreihenfolge über `invocationCallOrder`
+      // (vitest/jest-Mock-API) statt nur "wurde aufgerufen"/"wurde nicht
+      // aufgerufen".
+      mockFrom
+        .mockReturnValueOnce(wegLookupOk())
+        .mockReturnValueOnce(documentInsertOk())
+        .mockReturnValueOnce(versionInsertOk());
+
+      await uploadDokumentAction({}, dokumentFormData());
+
+      const [wegLookupCallOrder] = mockFrom.mock.invocationCallOrder;
+      const [uploadCallOrder] = mockStorageUpload.mock.invocationCallOrder;
+
+      // `noUncheckedIndexedAccess` macht beide Werte `number | undefined` —
+      // ein `if`-Guard statt zweier `toBeDefined()`-Assertions engt den Typ
+      // fuer den Compiler tatsaechlich ein (ein `expect(...).toBeDefined()`
+      // tut das nicht).
+      if (wegLookupCallOrder === undefined || uploadCallOrder === undefined) {
+        throw new Error(
+          "expected both the WEG lookup and the Storage upload to have been called",
+        );
+      }
+      expect(wegLookupCallOrder).toBeLessThan(uploadCallOrder);
+    },
+  );
+
   it("uploads first, writes the document with the pre-generated id, then the version", async () => {
     mockFrom
+      .mockReturnValueOnce(wegLookupOk())
       .mockReturnValueOnce(documentInsertOk())
       .mockReturnValueOnce(versionInsertOk());
 
@@ -270,7 +349,8 @@ describe("uploadDokumentAction", () => {
     expect(options).toEqual({ contentType: "application/pdf", upsert: false });
 
     // Danach erst die Dokumentzeile — mit genau der ID aus dem Storage-Pfad.
-    const documentCall = mockFrom.mock.results[0]?.value as {
+    // Index 0 ist der WEG-Check (results[0]), Index 1 die Dokumentzeile.
+    const documentCall = mockFrom.mock.results[1]?.value as {
       insert: ReturnType<typeof vi.fn>;
     };
     const [documentRow] = documentCall.insert.mock.calls[0] ?? [];
@@ -278,7 +358,7 @@ describe("uploadDokumentAction", () => {
 
     // Die Version traegt die serverseitig berechnete Pruefsumme, hex-codiert
     // mit dem PostgREST-bytea-Praefix "\x" — kein rohes Buffer-Objekt.
-    const versionCall = mockFrom.mock.results[1]?.value as {
+    const versionCall = mockFrom.mock.results[2]?.value as {
       insert: ReturnType<typeof vi.fn>;
     };
     const [versionRow] = versionCall.insert.mock.calls[0] ?? [];
@@ -296,23 +376,34 @@ describe("uploadDokumentAction", () => {
     expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
   });
 
-  it("never touches the database when the Storage upload fails", async () => {
-    mockStorageUpload.mockResolvedValue({
-      error: { message: "network error", name: "StorageError" },
-    });
+  it(
+    "reads only the WEG check, then writes nothing when the Storage upload fails",
+    async () => {
+      // Der WEG-Check ist ein Read und läuft immer, auch wenn der Upload
+      // danach scheitert — das ist beabsichtigt (siehe Fix-Kommentar in
+      // actions.ts) und kein Widerspruch zu "Storage vor Dokumentzeile":
+      // dieser Test belegt, dass nach dem Read kein einziger Schreibversuch
+      // (document/document_version) stattfindet.
+      mockFrom.mockReturnValueOnce(wegLookupOk());
+      mockStorageUpload.mockResolvedValue({
+        error: { message: "network error", name: "StorageError" },
+      });
 
-    const state = await uploadDokumentAction({}, dokumentFormData());
+      const state = await uploadDokumentAction({}, dokumentFormData());
 
-    expect(state.errors?.datei).toBeDefined();
-    expect(mockFrom).not.toHaveBeenCalled();
-    expect(redirect).not.toHaveBeenCalled();
-  });
+      expect(state.errors?.datei).toBeDefined();
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+      expect(redirect).not.toHaveBeenCalled();
+    },
+  );
 
   it(
     "logs the orphaned file when the document insert fails, since weg-docs " +
       "grants no delete policy (0015) to remove it",
     async () => {
-      mockFrom.mockReturnValueOnce(documentInsertFails());
+      mockFrom
+        .mockReturnValueOnce(wegLookupOk())
+        .mockReturnValueOnce(documentInsertFails());
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const state = await uploadDokumentAction({}, dokumentFormData());
@@ -320,8 +411,9 @@ describe("uploadDokumentAction", () => {
       const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
 
       expect(state.errors?._form).toBeDefined();
-      // Kein document_version-Versuch — nur EIN from()-Aufruf (das Dokument).
-      expect(mockFrom).toHaveBeenCalledTimes(1);
+      // Kein document_version-Versuch — genau ZWEI from()-Aufrufe (WEG-Check
+      // und Dokument).
+      expect(mockFrom).toHaveBeenCalledTimes(2);
       expect(redirect).not.toHaveBeenCalled();
 
       const orphanCall = consoleError.mock.calls.find((call) =>
@@ -339,6 +431,7 @@ describe("uploadDokumentAction", () => {
       "insert fails",
     async () => {
       mockFrom
+        .mockReturnValueOnce(wegLookupOk())
         .mockReturnValueOnce(documentInsertOk())
         .mockReturnValueOnce(versionInsertFails({ code: "23502" }));
       mockRpc.mockResolvedValueOnce(rpcEntferntFails());
@@ -388,6 +481,7 @@ describe("uploadDokumentAction", () => {
 
   it("still reports the save failure when the document soft-delete succeeds", async () => {
     mockFrom
+      .mockReturnValueOnce(wegLookupOk())
       .mockReturnValueOnce(documentInsertOk())
       .mockReturnValueOnce(versionInsertFails());
     mockRpc.mockResolvedValueOnce(rpcEntferntOk());
@@ -403,6 +497,7 @@ describe("uploadDokumentAction", () => {
       "instead of treating a silent false as success",
     async () => {
       mockFrom
+        .mockReturnValueOnce(wegLookupOk())
         .mockReturnValueOnce(documentInsertOk())
         .mockReturnValueOnce(versionInsertFails());
       // Kein Fehler, aber auch kein Treffer — PostgREST meldet dafuer nichts.

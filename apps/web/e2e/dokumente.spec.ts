@@ -17,6 +17,42 @@ import { createWegFixture } from "./helpers/weg";
 // Parallelitaet ohnehin unmoeglich; serial bleibt hier trotzdem gesetzt, weil
 // Test 3 eine mandantenweite Einstellung (aufbewahrungsregel) veraendert und
 // das nie mit einem anderen, zeitgleich laufenden Test kollidieren darf.
+//
+// Datenresiduum — PERMANENT, nicht nur "noch nicht aufgeraeumt": jeder
+// vollstaendige Lauf (alle drei Tests) hinterlaesst im Cloud-Tenant
+// nachgezaehlt 3 weg-Zeilen, 3 document-Zeilen (eine davon — Test 2 — ueber
+// dokument_entfernen soft-geloescht, die Zeile bleibt aber in der Tabelle
+// stehen), 4 document_version-Zeilen und 4 Objekte im Storage-Bucket
+// `weg-docs` (je ~346 Byte, die Groesse von e2e/fixtures/test.pdf). Test 3
+// loescht per REST vorab/danach genau eine `aufbewahrungsregel`-Zeile
+// (setzeRechnungRegelZurueck) — das ist die einzige Stelle in dieser Datei,
+// die je etwas entfernt, und betrifft nur diese eine Tabelle.
+//
+// Das ist kein Cleanup-Versaeumnis, sondern strukturell erzwungen (0015):
+// `document_version` ist append-only per Trigger
+// (tg_document_version_append_only, BEFORE UPDATE/DELETE, blockt
+// bedingungslos), und `document_version_document_fk` steht auf
+// `on delete restrict` — ein `document` mit mindestens einer Version kann
+// deshalb ueberhaupt nicht mehr geloescht werden, auch nicht mit
+// `service_role`/BYPASSRLS. `document_weg_fk` ist ebenfalls `on delete
+// restrict`, also wird auch die `weg`-Zeile selbst unloeschbar, sobald sie
+// ein Dokument traegt — zusaetzlich zu `weg`s eigener, schon seit 0008
+// bewusst fehlender DELETE-Policy. Diese drei Tests reihen sich damit in
+// denselben Befund ein wie die 331 kategorisch unloeschbaren E2E-WEGs aus
+// docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md (dort:
+// `sollstellung`/`verteilungsschluessel`, `unit`, `vote`,
+// `beschluss_sammlung_entry`) — hier von Anfang an bekannt, nicht erst am
+// Ende einer Aufraeumaktion entdeckt.
+//
+// `apps/web/scripts/cleanup-e2e-residue.mjs` enthaelt seit kurzem einen
+// `document`-Loeschversuch (`bulkStep("document", …)`), der aus genau diesem
+// Grund fuer jedes hier erzeugte Dokument mit "BLOCKED" endet, sobald das
+// Skript laeuft — `document_version` und die Storage-Objekte selbst versucht
+// es gar nicht erst zu entfernen. Kein Cleanup-Mechanismus ist hier
+// vorgesehen und keiner sollte gebaut werden: er muesste genau die
+// Sicherheitseigenschaft umgehen, die 0015 bewusst durchsetzt (siehe
+// `docs/specs/2026-09-22-dokumentenablage-design.md`, Abschnitt "Verwaiste
+// Dateien").
 test.describe.configure({ mode: "serial" });
 
 const stamp = () => Date.now();

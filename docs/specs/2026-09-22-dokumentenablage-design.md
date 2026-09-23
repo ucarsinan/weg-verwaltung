@@ -413,6 +413,21 @@ sondern protokolliert den vollständigen Pfad und die Dokument-ID, damit ein
 Betreiber die Datei bei Bedarf über die Admin-Funktion aus 0015 von Hand
 entfernt.
 
+**WEG-Check vor dem Upload (Fix vom 2026-09-23).** `uploadDokumentAction` las
+die WEG ursprünglich erst mit dem `document`-Insert — also nach dem Upload.
+Eine syntaktisch gültige, aber nicht existierende oder einem fremden Mandanten
+gehörende `weg_id` hätte damit trotzdem den vollen Upload ausgelöst und wäre
+erst danach am Insert gescheitert: ein bis zu 10 MB großes, für immer
+unlöschbares Storage-Objekt pro Versuch, ohne jede Zuordnung. Die Action prüft
+deshalb jetzt zuerst per `select` auf `public.weg`, ob die WEG existiert und
+(über `weg_select_own_tenant`, 0008) zum aufrufenden Mandanten gehört —
+derselbe Fehlertext für "existiert nicht" und "gehört einem anderen Mandanten",
+damit nichts über fremde Mandanten verrät wird. Das ist ein Read, kein
+Schreibvorgang, und ändert nichts an der Reihenfolge "Storage vor
+Dokumentzeile" aus dem Absatz oben: der Upload bleibt der erste Schreibschritt,
+er bekommt nur einen Lesecheck vorgeschaltet, der ihn für von vornherein
+unmögliche `weg_id`s verhindert.
+
 Die **Datenbankseite** dieser Kompensation — die Dokumentzeile ohne Version
 soft-löschen — läuft seit `0072` über `public.dokument_entfernen`. Bis dahin
 war sie ein direktes `UPDATE` und scheiterte deshalb immer an der
@@ -542,6 +557,15 @@ außerdem ein Fall für die Upload-Kompensation, die `false` zurückbekommt: kei
 Fehler, aber auch kein Treffer — das muss protokolliert und nicht als Erfolg
 gewertet werden.
 
+Für den WEG-Check vom 2026-09-23 (siehe „WEG-Check vor dem Upload" oben) kamen
+zwei weitere Fälle dazu: eine syntaktisch gültige, aber für den Mandanten
+nicht auflösbare `weg_id` wird abgelehnt, ohne dass Storage je aufgerufen
+wird — und ein eigener Test belegt per `invocationCallOrder` (vitest-Mock-API)
+die tatsächliche Reihenfolge der Aufrufe, nicht nur „Storage wurde/wurde nicht
+aufgerufen". Eine reine Aufrufzähler-Assertion hätte auch dann noch bestanden,
+wenn der Upload wieder vor den Check gerutscht wäre; die
+Reihenfolge-Assertion scheitert genau in diesem Fall.
+
 Die Fristrechnung wird **nicht** in TypeScript gespiegelt. Sie hat genau eine
 Heimat, und das ist die Datenbank. Dasselbe gilt für die Rückfallwerte selbst
 (8/6/10/dauerhaft je Dokumentart): sie stehen ausschließlich in
@@ -557,6 +581,28 @@ was die Sicht liefert (`formatJahreLabel`), sie berechnet nichts nach.
 
 Schritt 3 ist der Beweis, dass die Regel Daten sind und nicht Code. Ohne ihn
 bliebe „einstellbar" eine Behauptung.
+
+**Datenresiduum ist permanent, nicht nur unaufgeräumt.** Jeder vollständige
+Lauf hinterlässt im Cloud-Tenant 3 `weg`-Zeilen, 3 `document`-Zeilen (eine
+davon über `dokument_entfernen` soft-gelöscht, bleibt aber in der Tabelle
+stehen), 4 `document_version`-Zeilen und 4 Objekte im Bucket `weg-docs`
+(~346 Byte, `e2e/fixtures/test.pdf`). Test 3 löscht per REST vorab/danach
+genau eine `aufbewahrungsregel`-Zeile — die einzige Löschung in dieser Datei.
+Der Rest ist strukturell unlöschbar: `document_version` ist append-only per
+Trigger (`tg_document_version_append_only`, 0015), und sowohl
+`document_version_document_fk` als auch `document_weg_fk` stehen auf
+`on delete restrict` — ein `document` mit mindestens einer Version, und damit
+auch die tragende `weg`-Zeile, können deshalb selbst mit `service_role`
+(BYPASSRLS) nicht mehr gelöscht werden. Das reiht sich in denselben Befund
+ein wie die 331 kategorisch unlöschbaren E2E-WEGs aus
+`docs/agent-reports/2026-07-14-worker-general-cloud-e2e-first-run.md`.
+`apps/web/scripts/cleanup-e2e-residue.mjs` enthält einen `document`-
+Löschversuch, der aus genau diesem Grund für jedes hier erzeugte Dokument
+mit „BLOCKED" endet; `document_version` und die Storage-Objekte versucht er
+gar nicht erst zu entfernen. Kein Cleanup-Mechanismus ist vorgesehen — er
+müsste die oben („Verwaiste Dateien") beschriebene, von `0015` bewusst
+durchgesetzte Sicherheitseigenschaft umgehen. Details im Kopfkommentar von
+`apps/web/e2e/dokumente.spec.ts`.
 
 ## Produkttexte
 

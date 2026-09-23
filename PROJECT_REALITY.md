@@ -183,6 +183,11 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
    jemals ausgefuehrten Laufs von `apps/web/e2e/dokumente.spec.ts` (bisher nur
    `--list`-geprueft, nie gegen eine echte Umgebung gelaufen).
    Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
+   **Vor der Freigabe zu wissen:** dieser eine Lauf hinterlaesst permanentes
+   Datenresiduum im Cloud-Tenant — 3 `weg`-, 3 `document`- und 4
+   `document_version`-Zeilen sowie 4 Objekte im Bucket `weg-docs`, keine davon
+   je entfernbar (append-only-Trigger plus `on delete restrict` auf beiden
+   FKs, 0015). Details im Kopfkommentar von `apps/web/e2e/dokumente.spec.ts`.
 3. Erledigt am 2026-09-22: Das leere Forward-Fenster von `audit_verify_chain()`
    war eine NULL-Falle in `0050`, derselben Klasse wie `0064`. `0045` pruefte
    `valid_after_seq is null or seq > valid_after_seq`; `0050` verlor den
