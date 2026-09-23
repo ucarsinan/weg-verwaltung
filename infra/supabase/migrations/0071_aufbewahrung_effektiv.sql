@@ -67,6 +67,15 @@
 --   Zusicherungen, die den Tenant-Abgleich ueber BEIDE Sichten hinweg pruefen
 --   (zwei Mandanten, derselbe doc_typ, je eine eigene Regel, gelesen ueber
 --   dokument_uebersicht — nicht nur ueber aufbewahrung_effektiv direkt).
+--   Fix Round 2 (Review): diese zwei Zusicherungen laufen als "authenticated"
+--   und beweisen den Zwei-Hop-Pfad, aber NICHT, dass "ae.tenant_id =
+--   d.tenant_id" selbst etwas bewirkt — innerhalb einer authenticated-Session
+--   ist aufbewahrung_effektiv als security_invoker-Sicht ohnehin nie in der
+--   Lage, die Regel eines fremden Mandanten zu tragen (RLS auf
+--   aufbewahrungsregel filtert das vorher schon weg). Eine dritte, bewusst
+--   als "postgres" (BYPASSRLS) laufende Zusicherung stellt deshalb das
+--   einzige Szenario her, in dem das Praedikat ueberhaupt etwas zu tun hat —
+--   siehe Kommentar an der Zusicherung selbst.
 --
 -- Rollback / Forward-Fix:
 --   Vorwaerts-Fix bevorzugt. Ein Rueckbau muesste dokument_uebersicht wieder

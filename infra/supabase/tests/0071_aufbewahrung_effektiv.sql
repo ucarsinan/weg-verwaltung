@@ -22,6 +22,15 @@
 --     der explizite "ae.tenant_id = d.tenant_id"-Abgleich, den 0069 schon
 --     hatte und den die erste Fassung dieser Migration ersatzlos entfernt
 --     hatte, ohne dass RLS allein ungetestet blieb)
+--   - das Join-Praedikat "ae.tenant_id = d.tenant_id" selbst hat eine
+--     Unterscheidungskraft: eine als "postgres" (BYPASSRLS) laufende
+--     Zusicherung (Fix Round 2) beweist, dass GENAU dieses Praedikat einen
+--     fremden Mandanten davor schuetzt, die Regel eines anderen zu erben,
+--     wenn RLS "document" nicht mehr filtert — die vorherigen
+--     "authenticated"-Zusicherungen haben ueber dieses Praedikat KEINE
+--     Aussagekraft (sie bestehen nachweislich auch ohne es, siehe Fix-Report
+--     Runde 1), weil RLS auf aufbewahrungsregel den fremden Mandanten fuer
+--     sie ohnehin schon vorher ausschliesst
 --
 -- infra/supabase/tests/0069_dokumentenablage.sql bleibt unveraendert gueltig:
 -- dokument_uebersicht aendert sich an der Oberflaeche nicht, nur ihre interne
@@ -30,7 +39,7 @@
 
 begin;
 
-select plan(12);
+select plan(13);
 
 -- ===========================================================================
 -- Fixtures
@@ -228,6 +237,90 @@ select ok(
      from public.dokument_uebersicht
     where titel = '0071 Zwei-Hop Tenant B'),
   'dokument_uebersicht sieht fuer den fremden Mandanten den gesetzlichen Rueckfall (2028-12-31), nicht die Mandantenregel von Tenant A (2032-12-31) — Tenant-Abgleich haelt durch beide Sichten'
+);
+
+-- ===========================================================================
+-- 7. Das Praedikat selbst unter BYPASSRLS — die einzige Zusicherung, die
+--    scheitert, wenn "and ae.tenant_id = d.tenant_id" entfernt wird
+-- ===========================================================================
+--
+-- Fix Round 2 (Review): 3b/6b oben beweisen den Zwei-Hop-Pfad, aber NICHT,
+-- dass der Tenant-Abgleich selbst etwas bewirkt. Beide liefen als
+-- "authenticated" — dort ist aufbewahrung_effektiv als security_invoker-
+-- Sicht ohnehin nie in der Lage, die Regel eines fremden Mandanten zu
+-- tragen, weil RLS auf aufbewahrungsregel das schon VOR dem Join wegfiltert.
+-- Kein Szenario als "authenticated" kann das aendern: 3b/6b bestehen
+-- nachweislich AUCH mit dem alten, ungeschuetzten Join (per Hand geprueft,
+-- siehe Fix-Report Runde 1) — sie haben also keine Unterscheidungskraft
+-- ueber genau dieses Praedikat.
+--
+-- Diese Zusicherung laeuft DESHALB ABSICHTLICH als "postgres" (BYPASSRLS)
+-- — das ist hier die Pointe, nicht ein Test-Bug. "postgres" umgeht sowohl
+-- die (nicht FORCE-geschaltete) RLS von "document" als auch, weil es
+-- BYPASSRLS traegt, die FORCE ROW LEVEL SECURITY von "aufbewahrungsregel"
+-- (0069) — der Table-Owner sieht ALLE Mandanten gleichzeitig. Das ist exakt
+-- das einzige Szenario, in dem "ae.tenant_id = d.tenant_id" ueberhaupt etwas
+-- zu tun hat: eine aufrufende Rolle, deren RLS "document" NICHT filtert
+-- (z. B. ein Service-Role-Client ueber lib/supabase/admin.ts — heute liest
+-- darueber niemand diese Sichten, aber die Verteidigungslinie soll fuer den
+-- Tag greifen, an dem das passiert).
+--
+-- Aufbau: nur Tenant A bekommt eine Regel fuer 'korrespondenz' (jahre = 77,
+-- ein Markerwert, der mit keinem gesetzlichen Rueckfall oder frueheren
+-- Testwert verwechselt werden kann). Beide Mandanten bekommen je ein
+-- Dokument derselben Art mit demselben Dokumentdatum. Unter BYPASSRLS liefert
+-- aufbewahrung_effektiv fuer 'korrespondenz' GENAU EINE Zeile (nur Tenant A
+-- hat ueberhaupt eine Regel, kein Kreuzprodukt) mit ae.tenant_id =
+-- public.tenant_id() — einer Session-Konstante aus den JWT-Claims, NICHT aus
+-- aufbewahrungsregel gelesen. Ohne den Tenant-Abgleich im Join wuerde diese
+-- eine Zeile mit JEDEM Dokument dieser Art matchen, gleich welchem Mandanten
+-- es gehoert — Tenant As Regel wuerde auf Tenant Bs Dokument durchschlagen.
+--
+-- WARNUNG AN KUENFTIGE LESER: "set local role authenticated" hier
+-- NACHZURUESTEN wuerde diese Zusicherung nutzlos machen — sie wuerde dann
+-- wieder wie 3b/6b nur die RLS-Durchsetzung testen, nicht das Join-Praedikat
+-- selbst. Bitte nicht "reparieren".
+
+select pg_catalog.set_config(
+  'request.jwt.claims',
+  '{"sub":"11111111-1111-4111-8111-111111111171",'
+  '"role":"authenticated",'
+  '"app_metadata":{"tenant_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71",'
+  '"role":"verwalter_mitarbeiter"}}',
+  true
+);
+reset role;   -- zurueck zu "postgres" (BYPASSRLS) — die JWT-Claims (Tenant A) bleiben gesetzt
+
+insert into public.aufbewahrungsregel (tenant_id, doc_typ, jahre, rechtsgrundlage)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid, 'korrespondenz', 77,
+        'Marker-Regel fuer den BYPASSRLS-Test (Fix Round 2)');
+
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccc71'::uuid,
+        'korrespondenz', '0071 BYPASSRLS Tenant A', date '2021-01-01');
+
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb71'::uuid,
+        'dddddddd-dddd-4ddd-8ddd-dddddddddd71'::uuid,
+        'korrespondenz', '0071 BYPASSRLS Tenant B', date '2021-01-01');
+
+-- 01.01.2021 + Jahresende 2021 + 77 Jahre (Tenant As Marker-Regel) ->
+-- 31.12.2098, nur fuer Tenant As eigenes Dokument. Tenant Bs Dokument muss
+-- NULL bleiben (kein Match auf ae.tenant_id) — schluege das Praedikat fehl
+-- (nur "doc_typ" im Join), saehe Tenant Bs Dokument hier ebenfalls
+-- 2098-12-31 / 'mandantenregel', obwohl Tenant B nie eine solche Regel hatte.
+select ok(
+  (
+    (select aufzubewahren_bis = date '2098-12-31' and frist_herkunft = 'mandantenregel'
+       from public.dokument_uebersicht
+      where titel = '0071 BYPASSRLS Tenant A')
+    and
+    (select aufzubewahren_bis is null and frist_herkunft is null
+       from public.dokument_uebersicht
+      where titel = '0071 BYPASSRLS Tenant B')
+  ),
+  'unter BYPASSRLS (document ungefiltert) verhindert ausschliesslich der explizite Tenant-Abgleich, dass Tenant As Marker-Regel (77 Jahre) auf Tenant Bs gleichartiges Dokument durchschlaegt'
 );
 
 select * from finish();
