@@ -21,6 +21,15 @@ if (typeof File.prototype.arrayBuffer !== "function") {
   };
 }
 
+const WEG_ID = "22222222-2222-4222-8222-222222222222";
+// Nur für neueVersionAction/loescheDokumentAction: dort kommt die Dokument-ID
+// als Formularfeld herein, sie ist also frei wählbar. uploadDokumentAction
+// generiert ihre eigene ID über das echte `crypto.randomUUID()` — dessen Wert
+// wird pro Test aus dem tatsächlichen Storage-Aufruf gelesen, statt ihn zu
+// mocken (ein Mock auf "node:crypto" griff unter Vitest/jsdom hier nicht
+// zuverlässig).
+const DOC_ID = "33333333-3333-4333-8333-333333333333";
+
 const mockFrom = vi.fn();
 const mockStorageUpload = vi.fn();
 const mockStorageRemove = vi.fn();
@@ -49,22 +58,28 @@ vi.mock("@/lib/supabase/server", () => ({
   ),
 }));
 
-import { uploadDokumentAction } from "../actions";
-
-const WEG_ID = "22222222-2222-4222-8222-222222222222";
-const DOC_ID = "33333333-3333-4333-8333-333333333333";
+import {
+  loescheDokumentAction,
+  neueVersionAction,
+  uploadDokumentAction,
+} from "../actions";
 
 const PDF = new File(["inhalt"], "wartung.pdf", { type: "application/pdf" });
+const UUID_IN_PFAD_RE = /\/([0-9a-f-]{36})-v\d+\.\w+$/i;
 
-/** Erfolgreicher `insert(...).select("id").single()`-Pfad fuer das Dokument. */
-function documentInsertOk(id = DOC_ID) {
-  return {
-    insert: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
-      }),
+/**
+ * Erfolgreicher `insert(...).select("id").single()`-Pfad fuer das Dokument.
+ * Echot die tatsaechlich uebergebene `id` zurueck — uploadDokumentAction
+ * generiert sie selbst uber `crypto.randomUUID()`, ein fest verdrahteter Wert
+ * waere von der Zeile entkoppelt, die tatsaechlich getestet wird.
+ */
+function documentInsertOk() {
+  const insert = vi.fn((row: { id: string }) => ({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: row.id }, error: null }),
     }),
-  };
+  }));
+  return { insert };
 }
 
 function documentInsertFails(error: { code?: string } = { code: "500" }) {
@@ -85,6 +100,88 @@ function versionInsertFails(error: { code?: string } = { code: "500" }) {
   return { insert: vi.fn().mockResolvedValue({ error }) };
 }
 
+/**
+ * `.update({...}).eq("id", ...)` — die Soft-Delete-Kompensation in
+ * `uploadDokumentAction`, wenn der Versions-Insert scheitert (ein `eq`).
+ */
+function documentCleanupUpdateOk() {
+  const eq = vi.fn().mockResolvedValue({ error: null });
+  return { update: vi.fn().mockReturnValue({ eq }) };
+}
+
+function documentCleanupUpdateFails(error: { code?: string } = { code: "500" }) {
+  const eq = vi.fn().mockResolvedValue({ error });
+  return { update: vi.fn().mockReturnValue({ eq }) };
+}
+
+/**
+ * `.update({...}).eq("id", ...).eq("weg_id", ...)` — `loescheDokumentAction`
+ * filtert zusaetzlich nach der WEG (zwei verkettete `eq`).
+ */
+function loescheUpdateOk() {
+  const eq2 = vi.fn().mockResolvedValue({ error: null });
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+  return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
+}
+
+function loescheUpdateFails(error: { code?: string } = { code: "500" }) {
+  const eq2 = vi.fn().mockResolvedValue({ error });
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+  return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
+}
+
+/** `.select("id, doc_typ").eq("id", ...).eq("weg_id", ...).single()`. */
+function documentLookupOk(docTyp = "rechnung") {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi
+            .fn()
+            .mockResolvedValue({ data: { id: DOC_ID, doc_typ: docTyp }, error: null }),
+        }),
+      }),
+    }),
+  };
+}
+
+function documentLookupFails(error: { code?: string } = { code: "PGRST116" }) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error }),
+        }),
+      }),
+    }),
+  };
+}
+
+/** `.select("version_no").eq(...).order(...).limit(1)`. */
+function versionenListe(rows: { version_no: number }[]) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        }),
+      }),
+    }),
+  };
+}
+
+function versionenListeFails(error: { code?: string } = { code: "500" }) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data: null, error }),
+        }),
+      }),
+    }),
+  };
+}
+
 function dokumentFormData(
   overrides: Record<string, string> = {},
   { includeDatei = true } = {},
@@ -99,6 +196,23 @@ function dokumentFormData(
   return fd;
 }
 
+function neueVersionFormData(overrides: Record<string, string> = {}, includeDatei = true) {
+  const fd = new FormData();
+  fd.set("weg_id", WEG_ID);
+  fd.set("dokument_id", DOC_ID);
+  if (includeDatei) fd.set("datei", PDF);
+  for (const [key, value] of Object.entries(overrides)) fd.set(key, value);
+  return fd;
+}
+
+function loescheFormData(overrides: Record<string, string> = {}) {
+  const fd = new FormData();
+  fd.set("weg_id", WEG_ID);
+  fd.set("dokument_id", DOC_ID);
+  for (const [key, value] of Object.entries(overrides)) fd.set(key, value);
+  return fd;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockFrom.mockReset();
@@ -107,7 +221,7 @@ beforeEach(() => {
 });
 
 describe("uploadDokumentAction", () => {
-  it("rejects an invalid WEG id before touching the database", async () => {
+  it("rejects an invalid WEG id before touching the database or Storage", async () => {
     const state = await uploadDokumentAction(
       {},
       dokumentFormData({ weg_id: "nope" }),
@@ -115,19 +229,20 @@ describe("uploadDokumentAction", () => {
 
     expect(state.errors?._form).toBeDefined();
     expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
-  it("reports a field error for a missing title, without touching the database", async () => {
+  it("reports a field error for a missing title, without touching Storage", async () => {
     const state = await uploadDokumentAction(
       {},
       dokumentFormData({ titel: "" }),
     );
 
     expect(state.errors?.titel).toBeDefined();
-    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
-  it("uploads the file, records the version and redirects to the list", async () => {
+  it("uploads first, writes the document with the pre-generated id, then the version", async () => {
     mockFrom
       .mockReturnValueOnce(documentInsertOk())
       .mockReturnValueOnce(versionInsertOk());
@@ -139,13 +254,26 @@ describe("uploadDokumentAction", () => {
     // nicht auf den (in diesem Zweig bedeutungslosen) Rueckgabewert.
     await uploadDokumentAction({}, dokumentFormData());
 
-    // Storage-Pfad folgt dem Muster aus baueStoragePfad: tenant/weg/doctyp/id.ext
+    // Storage zuerst: der Pfad enthaelt schon die ID, die erst danach in die
+    // Dokumentzeile geschrieben wird (Ruling 2), und das Versions-Segment
+    // "-v1" (Ruling 1). Die ID selbst kommt aus dem echten
+    // `crypto.randomUUID()` — hier aus dem tatsaechlichen Aufruf gelesen,
+    // statt sie zu mocken.
     expect(mockStorageFrom).toHaveBeenCalledWith("weg-docs");
     expect(mockStorageUpload).toHaveBeenCalledTimes(1);
     const [path, bytes, options] = mockStorageUpload.mock.calls[0] ?? [];
-    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}.pdf`);
+    const generierteId = UUID_IN_PFAD_RE.exec(path)?.[1];
+    expect(generierteId).toBeDefined();
+    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${generierteId}-v1.pdf`);
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(options).toEqual({ contentType: "application/pdf", upsert: false });
+
+    // Danach erst die Dokumentzeile — mit genau der ID aus dem Storage-Pfad.
+    const documentCall = mockFrom.mock.results[0]?.value as {
+      insert: ReturnType<typeof vi.fn>;
+    };
+    const [documentRow] = documentCall.insert.mock.calls[0] ?? [];
+    expect(documentRow).toMatchObject({ id: generierteId, weg_id: WEG_ID });
 
     // Die Version traegt die serverseitig berechnete Pruefsumme, hex-codiert
     // mit dem PostgREST-bytea-Praefix "\x" — kein rohes Buffer-Objekt.
@@ -154,9 +282,9 @@ describe("uploadDokumentAction", () => {
     };
     const [versionRow] = versionCall.insert.mock.calls[0] ?? [];
     expect(versionRow).toMatchObject({
-      document_id: DOC_ID,
+      document_id: generierteId,
       version_no: 1,
-      storage_path: `tenant-1/${WEG_ID}/rechnung/${DOC_ID}.pdf`,
+      storage_path: path,
       mime_type: "application/pdf",
       file_size_bytes: 6,
       uploaded_by: "user-1",
@@ -167,57 +295,65 @@ describe("uploadDokumentAction", () => {
     expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
   });
 
-  it("stops before Storage when the document insert fails", async () => {
-    mockFrom.mockReturnValueOnce(documentInsertFails());
-
-    const state = await uploadDokumentAction({}, dokumentFormData());
-
-    expect(state.errors?._form).toBeDefined();
-    expect(mockStorageUpload).not.toHaveBeenCalled();
-    expect(redirect).not.toHaveBeenCalled();
-  });
-
-  it("reports the file field when the Storage upload fails, without writing a version", async () => {
-    mockFrom.mockReturnValueOnce(documentInsertOk());
-    mockStorageUpload.mockResolvedValue({
-      error: { message: "already exists" },
-    });
+  it("never touches the database when the Storage upload fails", async () => {
+    mockStorageUpload.mockResolvedValue({ error: { message: "network error", name: "StorageError" } });
 
     const state = await uploadDokumentAction({}, dokumentFormData());
 
     expect(state.errors?.datei).toBeDefined();
-    // Nur EIN from()-Aufruf (das Dokument) — document_version wird nicht mehr
-    // angefasst, wenn der Upload schon scheitert.
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("removes the just-uploaded file when the document insert fails", async () => {
+    mockFrom.mockReturnValueOnce(documentInsertFails());
+
+    const state = await uploadDokumentAction({}, dokumentFormData());
+
+    const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
+
+    expect(state.errors?._form).toBeDefined();
+    // Kein document_version-Versuch — nur EIN from()-Aufruf (das Dokument).
     expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
     expect(redirect).not.toHaveBeenCalled();
   });
 
   it(
-    "removes the orphaned file when the version insert fails, and logs both " +
-      "failures honestly when the cleanup itself also fails",
+    "removes the file and soft-deletes the document when the version insert " +
+      "fails, logging both compensating failures honestly",
     async () => {
       mockFrom
         .mockReturnValueOnce(documentInsertOk())
-        .mockReturnValueOnce(versionInsertFails({ code: "23502" }));
+        .mockReturnValueOnce(versionInsertFails({ code: "23502" }))
+        .mockReturnValueOnce(documentCleanupUpdateFails());
       mockStorageRemove.mockResolvedValue({
-        error: { message: "network error" },
+        error: { message: "network error", name: "StorageError" },
       });
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const state = await uploadDokumentAction({}, dokumentFormData());
 
-      expect(state.errors?._form).toBeDefined();
-      expect(mockStorageRemove).toHaveBeenCalledWith([
-        `tenant-1/${WEG_ID}/rechnung/${DOC_ID}.pdf`,
-      ]);
+      const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
 
-      // Beide Fehlschlaege muessen protokolliert sein — die verwaiste Datei
-      // bleibt sonst unbemerkt, wenn auch das Aufraeumen scheitert.
+      expect(state.errors?._form).toBeDefined();
+      expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
+
+      const softDeleteCall = mockFrom.mock.results[2]?.value as {
+        update: ReturnType<typeof vi.fn>;
+      };
+      expect(softDeleteCall.update).toHaveBeenCalledWith(
+        expect.objectContaining({ deleted_at: expect.any(String) }),
+      );
+
+      // Alle drei Fehlschlaege muessen protokolliert sein — die verwaiste
+      // Datei UND die kaputte Dokumentzeile bleiben sonst unbemerkt.
       const scopes = consoleError.mock.calls.map((call) => call[0]);
       expect(scopes).toEqual(
         expect.arrayContaining([
           "[uploadDokument.version] request failed",
-          "[uploadDokument.cleanup] request failed",
+          "[uploadDokument.cleanup.storage] request failed",
+          "[uploadDokument.cleanup.document] request failed",
         ]),
       );
 
@@ -225,17 +361,145 @@ describe("uploadDokumentAction", () => {
     },
   );
 
-  it("still reports the save failure when the cleanup succeeds", async () => {
+  it("still reports the save failure when both compensations succeed", async () => {
     mockFrom
       .mockReturnValueOnce(documentInsertOk())
-      .mockReturnValueOnce(versionInsertFails());
+      .mockReturnValueOnce(versionInsertFails())
+      .mockReturnValueOnce(documentCleanupUpdateOk());
 
     const state = await uploadDokumentAction({}, dokumentFormData());
 
+    const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
+
+    expect(state.errors?._form).toBeDefined();
+    expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("neueVersionAction", () => {
+  it("rejects an invalid dokument id before touching the database", async () => {
+    const state = await neueVersionAction(
+      {},
+      neueVersionFormData({ dokument_id: "nope" }),
+    );
+
+    expect(state.errors?._form).toBeDefined();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("requires a file", async () => {
+    const state = await neueVersionAction({}, neueVersionFormData({}, false));
+
+    expect(state.errors?.datei).toBeDefined();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("reports when the document cannot be found for this WEG", async () => {
+    mockFrom.mockReturnValueOnce(documentLookupFails());
+
+    const state = await neueVersionAction({}, neueVersionFormData());
+
+    expect(state.errors?._form).toBeDefined();
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("uploads version 2 to a path distinct from version 1 and bumps version_no", async () => {
+    mockFrom
+      .mockReturnValueOnce(documentLookupOk("rechnung"))
+      .mockReturnValueOnce(versionenListe([{ version_no: 1 }]))
+      .mockReturnValueOnce(versionInsertOk());
+
+    const state = await neueVersionAction({}, neueVersionFormData());
+
+    expect(state.errors).toBeUndefined();
+    expect(state.ok).toBe(true);
+
+    const [path] = mockStorageUpload.mock.calls[0] ?? [];
+    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v2.pdf`);
+    expect(path).not.toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v1.pdf`);
+
+    const versionCall = mockFrom.mock.results[2]?.value as {
+      insert: ReturnType<typeof vi.fn>;
+    };
+    const [versionRow] = versionCall.insert.mock.calls[0] ?? [];
+    expect(versionRow).toMatchObject({ document_id: DOC_ID, version_no: 2 });
+  });
+
+  it("starts at version 1 when the lookup returns no prior version (defensive)", async () => {
+    mockFrom
+      .mockReturnValueOnce(documentLookupOk("rechnung"))
+      .mockReturnValueOnce(versionenListe([]))
+      .mockReturnValueOnce(versionInsertOk());
+
+    await neueVersionAction({}, neueVersionFormData());
+
+    const [path] = mockStorageUpload.mock.calls[0] ?? [];
+    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v1.pdf`);
+  });
+
+  it("stops before Storage when the prior-version lookup fails", async () => {
+    mockFrom
+      .mockReturnValueOnce(documentLookupOk("rechnung"))
+      .mockReturnValueOnce(versionenListeFails());
+
+    const state = await neueVersionAction({}, neueVersionFormData());
+
+    expect(state.errors?._form).toBeDefined();
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("removes the uploaded file when the version insert fails, without touching the document row", async () => {
+    mockFrom
+      .mockReturnValueOnce(documentLookupOk("rechnung"))
+      .mockReturnValueOnce(versionenListe([{ version_no: 1 }]))
+      .mockReturnValueOnce(versionInsertFails());
+
+    const state = await neueVersionAction({}, neueVersionFormData());
+
     expect(state.errors?._form).toBeDefined();
     expect(mockStorageRemove).toHaveBeenCalledWith([
-      `tenant-1/${WEG_ID}/rechnung/${DOC_ID}.pdf`,
+      `tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v2.pdf`,
     ]);
+    // Genau drei from()-Aufrufe: Lookup, Versionsliste, Version-Insert — kein
+    // vierter für ein document-Update, anders als beim Erst-Upload.
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("loescheDokumentAction", () => {
+  it("rejects an invalid id before touching the database", async () => {
+    const state = await loescheDokumentAction(
+      {},
+      loescheFormData({ dokument_id: "nope" }),
+    );
+
+    expect(state.errors?._form).toBeDefined();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("soft-deletes by setting deleted_at, never touching Storage", async () => {
+    mockFrom.mockReturnValueOnce(loescheUpdateOk());
+
+    await loescheDokumentAction({}, loescheFormData());
+
+    const call = mockFrom.mock.results[0]?.value as {
+      update: ReturnType<typeof vi.fn>;
+    };
+    expect(call.update).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String) }),
+    );
+    expect(mockStorageRemove).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
+    expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
+  });
+
+  it("reports a generic error on database failure", async () => {
+    mockFrom.mockReturnValueOnce(loescheUpdateFails());
+
+    const state = await loescheDokumentAction({}, loescheFormData());
+
+    expect(state.errors?._form).toBeDefined();
     expect(redirect).not.toHaveBeenCalled();
   });
 });

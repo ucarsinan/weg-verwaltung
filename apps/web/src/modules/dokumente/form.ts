@@ -86,3 +86,71 @@ export function parseDokumentForm(
     },
   };
 }
+
+export interface NeueVersionFormState {
+  errors?: {
+    datei?: string[];
+    _form?: string[];
+  };
+  ok?: boolean;
+}
+
+export interface NeueVersionInput {
+  wegId: string;
+  dokumentId: string;
+  datei: File;
+}
+
+/**
+ * Validiert nur die Datei — Titel, Art und Dokumentdatum gehören zum
+ * Dokument, nicht zur einzelnen Version, und werden hier nicht erneut
+ * abgefragt.
+ */
+export function parseNeueVersionForm(
+  formData: FormData,
+): ParseResult<NeueVersionInput, NeueVersionFormState> {
+  const errors: NonNullable<NeueVersionFormState["errors"]> = {};
+
+  const wegId = String(formData.get("weg_id") ?? "");
+  const dokumentId = String(formData.get("dokument_id") ?? "");
+  const datei = formData.get("datei");
+
+  if (!UUID_RE.test(wegId) || !UUID_RE.test(dokumentId)) {
+    errors._form = ["Ungültiges Dokument."];
+  }
+
+  if (!(datei instanceof File)) {
+    errors.datei = ["Bitte eine Datei auswählen."];
+  } else {
+    const pruefung = pruefeDatei(datei);
+    if (!pruefung.ok) errors.datei = [pruefung.meldung];
+  }
+
+  if (Object.keys(errors).length > 0) return { errors: { errors } };
+
+  return { input: { wegId, dokumentId, datei: datei as File } };
+}
+
+export interface LoescheDokumentFormState {
+  errors?: {
+    _form?: string[];
+  };
+}
+
+export interface LoescheDokumentInput {
+  wegId: string;
+  dokumentId: string;
+}
+
+export function parseLoescheDokumentForm(
+  formData: FormData,
+): ParseResult<LoescheDokumentInput, LoescheDokumentFormState> {
+  const wegId = String(formData.get("weg_id") ?? "");
+  const dokumentId = String(formData.get("dokument_id") ?? "");
+
+  if (!UUID_RE.test(wegId) || !UUID_RE.test(dokumentId)) {
+    return { errors: { errors: { _form: ["Ungültiges Dokument."] } } };
+  }
+
+  return { input: { wegId, dokumentId } };
+}

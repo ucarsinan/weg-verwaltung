@@ -44,7 +44,14 @@ export function pruefeDatei(datei: File): DateiPruefung {
 }
 
 /**
- * Pfadmuster aus 0015: <tenant>/<weg>/<doc_typ>/<uuid>.<ext>
+ * Pfadmuster: <tenant>/<weg>/<doc_typ>/<uuid>-v<version_no>.<ext>
+ *
+ * Die Versionsnummer ist Teil des Pfads, nicht nur der Datenbankzeile:
+ * `weg-docs` vergibt laut 0015 bewusst keine UPDATE-Policy auf
+ * `storage.objects` ("new versions = new object paths, never overwrite").
+ * Ohne den Versions-Segment würde eine zweite Version derselben Datei-Endung
+ * denselben Pfad treffen wie die erste, und der Upload schlüge mit
+ * "already exists" fehl.
  *
  * Aus dem Dateinamen wird ausschliesslich die Endung uebernommen. Der Name
  * kommt aus dem Browser und ist Nutzereingabe; er darf den Pfad nicht
@@ -55,9 +62,10 @@ export function baueStoragePfad(args: {
   wegId: string;
   docTyp: DocTyp;
   dokumentId: string;
+  versionNo: number;
   dateiname: string;
 }): string {
   const endung = args.dateiname.split(".").pop()?.toLowerCase() ?? "bin";
   const sicher = /^[a-z0-9]{1,8}$/.test(endung) ? endung : "bin";
-  return `${args.tenantId}/${args.wegId}/${args.docTyp}/${args.dokumentId}.${sicher}`;
+  return `${args.tenantId}/${args.wegId}/${args.docTyp}/${args.dokumentId}-v${args.versionNo}.${sicher}`;
 }

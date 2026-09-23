@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarClock,
   FileText,
+  FolderOpen,
   Home,
   LayoutDashboard,
   Users,
@@ -58,6 +59,12 @@ export function WegWorkspaceNav({
       label: "Finanzen",
       href: `/wegs/${wegId}/finanzen`,
       icon: Banknote,
+      exact: false,
+    },
+    {
+      label: "Dokumente",
+      href: `/wegs/${wegId}/dokumente`,
+      icon: FolderOpen,
       exact: false,
     },
   ] as const;

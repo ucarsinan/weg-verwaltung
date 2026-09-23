@@ -15,6 +15,7 @@ import type {
   DocTyp,
   FristHerkunft,
 } from "@/lib/supabase/database.types";
+import NeueVersionForm from "./neue-version-form";
 
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type DokumentUebersichtRow = Database["public"]["Views"]["dokument_uebersicht"]["Row"];
@@ -168,11 +169,13 @@ export default async function DokumentDetailPage({
         <CardHeader>
           <CardTitle>Versionen</CardTitle>
           <CardDescription>
-            Jede hochgeladene Version bleibt erhalten und einzeln
-            herunterladbar — keine überschreibt eine vorhandene Datei.
+            Jede Version bleibt lesbar — eine neue Version ersetzt keine
+            vorhandene Datei, sie ergänzt die Liste.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <NeueVersionForm wegId={wegId} dokumentId={dokumentId} />
+
           {versionRows.length === 0 ? (
             <p
               role="status"
