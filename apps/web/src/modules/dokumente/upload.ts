@@ -44,7 +44,7 @@ export function pruefeDatei(datei: File): DateiPruefung {
 }
 
 /**
- * Pfadmuster: <tenant>/<weg>/<doc_typ>/<uuid>-v<version_no>.<ext>
+ * Pfadmuster: <tenant>/<weg>/<doc_typ>/<uuid>-v<version_no>-<eindeutig>.<ext>
  *
  * Die Versionsnummer ist Teil des Pfads, nicht nur der Datenbankzeile:
  * `weg-docs` vergibt laut 0015 bewusst keine UPDATE-Policy auf
@@ -52,6 +52,18 @@ export function pruefeDatei(datei: File): DateiPruefung {
  * Ohne den Versions-Segment würde eine zweite Version derselben Datei-Endung
  * denselben Pfad treffen wie die erste, und der Upload schlüge mit
  * "already exists" fehl.
+ *
+ * `eindeutig` ist zusätzlich Pflicht, weil dasselbe für einen *Retry* gilt:
+ * `weg-docs` vergibt auch keine DELETE-Policy (0015), eine hochgeladene Datei
+ * kann also nicht zurückgenommen werden, wenn der Datenbank-Insert danach
+ * scheitert — sie bleibt verwaist im Bucket stehen (protokolliert, siehe
+ * `dokumente/actions.ts`). Ohne diesen Zufallsanteil würde ein erneuter
+ * Versuch exakt denselben Pfad wie der gescheiterte errechnen
+ * (`max(version_no) + 1` ändert sich nicht, wenn der Insert nie ankam) und
+ * mit "already exists" scheitern — das Dokument wäre für immer
+ * unversionierbar. Der Aufrufer liefert die Zufälligkeit (z. B.
+ * `randomUUID().slice(0, 8)`), diese Funktion bleibt dadurch rein und
+ * testbar.
  *
  * Aus dem Dateinamen wird ausschliesslich die Endung uebernommen. Der Name
  * kommt aus dem Browser und ist Nutzereingabe; er darf den Pfad nicht
@@ -63,9 +75,10 @@ export function baueStoragePfad(args: {
   docTyp: DocTyp;
   dokumentId: string;
   versionNo: number;
+  eindeutig: string;
   dateiname: string;
 }): string {
   const endung = args.dateiname.split(".").pop()?.toLowerCase() ?? "bin";
   const sicher = /^[a-z0-9]{1,8}$/.test(endung) ? endung : "bin";
-  return `${args.tenantId}/${args.wegId}/${args.docTyp}/${args.dokumentId}-v${args.versionNo}.${sicher}`;
+  return `${args.tenantId}/${args.wegId}/${args.docTyp}/${args.dokumentId}-v${args.versionNo}-${args.eindeutig}.${sicher}`;
 }

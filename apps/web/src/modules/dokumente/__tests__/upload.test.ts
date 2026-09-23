@@ -49,7 +49,7 @@ describe("pruefeDatei", () => {
 });
 
 describe("baueStoragePfad", () => {
-  it("folgt dem Muster tenant/weg/doctyp/id-vN.ext", () => {
+  it("folgt dem Muster tenant/weg/doctyp/id-vN-eindeutig.ext", () => {
     expect(
       baueStoragePfad({
         tenantId: "11111111-1111-4111-8111-111111111111",
@@ -57,10 +57,11 @@ describe("baueStoragePfad", () => {
         docTyp: "rechnung",
         dokumentId: "33333333-3333-4333-8333-333333333333",
         versionNo: 1,
+        eindeutig: "a1b2c3d4",
         dateiname: "Wartung.pdf",
       }),
     ).toBe(
-      "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/rechnung/33333333-3333-4333-8333-333333333333-v1.pdf",
+      "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/rechnung/33333333-3333-4333-8333-333333333333-v1-a1b2c3d4.pdf",
     );
   });
 
@@ -73,6 +74,7 @@ describe("baueStoragePfad", () => {
       wegId: "22222222-2222-4222-8222-222222222222",
       docTyp: "rechnung" as const,
       dokumentId: "33333333-3333-4333-8333-333333333333",
+      eindeutig: "a1b2c3d4",
       dateiname: "Wartung.pdf",
     };
 
@@ -81,13 +83,38 @@ describe("baueStoragePfad", () => {
 
     expect(v1).not.toBe(v2);
     expect(v2).toBe(
-      "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/rechnung/33333333-3333-4333-8333-333333333333-v2.pdf",
+      "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/rechnung/33333333-3333-4333-8333-333333333333-v2-a1b2c3d4.pdf",
     );
   });
 
-  it("nimmt die Endung aus dem Dateinamen und nichts sonst", () => {
+  it("erzeugt bei gleichen Argumenten aber unterschiedlichem eindeutig verschiedene Pfade", () => {
+    // Das ist der eigentliche Zweck von `eindeutig`: ein Retry nach einem
+    // gescheiterten Datenbank-Insert (dieselbe dokumentId, dieselbe
+    // versionNo, weil sich der max(version_no)-Stand nicht geaendert hat)
+    // darf nicht denselben Pfad treffen — die zuvor hochgeladene, jetzt
+    // verwaiste Datei laesst sich mangels DELETE-Policy auf weg-docs (0015)
+    // nicht entfernen, "upsert: false" wuerde also mit "already exists"
+    // scheitern und das Dokument waere fuer immer unversionierbar.
+    const basis = {
+      tenantId: "11111111-1111-4111-8111-111111111111",
+      wegId: "22222222-2222-4222-8222-222222222222",
+      docTyp: "rechnung" as const,
+      dokumentId: "33333333-3333-4333-8333-333333333333",
+      versionNo: 2,
+      dateiname: "Wartung.pdf",
+    };
+
+    const versuch1 = baueStoragePfad({ ...basis, eindeutig: "aaaaaaaa" });
+    const versuch2 = baueStoragePfad({ ...basis, eindeutig: "bbbbbbbb" });
+
+    expect(versuch1).not.toBe(versuch2);
+  });
+
+  it("nimmt eine unverdaechtige Endung aus dem Dateinamen und nichts sonst", () => {
     // Ein Dateiname aus dem Browser ist Nutzereingabe. Nur die Endung wird
-    // uebernommen, der Rest des Namens landet nie im Pfad.
+    // uebernommen, der Rest des Namens landet nie im Pfad — hier ist die
+    // Endung selbst ("pdf") unverdaechtig, die Sanitisierung greift also gar
+    // nicht ein. Der hostile Zweig steht im naechsten Fall.
     expect(
       baueStoragePfad({
         tenantId: "11111111-1111-4111-8111-111111111111",
@@ -95,8 +122,28 @@ describe("baueStoragePfad", () => {
         docTyp: "doku",
         dokumentId: "33333333-3333-4333-8333-333333333333",
         versionNo: 1,
+        eindeutig: "a1b2c3d4",
         dateiname: "../../etc/passwd.pdf",
       }),
-    ).toContain("/doku/33333333-3333-4333-8333-333333333333-v1.pdf");
+    ).toContain("/doku/33333333-3333-4333-8333-333333333333-v1-a1b2c3d4.pdf");
+  });
+
+  it("verwirft eine hostile Endung und faellt auf 'bin' zurueck", () => {
+    // Ohne einen sauberen ".ext"-Suffix ist alles nach dem letzten Punkt
+    // "/etc/passwd" — das besteht die Regex /^[a-z0-9]{1,8}$/ nicht (Slash,
+    // zu lang) und loest genau den Fallback-Zweig aus, den der vorige Test
+    // mangels hostiler Endung nicht erreicht.
+    const pfad = baueStoragePfad({
+      tenantId: "11111111-1111-4111-8111-111111111111",
+      wegId: "22222222-2222-4222-8222-222222222222",
+      docTyp: "doku",
+      dokumentId: "33333333-3333-4333-8333-333333333333",
+      versionNo: 1,
+      eindeutig: "a1b2c3d4",
+      dateiname: "../../etc/passwd",
+    });
+
+    expect(pfad).not.toContain("passwd");
+    expect(pfad).toMatch(/\.bin$/);
   });
 });

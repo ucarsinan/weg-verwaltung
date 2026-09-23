@@ -38,4 +38,30 @@ describe("0070 weg-docs Bucket-Grenze", () => {
       new RegExp(`file_size_limit\\s*=\\s*${MAX_UPLOAD_BYTES}\\b`),
     );
   });
+
+  it("next.config.ts serverActions.bodySizeLimit entspricht ebenfalls MAX_UPLOAD_BYTES", () => {
+    // Die Migration allein bindet nur zwei der drei Stellen zusammen — ohne
+    // diese Zusicherung könnte next.config.ts unbemerkt allein abweichen,
+    // und genau das wäre der raetselhafte 413, den ein Nutzer zu sehen
+    // bekäme (Server Action lehnt ab, obwohl der Bucket die Datei erlauben
+    // würde, oder umgekehrt).
+    const nextConfig = readFileSync(
+      path.resolve(process.cwd(), "next.config.ts"),
+      "utf-8",
+    );
+
+    const match = /bodySizeLimit:\s*"(\d+)(kb|mb|gb)"/i.exec(nextConfig);
+    if (!match) throw new Error("bodySizeLimit nicht in next.config.ts gefunden.");
+
+    const [, zahlText, einheit] = match;
+    // Next.js parst diese Zeichenkette selbst ueber das "bytes"-Paket, das
+    // fuer kb/mb/gb binaere Einheiten verwendet (1 mb = 1024 * 1024) —
+    // dieselbe Rechnung hier, nachgerechnet statt bloss abgeschrieben.
+    const faktor = { kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 }[
+      einheit!.toLowerCase() as "kb" | "mb" | "gb"
+    ];
+    const bodySizeLimitBytes = Number(zahlText) * faktor;
+
+    expect(bodySizeLimitBytes).toBe(MAX_UPLOAD_BYTES);
+  });
 });

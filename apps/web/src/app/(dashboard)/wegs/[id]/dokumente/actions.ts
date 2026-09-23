@@ -2,7 +2,6 @@
 
 import { createHash, randomUUID } from "node:crypto";
 
-import type { ActionContext } from "@/modules/action-kernel";
 import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
 import {
   baueStoragePfad,
@@ -11,36 +10,44 @@ import {
   parseNeueVersionForm,
 } from "@/modules/dokumente";
 import type {
-  DokumentFormState,
+  DokumentFormState as ModuleDokumentFormState,
   DokumentInput,
-  LoescheDokumentFormState,
+  LoescheDokumentFormState as ModuleLoescheDokumentFormState,
   LoescheDokumentInput,
-  NeueVersionFormState,
+  NeueVersionFormState as ModuleNeueVersionFormState,
   NeueVersionInput,
 } from "@/modules/dokumente";
 import type { DocTyp } from "@/lib/supabase/database.types";
 
-export type {
-  DokumentFormState,
-  LoescheDokumentFormState,
-  NeueVersionFormState,
-} from "@/modules/dokumente";
+// Lokale Typ-Aliase statt `export type {...} from …` — dasselbe Muster wie
+// agent-actions.ts: "use server"-Dateien vertragen laut dortigem Kommentar
+// keine `export type {…}`-Re-Exports unter Turbopack.
+export type DokumentFormState = ModuleDokumentFormState;
+export type LoescheDokumentFormState = ModuleLoescheDokumentFormState;
+export type NeueVersionFormState = ModuleNeueVersionFormState;
 
 /**
- * Entfernt eine hochgeladene Datei wieder, wenn der Datenbankschritt danach
- * scheitert, und protokolliert einen Fehlschlag beim Aufräumen selbst statt
- * ihn zu verschlucken — sonst bleibt eine verwaiste Datei unbemerkt. Von
- * `uploadDokumentAction` und `neueVersionAction` geteilt.
+ * `weg-docs` vergibt laut 0015 bewusst weder eine UPDATE- noch eine
+ * DELETE-Policy auf `storage.objects`: "if a real delete is ever needed, it
+ * goes through a SECURITY DEFINER admin function with audit log entry. No
+ * app-side path." Eine Server Action kann eine schon hochgeladene Datei also
+ * grundsätzlich nicht mehr zurücknehmen, wenn der Datenbankschritt danach
+ * scheitert — es gibt keine Kompensation, die das ausführen könnte. Diese
+ * Funktion verschweigt die verwaiste Datei deshalb nicht, sondern
+ * protokolliert sie auffindbar: vollständiger Pfad und Dokument-ID, damit ein
+ * Betreiber sie bei Bedarf über die Admin-Funktion aus 0015 von Hand entfernt.
  */
-async function raeumeDateiAuf(
-  ctx: ActionContext,
-  pfad: string,
+function protokolliereVerwaisteDatei(
   scope: string,
-): Promise<void> {
-  const { error } = await ctx.supabase.storage.from("weg-docs").remove([pfad]);
-  if (error) {
-    logPostgrestError(scope, { code: error.name, hint: error.message });
-  }
+  pfad: string,
+  dokumentId: string,
+): void {
+  console.error(
+    `[${scope}] orphaned storage object — weg-docs grants no delete policy ` +
+      "(0015); an uploaded file with no database row was left behind and " +
+      "needs manual cleanup via the SECURITY DEFINER admin function",
+    { pfad, dokumentId },
+  );
 }
 
 export async function uploadDokumentAction(
@@ -60,6 +67,9 @@ export async function uploadDokumentAction(
         // scheitert. Der häufigste Fehler (schlechte Datei, Storage-Problem)
         // hinterlässt so gar keine Datenbankzeile.
         const documentId = randomUUID();
+        // Macht einen Retry nach einem gescheiterten Insert kollisionsfrei —
+        // siehe Doc-Kommentar von baueStoragePfad.
+        const eindeutig = randomUUID().slice(0, 8);
 
         const pfad = baueStoragePfad({
           tenantId: ctx.tenantId,
@@ -67,6 +77,7 @@ export async function uploadDokumentAction(
           docTyp: input.docTyp,
           dokumentId: documentId,
           versionNo: 1,
+          eindeutig,
           dateiname: input.datei.name,
         });
 
@@ -110,7 +121,9 @@ export async function uploadDokumentAction(
 
         if (docError || !doc) {
           logPostgrestError("uploadDokument.document", docError ?? {});
-          await raeumeDateiAuf(ctx, pfad, "uploadDokument.cleanup.storage");
+          // Keine Kompensation möglich (siehe protokolliereVerwaisteDatei) —
+          // die Datei bleibt im Bucket stehen, protokolliert statt verschwiegen.
+          protokolliereVerwaisteDatei("uploadDokument", pfad, documentId);
           return { errors: { errors: { _form: ["Anlegen fehlgeschlagen."] } } };
         }
 
@@ -133,13 +146,11 @@ export async function uploadDokumentAction(
 
         if (versionError) {
           logPostgrestError("uploadDokument.version", versionError);
-          // Kompensation in zwei Richtungen: Storage und Datenbank liegen
-          // nicht in einer Transaktion. Die Datei wird entfernt, UND die
-          // gerade erst angelegte Dokumentzeile wird soft-gelöscht — ohne
-          // Version wäre sie eine Sackgasse (kein Hard-Delete möglich, 0015).
-          // Scheitert eines von beidem, wird das protokolliert statt
-          // verschwiegen.
-          await raeumeDateiAuf(ctx, pfad, "uploadDokument.cleanup.storage");
+          // Auch hier keine Kompensation der Datei möglich. Die Dokumentzeile
+          // wird trotzdem soft-gelöscht — ohne Version wäre sie sonst eine
+          // Sackgasse (kein Hard-Delete möglich, 0015); scheitert das,
+          // protokolliert wie jeder andere Fehler.
+          protokolliereVerwaisteDatei("uploadDokument", pfad, doc.id);
 
           const { error: documentCleanupError } = await ctx.supabase
             .from("document")
@@ -212,6 +223,12 @@ export async function neueVersionAction(
         }
 
         const naechsteVersionNo = (bisherige?.[0]?.version_no ?? 0) + 1;
+        // Macht einen Retry nach einem gescheiterten Insert kollisionsfrei —
+        // ohne diesen Anteil würde ein erneuter Versuch mit unverändertem
+        // `naechsteVersionNo` exakt denselben Pfad treffen wie der
+        // gescheiterte, und "already exists" scheitern, ohne dass die alte
+        // Datei entfernbar wäre (0015: keine DELETE-Policy).
+        const eindeutig = randomUUID().slice(0, 8);
 
         const pfad = baueStoragePfad({
           tenantId: ctx.tenantId,
@@ -219,6 +236,7 @@ export async function neueVersionAction(
           docTyp: doc.doc_typ as DocTyp,
           dokumentId: input.dokumentId,
           versionNo: naechsteVersionNo,
+          eindeutig,
           dateiname: input.datei.name,
         });
 
@@ -257,10 +275,11 @@ export async function neueVersionAction(
 
         if (versionError) {
           logPostgrestError("neueVersion.version", versionError);
-          // Das Dokument selbst bleibt unangetastet — anders als beim
-          // Erst-Upload existiert es schon mit mindestens einer gültigen
-          // Version, ein Soft-Delete wäre hier falsch.
-          await raeumeDateiAuf(ctx, pfad, "neueVersion.cleanup.storage");
+          // Keine Kompensation möglich (0015: keine DELETE-Policy auf
+          // storage.objects) — protokolliert statt verschwiegen. Das
+          // Dokument selbst bleibt unangetastet: es existiert schon mit
+          // mindestens einer gültigen Version, ein Soft-Delete wäre falsch.
+          protokolliereVerwaisteDatei("neueVersion", pfad, input.dokumentId);
           return {
             errors: { errors: { _form: ["Speichern fehlgeschlagen."] } },
           };
@@ -293,11 +312,17 @@ export async function loescheDokumentAction(
         // `document`, und das Storage-Objekt bleibt unangetastet — die
         // Verwaltungsunterlagen gehören der WEG, der Verwalter verwahrt sie
         // treuhänderisch und gibt sie heraus, statt sie zu vernichten.
-        const { error } = await ctx.supabase
+        //
+        // `.select("id")` ist Pflicht, nicht Kosmetik: PostgREST meldet für
+        // ein UPDATE, das null Zeilen trifft (falsche weg_id, schon entfernt,
+        // erratene ID), keinen Fehler — ohne die Rückgabe zu prüfen, würde
+        // der Nutzer "entfernt" hören, obwohl nichts passiert ist.
+        const { data, error } = await ctx.supabase
           .from("document")
           .update({ deleted_at: new Date().toISOString() })
           .eq("id", input.dokumentId)
-          .eq("weg_id", input.wegId);
+          .eq("weg_id", input.wegId)
+          .select("id");
 
         if (error) {
           logPostgrestError("loescheDokument", error);
@@ -305,6 +330,12 @@ export async function loescheDokumentAction(
             errors: {
               errors: { _form: ["Entfernen aus der Liste fehlgeschlagen."] },
             },
+          };
+        }
+
+        if (!data || data.length === 0) {
+          return {
+            errors: { errors: { _form: ["Dokument wurde nicht gefunden."] } },
           };
         }
 

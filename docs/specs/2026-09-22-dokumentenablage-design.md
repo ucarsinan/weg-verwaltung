@@ -178,22 +178,15 @@ auditiert. `0069` hängt den Standard-Emitter aus `0026` an `document`.
 | --- | --- |
 | `/wegs/[id]/dokumente` | Liste[^t3] |
 | `/wegs/[id]/dokumente/neu` | Hochladen |
-| `/wegs/[id]/dokumente/[dokumentId]` | Versionen, Herunterladen[^t3] |
+| `/wegs/[id]/dokumente/[dokumentId]` | Versionen, neue Version, Herunterladen |
 | `/einstellungen/aufbewahrung` | Fristregeln bearbeiten |
 
 Dokumente hängen an der WEG, die Fristregeln am Mandanten — deshalb die
 getrennten Orte.
 
-[^t3]: Task 3 hat die Liste ohne Filter nach Art/Jahr gebaut und die
-    Detailseite ohne „neue Version hochladen" — der Task-Brief gab für beide
-    Seiten nur Struktur und tragende Abfrage vor, keine Formularfelder oder
-    Fehlerzustände für diese beiden Funktionen. Bevor eine „neue Version"
-    ergänzt wird, muss zudem `baueStoragePfad` (`modules/dokumente/upload.ts`,
-    Task 2) um die Versionsnummer erweitert werden: der Pfad hängt bisher nur
-    von `dokumentId` ab, eine zweite Version mit gleicher Dateiendung würde
-    also denselben Storage-Pfad treffen wie die erste — `weg-docs` erlaubt laut
-    0015 aber kein Overwrite (keine UPDATE-Policy auf `storage.objects`), der
-    Upload schlüge fehl. Details: `task-3-report.md`.
+[^t3]: Task 3 hat die Liste ohne Filter nach Art/Jahr gebaut — der Task-Brief
+    gab nur Struktur und tragende Abfrage vor, kein Filter-UI. Details:
+    `task-3-report.md`.
 
 Neues Modul `modules/dokumente` nach dem Muster von `modules/finanzen`:
 `index.ts` als Barrel, Fachlogik daneben, `__tests__`. Server Actions über
@@ -233,10 +226,17 @@ umgeht das Limit nur scheinbar — der Server müsste die Datei zum Prüfsummenb
 zurücklesen, sie flösse also doch durch, nur später und mit zwei Fehlerquellen
 mehr.
 
-**Verwaiste Dateien.** Storage und Datenbank liegen nicht in einer Transaktion.
-Schlägt der Datenbank-Eintrag nach erfolgreichem Upload fehl, wird die Datei
-wieder entfernt; scheitert auch das, protokolliert die Action es, statt zu
-schweigen.
+**Verwaiste Dateien.** Storage und Datenbank liegen nicht in einer
+Transaktion. `weg-docs` vergibt laut 0015 bewusst weder eine UPDATE- noch eine
+DELETE-Policy auf `storage.objects` — "if a real delete is ever needed, it
+goes through a SECURITY DEFINER admin function with audit log entry. No
+app-side path." Schlägt der Datenbank-Eintrag nach einem erfolgreichen Upload
+fehl, kann die Datei deshalb **nicht** zurückgenommen werden: sie bleibt im
+Bucket stehen. Eine Kompensation, die sie entfernt, gibt es nicht und kann es
+mit den vergebenen Rechten nicht geben. Die Action verschweigt das nicht,
+sondern protokolliert den vollständigen Pfad und die Dokument-ID, damit ein
+Betreiber die Datei bei Bedarf über die Admin-Funktion aus 0015 von Hand
+entfernt.
 
 **Bekanntes Restrisiko: gleichzeitige "neue Version".** `neueVersionAction`
 liest die höchste vorhandene `version_no` und schreibt `version_no + 1` —
@@ -245,10 +245,17 @@ Moment eine neue Version desselben Dokuments hoch, können beide dieselbe
 Nummer berechnen. Das ist akzeptiert, kein offener Fehler: `unique (tenant_id,
 document_id, version_no)` (0015, Zeile 77) lässt die zweite, unterlegene
 Version mit `23505` scheitern, statt beide unbemerkt nebeneinander stehen zu
-lassen; die Action fängt das wie jeden anderen Datenbankfehler ab, entfernt
-die schon hochgeladene Datei wieder (Kompensation, siehe oben) und meldet dem
-Nutzer einen Fehler. Es geht dabei nichts verloren und nichts wird still
-überschrieben — das Fenster schließt fail-closed, nicht fail-silent.
+lassen; die Action fängt das wie jeden anderen Datenbankfehler ab und meldet
+dem Nutzer einen Fehler. Ihre schon hochgeladene Datei bleibt dabei verwaist
+im Bucket stehen — siehe „Verwaiste Dateien" oben, dieselbe Einschränkung
+gilt hier unverändert. Die beiden Uploads kollidieren dabei nicht
+miteinander: jeder Versuch bekommt über `eindeutig` (`randomUUID().slice(0,
+8)`, siehe `modules/dokumente/upload.ts`) einen eigenen Zufallsanteil im
+Pfad, die Dateien landen also nebeneinander im Bucket statt sich
+gegenseitig zu überschreiben. An der Datenintegrität geht nichts verloren und
+nichts wird still überschrieben — das Fenster schließt fail-closed, nicht
+fail-silent, mit einer protokollierten Datei-Leiche als einzigem
+Nebeneffekt.
 
 Ein echter Fix (eine `SECURITY DEFINER`-RPC, die `select max(version_no) …
 for update` und den Insert in derselben Transaktion sperrt) wäre eine neue

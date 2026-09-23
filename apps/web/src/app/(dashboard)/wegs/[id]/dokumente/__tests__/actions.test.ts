@@ -32,11 +32,10 @@ const DOC_ID = "33333333-3333-4333-8333-333333333333";
 
 const mockFrom = vi.fn();
 const mockStorageUpload = vi.fn();
-const mockStorageRemove = vi.fn();
-const mockStorageFrom = vi.fn(() => ({
-  upload: mockStorageUpload,
-  remove: mockStorageRemove,
-}));
+// Kein `remove` mehr: weg-docs vergibt laut 0015 keine DELETE-Policy auf
+// storage.objects, die Action ruft es also nie auf (siehe Ruling zu Fix
+// Round 1 — `raeumeDateiAuf` war totes/unausführbares Kompensationscode).
+const mockStorageFrom = vi.fn(() => ({ upload: mockStorageUpload }));
 
 const mockAuth = {
   getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
@@ -65,7 +64,17 @@ import {
 } from "../actions";
 
 const PDF = new File(["inhalt"], "wartung.pdf", { type: "application/pdf" });
-const UUID_IN_PFAD_RE = /\/([0-9a-f-]{36})-v\d+\.\w+$/i;
+
+/** Pfadmuster: tenant/weg/doctyp/<uuid>-v<versionNo>-<eindeutig, 8 Hex>.ext */
+function parsePfad(pfad: string) {
+  const match = new RegExp(
+    `^tenant-1/${WEG_ID}/rechnung/([0-9a-f-]{36})-v(\\d+)-([0-9a-f]{8})\\.pdf$`,
+    "i",
+  ).exec(pfad);
+  return match
+    ? { dokumentId: match[1], versionNo: Number(match[2]), eindeutig: match[3] }
+    : null;
+}
 
 /**
  * Erfolgreicher `insert(...).select("id").single()`-Pfad fuer das Dokument.
@@ -103,6 +112,8 @@ function versionInsertFails(error: { code?: string } = { code: "500" }) {
 /**
  * `.update({...}).eq("id", ...)` — die Soft-Delete-Kompensation in
  * `uploadDokumentAction`, wenn der Versions-Insert scheitert (ein `eq`).
+ * Betrifft nur die Dokumentzeile — die Datei selbst kann nicht kompensiert
+ * werden (siehe orphanCall-Assertions), das ist der Kern von Fix Round 1.
  */
 function documentCleanupUpdateOk() {
   const eq = vi.fn().mockResolvedValue({ error: null });
@@ -115,17 +126,23 @@ function documentCleanupUpdateFails(error: { code?: string } = { code: "500" }) 
 }
 
 /**
- * `.update({...}).eq("id", ...).eq("weg_id", ...)` — `loescheDokumentAction`
- * filtert zusaetzlich nach der WEG (zwei verkettete `eq`).
+ * `.update({...}).eq("id", ...).eq("weg_id", ...).select("id")` —
+ * `loescheDokumentAction`. Das `.select("id")` ist Pflicht in der echten
+ * Action (PostgREST meldet sonst keinen Fehler bei null getroffenen Zeilen),
+ * die Mocks bilden das nach: `matchedIds` steuert, was `data` liefert.
  */
-function loescheUpdateOk() {
-  const eq2 = vi.fn().mockResolvedValue({ error: null });
+function loescheUpdateOk(matchedIds: string[] = [DOC_ID]) {
+  const select = vi
+    .fn()
+    .mockResolvedValue({ data: matchedIds.map((id) => ({ id })), error: null });
+  const eq2 = vi.fn().mockReturnValue({ select });
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
   return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
 }
 
 function loescheUpdateFails(error: { code?: string } = { code: "500" }) {
-  const eq2 = vi.fn().mockResolvedValue({ error });
+  const select = vi.fn().mockResolvedValue({ data: null, error });
+  const eq2 = vi.fn().mockReturnValue({ select });
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
   return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
 }
@@ -217,7 +234,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFrom.mockReset();
   mockStorageUpload.mockReset().mockResolvedValue({ error: null });
-  mockStorageRemove.mockReset().mockResolvedValue({ error: null });
 });
 
 describe("uploadDokumentAction", () => {
@@ -255,16 +271,16 @@ describe("uploadDokumentAction", () => {
     await uploadDokumentAction({}, dokumentFormData());
 
     // Storage zuerst: der Pfad enthaelt schon die ID, die erst danach in die
-    // Dokumentzeile geschrieben wird (Ruling 2), und das Versions-Segment
-    // "-v1" (Ruling 1). Die ID selbst kommt aus dem echten
+    // Dokumentzeile geschrieben wird, das Versions-Segment "-v1" und ein
+    // Zufallsanteil ("eindeutig"). Die ID selbst kommt aus dem echten
     // `crypto.randomUUID()` — hier aus dem tatsaechlichen Aufruf gelesen,
     // statt sie zu mocken.
     expect(mockStorageFrom).toHaveBeenCalledWith("weg-docs");
     expect(mockStorageUpload).toHaveBeenCalledTimes(1);
     const [path, bytes, options] = mockStorageUpload.mock.calls[0] ?? [];
-    const generierteId = UUID_IN_PFAD_RE.exec(path)?.[1];
-    expect(generierteId).toBeDefined();
-    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${generierteId}-v1.pdf`);
+    const geparst = parsePfad(path);
+    expect(geparst).not.toBeNull();
+    expect(geparst?.versionNo).toBe(1);
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(options).toEqual({ contentType: "application/pdf", upsert: false });
 
@@ -273,7 +289,7 @@ describe("uploadDokumentAction", () => {
       insert: ReturnType<typeof vi.fn>;
     };
     const [documentRow] = documentCall.insert.mock.calls[0] ?? [];
-    expect(documentRow).toMatchObject({ id: generierteId, weg_id: WEG_ID });
+    expect(documentRow).toMatchObject({ id: geparst?.dokumentId, weg_id: WEG_ID });
 
     // Die Version traegt die serverseitig berechnete Pruefsumme, hex-codiert
     // mit dem PostgREST-bytea-Praefix "\x" — kein rohes Buffer-Objekt.
@@ -282,7 +298,7 @@ describe("uploadDokumentAction", () => {
     };
     const [versionRow] = versionCall.insert.mock.calls[0] ?? [];
     expect(versionRow).toMatchObject({
-      document_id: generierteId,
+      document_id: geparst?.dokumentId,
       version_no: 1,
       storage_path: path,
       mime_type: "application/pdf",
@@ -296,7 +312,9 @@ describe("uploadDokumentAction", () => {
   });
 
   it("never touches the database when the Storage upload fails", async () => {
-    mockStorageUpload.mockResolvedValue({ error: { message: "network error", name: "StorageError" } });
+    mockStorageUpload.mockResolvedValue({
+      error: { message: "network error", name: "StorageError" },
+    });
 
     const state = await uploadDokumentAction({}, dokumentFormData());
 
@@ -305,31 +323,11 @@ describe("uploadDokumentAction", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("removes the just-uploaded file when the document insert fails", async () => {
-    mockFrom.mockReturnValueOnce(documentInsertFails());
-
-    const state = await uploadDokumentAction({}, dokumentFormData());
-
-    const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
-
-    expect(state.errors?._form).toBeDefined();
-    // Kein document_version-Versuch — nur EIN from()-Aufruf (das Dokument).
-    expect(mockFrom).toHaveBeenCalledTimes(1);
-    expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
-    expect(redirect).not.toHaveBeenCalled();
-  });
-
   it(
-    "removes the file and soft-deletes the document when the version insert " +
-      "fails, logging both compensating failures honestly",
+    "logs the orphaned file when the document insert fails, since weg-docs " +
+      "grants no delete policy (0015) to remove it",
     async () => {
-      mockFrom
-        .mockReturnValueOnce(documentInsertOk())
-        .mockReturnValueOnce(versionInsertFails({ code: "23502" }))
-        .mockReturnValueOnce(documentCleanupUpdateFails());
-      mockStorageRemove.mockResolvedValue({
-        error: { message: "network error", name: "StorageError" },
-      });
+      mockFrom.mockReturnValueOnce(documentInsertFails());
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const state = await uploadDokumentAction({}, dokumentFormData());
@@ -337,7 +335,35 @@ describe("uploadDokumentAction", () => {
       const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
 
       expect(state.errors?._form).toBeDefined();
-      expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
+      // Kein document_version-Versuch — nur EIN from()-Aufruf (das Dokument).
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+      expect(redirect).not.toHaveBeenCalled();
+
+      const orphanCall = consoleError.mock.calls.find((call) =>
+        String(call[0]).includes("[uploadDokument] orphaned storage object"),
+      );
+      expect(orphanCall).toBeDefined();
+      expect(orphanCall?.[1]).toMatchObject({ pfad: uploadedPath });
+
+      consoleError.mockRestore();
+    },
+  );
+
+  it(
+    "logs the orphaned file and soft-deletes the document when the version " +
+      "insert fails",
+    async () => {
+      mockFrom
+        .mockReturnValueOnce(documentInsertOk())
+        .mockReturnValueOnce(versionInsertFails({ code: "23502" }))
+        .mockReturnValueOnce(documentCleanupUpdateFails());
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const state = await uploadDokumentAction({}, dokumentFormData());
+
+      const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
+
+      expect(state.errors?._form).toBeDefined();
 
       const softDeleteCall = mockFrom.mock.results[2]?.value as {
         update: ReturnType<typeof vi.fn>;
@@ -346,22 +372,33 @@ describe("uploadDokumentAction", () => {
         expect.objectContaining({ deleted_at: expect.any(String) }),
       );
 
-      // Alle drei Fehlschlaege muessen protokolliert sein — die verwaiste
-      // Datei UND die kaputte Dokumentzeile bleiben sonst unbemerkt.
-      const scopes = consoleError.mock.calls.map((call) => call[0]);
-      expect(scopes).toEqual(
-        expect.arrayContaining([
-          "[uploadDokument.version] request failed",
-          "[uploadDokument.cleanup.storage] request failed",
-          "[uploadDokument.cleanup.document] request failed",
-        ]),
+      // Die Datei kann nicht entfernt werden (0015: keine DELETE-Policy auf
+      // storage.objects) — sie muss protokolliert sein, ebenso der
+      // fehlgeschlagene Insert UND der fehlgeschlagene Kompensationsversuch
+      // für die Dokumentzeile. Alle drei einzeln, nichts verschluckt.
+      const scopes = consoleError.mock.calls.map((call) => String(call[0]));
+      expect(
+        scopes.some((s) => s.includes("[uploadDokument.version] request failed")),
+      ).toBe(true);
+      expect(
+        scopes.some((s) => s.includes("[uploadDokument] orphaned storage object")),
+      ).toBe(true);
+      expect(
+        scopes.some((s) =>
+          s.includes("[uploadDokument.cleanup.document] request failed"),
+        ),
+      ).toBe(true);
+
+      const orphanCall = consoleError.mock.calls.find((call) =>
+        String(call[0]).includes("orphaned storage object"),
       );
+      expect(orphanCall?.[1]).toMatchObject({ pfad: uploadedPath });
 
       consoleError.mockRestore();
     },
   );
 
-  it("still reports the save failure when both compensations succeed", async () => {
+  it("still reports the save failure when the document soft-delete succeeds", async () => {
     mockFrom
       .mockReturnValueOnce(documentInsertOk())
       .mockReturnValueOnce(versionInsertFails())
@@ -369,10 +406,7 @@ describe("uploadDokumentAction", () => {
 
     const state = await uploadDokumentAction({}, dokumentFormData());
 
-    const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
-
     expect(state.errors?._form).toBeDefined();
-    expect(mockStorageRemove).toHaveBeenCalledWith([uploadedPath]);
     expect(redirect).not.toHaveBeenCalled();
   });
 });
@@ -416,14 +450,18 @@ describe("neueVersionAction", () => {
     expect(state.ok).toBe(true);
 
     const [path] = mockStorageUpload.mock.calls[0] ?? [];
-    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v2.pdf`);
-    expect(path).not.toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v1.pdf`);
+    const geparst = parsePfad(path);
+    expect(geparst).toMatchObject({ dokumentId: DOC_ID, versionNo: 2 });
 
     const versionCall = mockFrom.mock.results[2]?.value as {
       insert: ReturnType<typeof vi.fn>;
     };
     const [versionRow] = versionCall.insert.mock.calls[0] ?? [];
-    expect(versionRow).toMatchObject({ document_id: DOC_ID, version_no: 2 });
+    expect(versionRow).toMatchObject({
+      document_id: DOC_ID,
+      version_no: 2,
+      storage_path: path,
+    });
   });
 
   it("starts at version 1 when the lookup returns no prior version (defensive)", async () => {
@@ -435,7 +473,7 @@ describe("neueVersionAction", () => {
     await neueVersionAction({}, neueVersionFormData());
 
     const [path] = mockStorageUpload.mock.calls[0] ?? [];
-    expect(path).toBe(`tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v1.pdf`);
+    expect(parsePfad(path)).toMatchObject({ dokumentId: DOC_ID, versionNo: 1 });
   });
 
   it("stops before Storage when the prior-version lookup fails", async () => {
@@ -449,22 +487,68 @@ describe("neueVersionAction", () => {
     expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
-  it("removes the uploaded file when the version insert fails, without touching the document row", async () => {
-    mockFrom
-      .mockReturnValueOnce(documentLookupOk("rechnung"))
-      .mockReturnValueOnce(versionenListe([{ version_no: 1 }]))
-      .mockReturnValueOnce(versionInsertFails());
+  it(
+    "logs the orphaned file when the version insert fails, without touching " +
+      "the document row",
+    async () => {
+      mockFrom
+        .mockReturnValueOnce(documentLookupOk("rechnung"))
+        .mockReturnValueOnce(versionenListe([{ version_no: 1 }]))
+        .mockReturnValueOnce(versionInsertFails());
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const state = await neueVersionAction({}, neueVersionFormData());
+      const state = await neueVersionAction({}, neueVersionFormData());
 
-    expect(state.errors?._form).toBeDefined();
-    expect(mockStorageRemove).toHaveBeenCalledWith([
-      `tenant-1/${WEG_ID}/rechnung/${DOC_ID}-v2.pdf`,
-    ]);
-    // Genau drei from()-Aufrufe: Lookup, Versionsliste, Version-Insert — kein
-    // vierter für ein document-Update, anders als beim Erst-Upload.
-    expect(mockFrom).toHaveBeenCalledTimes(3);
-  });
+      const [uploadedPath] = mockStorageUpload.mock.calls[0] ?? [];
+
+      expect(state.errors?._form).toBeDefined();
+
+      const orphanCall = consoleError.mock.calls.find((call) =>
+        String(call[0]).includes("[neueVersion] orphaned storage object"),
+      );
+      expect(orphanCall).toBeDefined();
+      expect(orphanCall?.[1]).toMatchObject({
+        pfad: uploadedPath,
+        dokumentId: DOC_ID,
+      });
+
+      // Genau drei from()-Aufrufe: Lookup, Versionsliste, Version-Insert —
+      // kein vierter für ein document-Update, anders als beim Erst-Upload.
+      expect(mockFrom).toHaveBeenCalledTimes(3);
+
+      consoleError.mockRestore();
+    },
+  );
+
+  it(
+    "computes a different path on a retry, so a failed attempt can never " +
+      "collide with the next one",
+    async () => {
+      // Simuliert genau das Szenario, das `eindeutig` verhindert: der erste
+      // Versuch scheitert nach dem Upload, max(version_no) bleibt
+      // unveraendert (der Insert kam nie an), ein zweiter Versuch mit
+      // denselben Formulardaten würde ohne `eindeutig` exakt denselben Pfad
+      // berechnen und mit "already exists" scheitern — das Dokument wäre für
+      // immer unversionierbar.
+      mockFrom
+        .mockReturnValueOnce(documentLookupOk("rechnung"))
+        .mockReturnValueOnce(versionenListe([{ version_no: 1 }]))
+        .mockReturnValueOnce(versionInsertFails());
+      await neueVersionAction({}, neueVersionFormData());
+      const [ersterPfad] = mockStorageUpload.mock.calls[0] ?? [];
+
+      mockFrom
+        .mockReturnValueOnce(documentLookupOk("rechnung"))
+        .mockReturnValueOnce(versionenListe([{ version_no: 1 }])) // unveraendert
+        .mockReturnValueOnce(versionInsertOk());
+      await neueVersionAction({}, neueVersionFormData());
+      const [zweiterPfad] = mockStorageUpload.mock.calls[1] ?? [];
+
+      expect(ersterPfad).not.toBe(zweiterPfad);
+      expect(parsePfad(ersterPfad)).toMatchObject({ versionNo: 2 });
+      expect(parsePfad(zweiterPfad)).toMatchObject({ versionNo: 2 });
+    },
+  );
 });
 
 describe("loescheDokumentAction", () => {
@@ -489,7 +573,7 @@ describe("loescheDokumentAction", () => {
     expect(call.update).toHaveBeenCalledWith(
       expect.objectContaining({ deleted_at: expect.any(String) }),
     );
-    expect(mockStorageRemove).not.toHaveBeenCalled();
+    expect(mockStorageFrom).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
     expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
   });
@@ -502,4 +586,22 @@ describe("loescheDokumentAction", () => {
     expect(state.errors?._form).toBeDefined();
     expect(redirect).not.toHaveBeenCalled();
   });
+
+  it(
+    "reports not-found when the update matches nothing, instead of telling " +
+      "the user it was removed",
+    async () => {
+      // PostgREST meldet fuer ein UPDATE, das null Zeilen trifft, keinen
+      // Fehler — ohne `.select("id")` und diese Pruefung wuerde der Nutzer
+      // "entfernt" hoeren, obwohl nichts passiert ist (falsche weg_id, schon
+      // entfernt, oder eine erratene ID).
+      mockFrom.mockReturnValueOnce(loescheUpdateOk([]));
+
+      const state = await loescheDokumentAction({}, loescheFormData());
+
+      expect(state.errors?._form).toBeDefined();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
 });
