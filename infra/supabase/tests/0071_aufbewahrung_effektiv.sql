@@ -15,6 +15,13 @@
 --     Mandanten (Test unter "set local role authenticated", nicht als
 --     "postgres" — der Table-Owner hat BYPASSRLS, FORCE ROW LEVEL SECURITY
 --     waere sonst wirkungslos und die Zusicherung vakuos, siehe 0069)
+--   - der Zwei-Hop-Pfad durch BEIDE Sichten (dokument_uebersicht ->
+--     aufbewahrung_effektiv -> aufbewahrungsregel) haelt die Mandantentrennung
+--     ein: zwei Mandanten, DERSELBE doc_typ, je eine eigene Regel — jeder
+--     sieht ueber dokument_uebersicht nur seine eigene Frist (Fix Round 1:
+--     der explizite "ae.tenant_id = d.tenant_id"-Abgleich, den 0069 schon
+--     hatte und den die erste Fassung dieser Migration ersatzlos entfernt
+--     hatte, ohne dass RLS allein ungetestet blieb)
 --
 -- infra/supabase/tests/0069_dokumentenablage.sql bleibt unveraendert gueltig:
 -- dokument_uebersicht aendert sich an der Oberflaeche nicht, nur ihre interne
@@ -23,7 +30,7 @@
 
 begin;
 
-select plan(10);
+select plan(12);
 
 -- ===========================================================================
 -- Fixtures
@@ -89,6 +96,32 @@ select ok(
      from public.aufbewahrung_effektiv
     where doc_typ = 'rechnung'),
   'eine Mandantenregel von 12 Jahren verschiebt Jahre UND Herkunft, rechtsgrundlage wird durchgereicht'
+);
+
+-- ===========================================================================
+-- 3b. Derselbe Tenant-Abgleich, jetzt durch den Zwei-Hop-Pfad geprueft:
+--     dokument_uebersicht -> aufbewahrung_effektiv -> aufbewahrungsregel
+-- ===========================================================================
+
+insert into public.weg (tenant_id, id, name, adresse)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccc71'::uuid,
+        '0071 WEG A', 'Zwei-Hop-Weg A');
+
+-- 15.05.2020 + Jahresende 2020 + die Mandantenregel von 12 Jahren (oben) ->
+-- 31.12.2032. Derselbe doc_typ ('rechnung') wie unten bei Tenant B, mit
+-- absichtlich demselben Dokumentdatum, damit ein durchgesickerter Wert des
+-- anderen Mandanten sofort auffiele statt zufaellig zusammenzupassen.
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccc71'::uuid,
+        'rechnung', '0071 Zwei-Hop Tenant A', date '2020-05-15');
+
+select ok(
+  (select aufzubewahren_bis = date '2032-12-31' and frist_herkunft = 'mandantenregel'
+     from public.dokument_uebersicht
+    where titel = '0071 Zwei-Hop Tenant A'),
+  'dokument_uebersicht traegt die 12-Jahre-Mandantenregel von Tenant A ueber beide Sichten hinweg bis zum Dokument'
 );
 
 -- ===========================================================================
@@ -167,6 +200,34 @@ select is(
   (select count(*)::int from public.aufbewahrung_effektiv),
   7,
   'auch fuer den fremden Mandanten bleiben es genau sieben Zeilen'
+);
+
+-- ===========================================================================
+-- 6b. Derselbe Zwei-Hop-Pfad, jetzt fuer den fremden Mandanten: DERSELBE
+--     doc_typ ('rechnung'), DASSELBE Dokumentdatum wie bei Tenant A oben —
+--     nur der gesetzliche Rueckfall darf hier ankommen, nie die 12 Jahre von
+--     Tenant A. Das ist die Zusicherung, die Fix Round 1 verlangt: der
+--     Tenant-Abgleich muss durch BEIDE Sichten hindurch halten, nicht nur in
+--     aufbewahrung_effektiv direkt (Abschnitt 6 oben).
+-- ===========================================================================
+
+insert into public.weg (tenant_id, id, name, adresse)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb71'::uuid,
+        'dddddddd-dddd-4ddd-8ddd-dddddddddd71'::uuid,
+        '0071 WEG B', 'Zwei-Hop-Weg B');
+
+insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb71'::uuid,
+        'dddddddd-dddd-4ddd-8ddd-dddddddddd71'::uuid,
+        'rechnung', '0071 Zwei-Hop Tenant B', date '2020-05-15');
+
+-- 15.05.2020 + Jahresende 2020 + gesetzlicher Rueckfall von 8 Jahren ->
+-- 31.12.2028 — NICHT 2032-12-31 (das waere Tenant As Mandantenregel).
+select ok(
+  (select aufzubewahren_bis = date '2028-12-31' and frist_herkunft = 'gesetzlicher_rueckfall'
+     from public.dokument_uebersicht
+    where titel = '0071 Zwei-Hop Tenant B'),
+  'dokument_uebersicht sieht fuer den fremden Mandanten den gesetzlichen Rueckfall (2028-12-31), nicht die Mandantenregel von Tenant A (2032-12-31) — Tenant-Abgleich haelt durch beide Sichten'
 );
 
 select * from finish();

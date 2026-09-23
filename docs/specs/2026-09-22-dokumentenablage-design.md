@@ -175,15 +175,31 @@ widersprechenden.
 
 Dieselbe Begründung wie im vorigen Abschnitt gilt unverändert weiter: kein
 Schema `private`, keine `SECURITY DEFINER`-Funktion, kein `tenant_id`-
-Parameter. `aufbewahrung_effektiv` hat selbst keine `tenant_id`-Spalte —
-`unnest()` ist mandantenlos —, die Mandantentrennung kommt ausschließlich über
-die RLS von `public.aufbewahrungsregel`, an die die Sicht per
-`security_invoker` gebunden bleibt, auch ohne eine treibende Tabelle mit
-eigener `tenant_id`. Ob eine Mandantenregel existiert, entscheidet weiterhin
+Parameter. Die Mandantentrennung kommt aus der RLS von
+`public.aufbewahrungsregel`, an die die Sicht per `security_invoker` gebunden
+bleibt. Ob eine Mandantenregel existiert, entscheidet weiterhin
 `r.id is not null`, nie `coalesce(r.jahre, ...)` — aus demselben Grund wie
 oben: eine Mandantenregel mit `jahre = null` muss von der statutarisch
 dauerhaften Rückfall-Zeile (z. B. `protokoll`) unterscheidbar bleiben, obwohl
 beide `jahre = null` tragen.
+
+**Fix Round 1 (Review): der explizite Tenant-Abgleich aus `0069` ist zurück.**
+`0069` joinete `aufbewahrungsregel` mit `r.tenant_id = d.tenant_id and
+r.doc_typ = d.doc_typ` — ein expliziter Abgleich OBEN AUF der RLS, nicht nur
+die RLS allein. Die erste Fassung von `aufbewahrung_effektiv` ließ das weg,
+weil `unnest()` keine treibende Tabelle mit eigener `tenant_id`-Spalte hat;
+die Mandantentrennung ruhte danach ausschließlich darauf, dass RLS durch zwei
+verschachtelte Sichten hindurch weiterhin greift. Das funktioniert
+(`security_invoker` propagiert RLS-Durchsetzung durch jede Zwischenschicht,
+mit pgTAP bestätigt — siehe „pgTAP `0071`" unten), war aber eine bestehende
+Verteidigungslinie, die ersatzlos verschwunden wäre, ohne dass es zunächst
+jemand bemerkt hätte. Deshalb trägt `aufbewahrung_effektiv` jetzt zusätzlich
+`public.tenant_id() as tenant_id` (liest die JWT-Claims der aufrufenden Rolle
+direkt, keine Basistabelle nötig), und `dokument_uebersicht` joint explizit
+sowohl auf `doc_typ` als auch auf `tenant_id`. Weiterhin ein `LEFT JOIN`:
+schlägt der Tenant-Abgleich je fehl, muss das Dokument mit einer NULL-Frist
+in der Sicht auftauchen — nie verschwinden, das wäre ein stilles, schwerer zu
+findendes Datenleck als eine sichtbar fehlende Frist.
 
 `dokument_uebersicht` ändert dadurch weder ihre Ausgabespalten noch deren
 Semantik — nur die interne Herleitung von `aufzubewahren_bis`/`frist_herkunft`
@@ -329,7 +345,7 @@ Dazu:
 
 ### pgTAP `0071`
 
-`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 10 Zusicherungen:
+`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 12 Zusicherungen:
 `aufbewahrung_effektiv` liefert immer alle sieben Dokumentarten (auch ganz
 ohne Mandantenregel und ohne Dokument), der gesetzliche Rückfall greift ohne
 Regel, eine Mandantenregel schlägt ihn bei Jahren **und** Herkunft, eine
@@ -337,7 +353,12 @@ Mandantenregel mit `jahre = null` bleibt von der statutarisch dauerhaften
 Rückfall-Zeile (`protokoll`) unterscheidbar, und ein fremder Mandant sieht
 seine eigenen Werte, nie die des anderen — geprüft unter
 `set local role authenticated`, nicht als `postgres` (Table-Owner mit
-BYPASSRLS, sonst wäre die Zusicherung vakuos).
+BYPASSRLS, sonst wäre die Zusicherung vakuos). Zwei der zwölf gehen
+zusätzlich den vollen Zwei-Hop-Pfad durch `dokument_uebersicht` selbst (nicht
+nur durch `aufbewahrung_effektiv` direkt): zwei Mandanten, derselbe `doc_typ`
+(`rechnung`), dasselbe Dokumentdatum, je eine eigene Regel bzw. keine — jeder
+sieht über `dokument_uebersicht` nur seine eigene Frist (Fix Round 1, siehe
+oben).
 
 ### Modultests
 

@@ -3519,6 +3519,7 @@ export type Database = {
           jahre: number | null
           notiz: string | null
           rechtsgrundlage: string | null
+          tenant_id: string | null
         }
         Relationships: []
       }

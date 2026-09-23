@@ -11,18 +11,23 @@ import { speichereRegelAction, type RegelFormState } from "./actions";
 
 const initialState: RegelFormState = {};
 
-// Feste Vorschläge, überschreibbar — keine automatische Auswahl je nach
-// Dokumentart. Die ersten beiden zitieren dieselben Rückfallwerte, die schon
-// als Kommentar in public.aufbewahrung_effektiv (0071) stehen; hier sind es
-// reine Ausfüllhilfen für das Freitextfeld, keine zweite Berechnung.
-const VORSCHLAEGE: ReadonlyArray<{
+// Reine Zitat-Vorschläge — sie setzen AUSSCHLIESSLICH rechtsgrundlage, nie
+// jahre. Fix Round 1 (Review): eine frühere Fassung hängte "— acht Jahre"
+// bzw. "— sechs Jahre" an die Beschriftung UND schrieb diese Zahlen fest in
+// die Jahre-Eingabe. Das war eine zweite, in TypeScript hartkodierte Kopie
+// derselben Rückfallwerte, die ausschließlich in
+// public.aufbewahrung_effektiv (0071) stehen dürfen: ändert eine spätere
+// Migration den gesetzlichen Rückfall, hätte der Chip stillschweigend die
+// alte Zahl weiterangeboten — ein Klick hätte dann einen expliziten
+// Mandanten-Override mit einem falschen Wert erzeugt, gerade weil er wie
+// eine Hilfe aussah. Diese beiden Chips sind deshalb reiner Text, ihre
+// Beschriftung nennt keine Zahl mehr, weil sie keine setzen.
+const RECHTSGRUNDLAGE_VORSCHLAEGE: ReadonlyArray<{
   label: string;
-  jahre: string;
   rechtsgrundlage: string;
 }> = [
-  { label: "§ 147 Abs. 3 Nr. 4 AO — acht Jahre", jahre: "8", rechtsgrundlage: "§ 147 Abs. 3 Nr. 4 AO" },
-  { label: "§ 147 Abs. 3 — sechs Jahre", jahre: "6", rechtsgrundlage: "§ 147 Abs. 3" },
-  { label: "dauerhaft", jahre: "", rechtsgrundlage: "" },
+  { label: "§ 147 Abs. 3 Nr. 4 AO", rechtsgrundlage: "§ 147 Abs. 3 Nr. 4 AO" },
+  { label: "§ 147 Abs. 3", rechtsgrundlage: "§ 147 Abs. 3" },
 ];
 
 function SubmitButton() {
@@ -146,12 +151,33 @@ export function RegelForm({ docTyp, label, effektiv }: RegelFormProps) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {VORSCHLAEGE.map((vorschlag) => (
+          {/*
+            Nur anzeigen, solange (noch) keine Mandantenregel besteht: der
+            Wert kommt live aus effektiv.jahre (aufbewahrung_effektiv, 0071),
+            nie aus einem Literal — bei einer bestehenden Mandantenregel
+            kennt die Seite den ursprünglichen Rückfallwert gar nicht mehr
+            (er wurde durch die Regel ersetzt), ein Chip könnte hier also nur
+            raten.
+          */}
+          {!istMandantenregel ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (jahreRef.current) {
+                  jahreRef.current.value = effektiv.jahre === null ? "" : String(effektiv.jahre);
+                }
+              }}
+              className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
+            >
+              Gesetzlichen Vorschlag übernehmen ({formatJahreLabel(effektiv.jahre)})
+            </button>
+          ) : null}
+
+          {RECHTSGRUNDLAGE_VORSCHLAEGE.map((vorschlag) => (
             <button
               key={vorschlag.label}
               type="button"
               onClick={() => {
-                if (jahreRef.current) jahreRef.current.value = vorschlag.jahre;
                 if (rechtsgrundlageRef.current) {
                   rechtsgrundlageRef.current.value = vorschlag.rechtsgrundlage;
                 }
@@ -161,6 +187,22 @@ export function RegelForm({ docTyp, label, effektiv }: RegelFormProps) {
               {vorschlag.label}
             </button>
           ))}
+
+          {/*
+            Berührt ausschließlich das Jahresfeld. Eine frühere Fassung
+            leerte hier auch rechtsgrundlage ohne jeden Hinweis darauf im
+            einwortigen Label "dauerhaft" — ein Klick hätte eine bereits
+            eingetragene Begründung unbemerkt gelöscht (Fix Round 1).
+          */}
+          <button
+            type="button"
+            onClick={() => {
+              if (jahreRef.current) jahreRef.current.value = "";
+            }}
+            className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
+          >
+            dauerhaft
+          </button>
         </div>
 
         <div className="space-y-1">
