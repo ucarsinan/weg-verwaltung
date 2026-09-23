@@ -152,15 +152,31 @@ export async function uploadDokumentAction(
           // protokolliert wie jeder andere Fehler.
           protokolliereVerwaisteDatei("uploadDokument", pfad, doc.id);
 
-          const { error: documentCleanupError } = await ctx.supabase
-            .from("document")
-            .update({ deleted_at: new Date().toISOString() })
-            .eq("id", doc.id);
+          // Über dieselbe RPC wie loescheDokumentAction (0072) — ein
+          // direktes UPDATE scheiterte hier genauso an der SELECT-Policy aus
+          // 0015. Nicht still: PostgREST liefert die WITH-CHECK-Ablehnung als
+          // harten 42501, `error` war also gesetzt und wurde protokolliert.
+          // Ungelesen blieb die Trefferzahl — eine Kompensation, die null
+          // Zeilen trifft, blieb deshalb stumm. Beides deckt der
+          // Rückgabewert jetzt ab.
+          const { data: aufgeraeumt, error: documentCleanupError } =
+            await ctx.supabase.rpc("dokument_entfernen", {
+              p_dokument_id: doc.id,
+              p_weg_id: input.wegId,
+            });
           if (documentCleanupError) {
             logPostgrestError(
               "uploadDokument.cleanup.document",
               documentCleanupError,
             );
+          } else if (!aufgeraeumt) {
+            // Kein Fehler, aber auch kein Treffer. Die Dokumentzeile bleibt
+            // ohne Version stehen; sie ist mangels DELETE-Policy nicht
+            // entfernbar, also wird sie protokolliert statt verschwiegen.
+            logPostgrestError("uploadDokument.cleanup.document", {
+              code: "no_rows",
+              hint: `dokument_entfernen matched no row for ${doc.id}`,
+            });
           }
 
           return {
@@ -313,16 +329,26 @@ export async function loescheDokumentAction(
         // Verwaltungsunterlagen gehören der WEG, der Verwalter verwahrt sie
         // treuhänderisch und gibt sie heraus, statt sie zu vernichten.
         //
-        // `.select("id")` ist Pflicht, nicht Kosmetik: PostgREST meldet für
-        // ein UPDATE, das null Zeilen trifft (falsche weg_id, schon entfernt,
-        // erratene ID), keinen Fehler — ohne die Rückgabe zu prüfen, würde
-        // der Nutzer "entfernt" hören, obwohl nichts passiert ist.
-        const { data, error } = await ctx.supabase
-          .from("document")
-          .update({ deleted_at: new Date().toISOString() })
-          .eq("id", input.dokumentId)
-          .eq("weg_id", input.wegId)
-          .select("id");
+        // Der Soft-Delete geht über die RPC aus 0072, nicht mehr über ein
+        // direktes UPDATE. Grund: die SELECT-Policy aus 0015 filtert
+        // `deleted_at is null`, und PostgreSQL verlangt, dass die neue Zeile
+        // eines UPDATE unter der SELECT-Policy sichtbar bleibt. Ein UPDATE,
+        // das `deleted_at` setzt, macht sie unsichtbar und wird abgelehnt
+        // (`new row violates row-level security policy for table
+        // "document"`). Das lag nicht am `.select("id")` — die Prüfung
+        // greift auch ohne RETURNING. Die Policy bleibt, wie sie ist; der
+        // Schreibpfad wandert in eine eng geschnittene SECURITY-DEFINER-
+        // Funktion, die den Mandanten selbst auflöst und die weg_id weiterhin
+        // verlangt.
+        //
+        // Der Rückgabewert ist Pflicht, nicht Kosmetik: `false` heißt
+        // "nichts getroffen" (falsche weg_id, schon entfernt, erratene ID) —
+        // ohne die Prüfung würde der Nutzer "entfernt" hören, obwohl nichts
+        // passiert ist.
+        const { data: entfernt, error } = await ctx.supabase.rpc(
+          "dokument_entfernen",
+          { p_dokument_id: input.dokumentId, p_weg_id: input.wegId },
+        );
 
         if (error) {
           logPostgrestError("loescheDokument", error);
@@ -333,7 +359,7 @@ export async function loescheDokumentAction(
           };
         }
 
-        if (!data || data.length === 0) {
+        if (!entfernt) {
           return {
             errors: { errors: { _form: ["Dokument wurde nicht gefunden."] } },
           };

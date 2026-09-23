@@ -1007,6 +1007,14 @@ export type Database = Overwrite<
               };
               Returns: undefined;
             };
+            // Soft-Delete der Dokumentenablage (Migration 0072). Signatur
+            // manuell nachgetragen wie die uebrigen RPCs hier —
+            // database.types.gen.ts kennt sie noch nicht (Regenerieren
+            // erfordert einen Cloud-Zugriff).
+            dokument_entfernen: {
+              Args: { p_dokument_id: string; p_weg_id: string };
+              Returns: boolean;
+            };
             erstelle_vermoegensbericht: {
               Args: { p_weg_id: string; p_jahr: number };
               Returns: string;

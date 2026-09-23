@@ -31,6 +31,12 @@ const WEG_ID = "22222222-2222-4222-8222-222222222222";
 const DOC_ID = "33333333-3333-4333-8333-333333333333";
 
 const mockFrom = vi.fn();
+// Der Soft-Delete laeuft seit 0072 ueber die RPC public.dokument_entfernen,
+// nicht mehr ueber ein direktes UPDATE: die SELECT-Policy aus 0015 filtert
+// `deleted_at is null`, und PostgreSQL lehnt jedes UPDATE ab, dessen neue
+// Zeile unter der eigenen SELECT-Policy unsichtbar waere. Betroffen waren
+// beide Schreibpfade dieser Datei.
+const mockRpc = vi.fn();
 const mockStorageUpload = vi.fn();
 // Kein `remove` mehr: weg-docs vergibt laut 0015 keine DELETE-Policy auf
 // storage.objects, die Action ruft es also nie auf (siehe Ruling zu Fix
@@ -51,6 +57,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({
       from: mockFrom,
+      rpc: mockRpc,
       auth: mockAuth,
       storage: { from: mockStorageFrom },
     }),
@@ -110,41 +117,18 @@ function versionInsertFails(error: { code?: string } = { code: "500" }) {
 }
 
 /**
- * `.update({...}).eq("id", ...)` — die Soft-Delete-Kompensation in
- * `uploadDokumentAction`, wenn der Versions-Insert scheitert (ein `eq`).
- * Betrifft nur die Dokumentzeile — die Datei selbst kann nicht kompensiert
- * werden (siehe orphanCall-Assertions), das ist der Kern von Fix Round 1.
+ * `rpc("dokument_entfernen", …)` — der einzige Soft-Delete-Pfad seit 0072.
+ * Die Funktion gibt `true` zurueck, wenn genau eine Zeile entfernt wurde,
+ * und `false`, wenn nichts passte (falsche weg_id, erratene ID, schon
+ * entfernt). Beide Aufrufer dieser Datei muessen den Rueckgabewert
+ * auswerten: PostgREST meldet fuer "nichts getroffen" keinen Fehler.
  */
-function documentCleanupUpdateOk() {
-  const eq = vi.fn().mockResolvedValue({ error: null });
-  return { update: vi.fn().mockReturnValue({ eq }) };
+function rpcEntferntOk(entfernt = true) {
+  return { data: entfernt, error: null };
 }
 
-function documentCleanupUpdateFails(error: { code?: string } = { code: "500" }) {
-  const eq = vi.fn().mockResolvedValue({ error });
-  return { update: vi.fn().mockReturnValue({ eq }) };
-}
-
-/**
- * `.update({...}).eq("id", ...).eq("weg_id", ...).select("id")` —
- * `loescheDokumentAction`. Das `.select("id")` ist Pflicht in der echten
- * Action (PostgREST meldet sonst keinen Fehler bei null getroffenen Zeilen),
- * die Mocks bilden das nach: `matchedIds` steuert, was `data` liefert.
- */
-function loescheUpdateOk(matchedIds: string[] = [DOC_ID]) {
-  const select = vi
-    .fn()
-    .mockResolvedValue({ data: matchedIds.map((id) => ({ id })), error: null });
-  const eq2 = vi.fn().mockReturnValue({ select });
-  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-  return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
-}
-
-function loescheUpdateFails(error: { code?: string } = { code: "500" }) {
-  const select = vi.fn().mockResolvedValue({ data: null, error });
-  const eq2 = vi.fn().mockReturnValue({ select });
-  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-  return { update: vi.fn().mockReturnValue({ eq: eq1 }) };
+function rpcEntferntFails(error: { code?: string } = { code: "500" }) {
+  return { data: null, error };
 }
 
 /** `.select("id, doc_typ").eq("id", ...).eq("weg_id", ...).single()`. */
@@ -233,6 +217,7 @@ function loescheFormData(overrides: Record<string, string> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFrom.mockReset();
+  mockRpc.mockReset();
   mockStorageUpload.mockReset().mockResolvedValue({ error: null });
 });
 
@@ -355,8 +340,8 @@ describe("uploadDokumentAction", () => {
     async () => {
       mockFrom
         .mockReturnValueOnce(documentInsertOk())
-        .mockReturnValueOnce(versionInsertFails({ code: "23502" }))
-        .mockReturnValueOnce(documentCleanupUpdateFails());
+        .mockReturnValueOnce(versionInsertFails({ code: "23502" }));
+      mockRpc.mockResolvedValueOnce(rpcEntferntFails());
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const state = await uploadDokumentAction({}, dokumentFormData());
@@ -365,12 +350,15 @@ describe("uploadDokumentAction", () => {
 
       expect(state.errors?._form).toBeDefined();
 
-      const softDeleteCall = mockFrom.mock.results[2]?.value as {
-        update: ReturnType<typeof vi.fn>;
-      };
-      expect(softDeleteCall.update).toHaveBeenCalledWith(
-        expect.objectContaining({ deleted_at: expect.any(String) }),
-      );
+      // Die Kompensation geht ueber die RPC aus 0072, nicht ueber ein
+      // direktes UPDATE — das scheiterte hier an der SELECT-Policy aus 0015.
+      // Den Fehler las dieser Pfad schon immer (42501, protokolliert); was
+      // er nie las, war die Trefferzahl. Der Fall darunter deckt genau die
+      // ab: kein Fehler, aber auch kein Treffer.
+      expect(mockRpc).toHaveBeenCalledWith("dokument_entfernen", {
+        p_dokument_id: expect.any(String),
+        p_weg_id: WEG_ID,
+      });
 
       // Die Datei kann nicht entfernt werden (0015: keine DELETE-Policy auf
       // storage.objects) — sie muss protokolliert sein, ebenso der
@@ -401,14 +389,38 @@ describe("uploadDokumentAction", () => {
   it("still reports the save failure when the document soft-delete succeeds", async () => {
     mockFrom
       .mockReturnValueOnce(documentInsertOk())
-      .mockReturnValueOnce(versionInsertFails())
-      .mockReturnValueOnce(documentCleanupUpdateOk());
+      .mockReturnValueOnce(versionInsertFails());
+    mockRpc.mockResolvedValueOnce(rpcEntferntOk());
 
     const state = await uploadDokumentAction({}, dokumentFormData());
 
     expect(state.errors?._form).toBeDefined();
     expect(redirect).not.toHaveBeenCalled();
   });
+
+  it(
+    "logs the failed compensation when dokument_entfernen matches no row, " +
+      "instead of treating a silent false as success",
+    async () => {
+      mockFrom
+        .mockReturnValueOnce(documentInsertOk())
+        .mockReturnValueOnce(versionInsertFails());
+      // Kein Fehler, aber auch kein Treffer — PostgREST meldet dafuer nichts.
+      mockRpc.mockResolvedValueOnce(rpcEntferntOk(false));
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await uploadDokumentAction({}, dokumentFormData());
+
+      const scopes = consoleError.mock.calls.map((call) => String(call[0]));
+      expect(
+        scopes.some((s) =>
+          s.includes("[uploadDokument.cleanup.document] request failed"),
+        ),
+      ).toBe(true);
+
+      consoleError.mockRestore();
+    },
+  );
 });
 
 describe("neueVersionAction", () => {
@@ -562,24 +574,31 @@ describe("loescheDokumentAction", () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("soft-deletes by setting deleted_at, never touching Storage", async () => {
-    mockFrom.mockReturnValueOnce(loescheUpdateOk());
+  it(
+    "soft-deletes through the 0072 RPC — never a direct UPDATE, never Storage",
+    async () => {
+      mockRpc.mockResolvedValueOnce(rpcEntferntOk());
 
-    await loescheDokumentAction({}, loescheFormData());
+      await loescheDokumentAction({}, loescheFormData());
 
-    const call = mockFrom.mock.results[0]?.value as {
-      update: ReturnType<typeof vi.fn>;
-    };
-    expect(call.update).toHaveBeenCalledWith(
-      expect.objectContaining({ deleted_at: expect.any(String) }),
-    );
-    expect(mockStorageFrom).not.toHaveBeenCalled();
-    expect(revalidatePath).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
-    expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
-  });
+      // Ein direktes `.from("document").update({ deleted_at })` wird von der
+      // SELECT-Policy aus 0015 abgelehnt ("new row violates row-level
+      // security policy"), weil die neue Zeile unter der eigenen Policy
+      // unsichtbar waere. Deshalb: RPC statt UPDATE, und `from` gar nicht
+      // mehr angefasst.
+      expect(mockRpc).toHaveBeenCalledWith("dokument_entfernen", {
+        p_dokument_id: DOC_ID,
+        p_weg_id: WEG_ID,
+      });
+      expect(mockFrom).not.toHaveBeenCalled();
+      expect(mockStorageFrom).not.toHaveBeenCalled();
+      expect(revalidatePath).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
+      expect(redirect).toHaveBeenCalledWith(`/wegs/${WEG_ID}/dokumente`);
+    },
+  );
 
   it("reports a generic error on database failure", async () => {
-    mockFrom.mockReturnValueOnce(loescheUpdateFails());
+    mockRpc.mockResolvedValueOnce(rpcEntferntFails());
 
     const state = await loescheDokumentAction({}, loescheFormData());
 
@@ -588,14 +607,14 @@ describe("loescheDokumentAction", () => {
   });
 
   it(
-    "reports not-found when the update matches nothing, instead of telling " +
+    "reports not-found when the RPC matched nothing, instead of telling " +
       "the user it was removed",
     async () => {
-      // PostgREST meldet fuer ein UPDATE, das null Zeilen trifft, keinen
-      // Fehler — ohne `.select("id")` und diese Pruefung wuerde der Nutzer
-      // "entfernt" hoeren, obwohl nichts passiert ist (falsche weg_id, schon
-      // entfernt, oder eine erratene ID).
-      mockFrom.mockReturnValueOnce(loescheUpdateOk([]));
+      // Die RPC gibt `false` zurueck, wenn nichts passte (falsche weg_id,
+      // erratene ID, schon entfernt) — und PostgREST meldet dafuer keinen
+      // Fehler. Ohne diese Pruefung wuerde der Nutzer "entfernt" hoeren,
+      // obwohl nichts passiert ist.
+      mockRpc.mockResolvedValueOnce(rpcEntferntOk(false));
 
       const state = await loescheDokumentAction({}, loescheFormData());
 

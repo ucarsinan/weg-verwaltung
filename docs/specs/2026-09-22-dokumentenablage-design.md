@@ -1,11 +1,11 @@
 # Dokumentenablage Design
 
 Datum: 2026-09-22
-Status: umgesetzt (Tasks 1–6, abgeschlossen 2026-09-23) — Migrationen `0069`-`0071` lokal
+Status: umgesetzt (Tasks 1–7, abgeschlossen 2026-09-23) — Migrationen `0069`-`0072` lokal
 gebaut und pgTAP-gruen, Cloud-Rollout steht noch aus (freigabepflichtig). Der
 E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und `--list`-geprueft,
 aber noch nie ausgefuehrt.
-Migration: `0069` (erweitert um `0070`, `0071`)
+Migration: `0069` (erweitert um `0070`, `0071`, `0072`)
 
 ## Ziel
 
@@ -135,6 +135,11 @@ Ein `left join` (nicht `cross join lateral` einer Funktion) ist hier
 Pflicht: fehlt eine Mandantenregel, muss das Dokument mit `aufzubewahren_bis
 is null`-Rückfall trotzdem in der Sicht erscheinen, nie verschwinden.
 
+**Diese Begründung gilt für den Lesepfad — und nur für ihn.** Sie wurde in
+`0072` nicht revidiert, sondern abgegrenzt: beim *Schreiben* ist RLS kein
+umständlicher, aber gangbarer Weg, sondern ein hartes Hindernis. Siehe
+„`0072` — der Soft-Delete, den RLS unmöglich macht" unten.
+
 Ob eine Mandantenregel existiert, entscheidet `r.id is not null` — **nicht**
 `r.jahre is not null` bzw. `coalesce(r.jahre, …)`. Eine Mandantenregel mit
 `jahre = null` bedeutet „dauerhaft" und muss von „keine Regel vorhanden"
@@ -180,7 +185,10 @@ Dieselbe Begründung wie im vorigen Abschnitt gilt unverändert weiter: kein
 Schema `private`, keine `SECURITY DEFINER`-Funktion, kein `tenant_id`-
 Parameter. Die Mandantentrennung kommt aus der RLS von
 `public.aufbewahrungsregel`, an die die Sicht per `security_invoker` gebunden
-bleibt. Ob eine Mandantenregel existiert, entscheidet weiterhin
+bleibt — **seit `0072` zusätzlich aus einem expliziten Tenant-Abgleich im
+Join selbst**, weil „RLS filtert vorher" nur für `authenticated` stimmt und
+nicht für einen Aufrufer mit `BYPASSRLS` (siehe „`0072` — der Tenant-Abgleich
+im Join" unten). Ob eine Mandantenregel existiert, entscheidet weiterhin
 `r.id is not null`, nie `coalesce(r.jahre, ...)` — aus demselben Grund wie
 oben: eine Mandantenregel mit `jahre = null` muss von der statutarisch
 dauerhaften Rückfall-Zeile (z. B. `protokoll`) unterscheidbar bleiben, obwohl
@@ -209,6 +217,115 @@ Semantik — nur die interne Herleitung von `aufzubewahren_bis`/`frist_herkunft`
 wechselt von einem eingebetteten `CASE` zu einem Join auf
 `aufbewahrung_effektiv`. `infra/supabase/tests/0069_dokumentenablage.sql`
 bleibt deshalb unverändert gültig.
+
+### `0072` — der Soft-Delete, den RLS unmöglich macht
+
+**Anlass: ein kritischer Befund aus dem Branch-Review.** Das Entfernen eines
+Dokuments war seit `0015` strukturell unmöglich — nicht selten fehlerhaft,
+sondern in jedem Fall. `public.document` trägt diese SELECT-Policy:
+
+```sql
+using (tenant_id = (select public.tenant_id()) and deleted_at is null)
+```
+
+PostgreSQL verlangt, dass die **neue** Zeile eines `UPDATE` unter der
+SELECT-Policy sichtbar bleibt. Genau das bricht der Soft-Delete: sobald
+`deleted_at` gesetzt ist, fällt die Zeile aus ihrer eigenen Sichtbarkeit, und
+das `UPDATE` wird abgelehnt:
+
+```
+ERROR:  new row violates row-level security policy for table "document"
+```
+
+Gegen die lokale ephemere Datenbank als `authenticated` gegen die echte
+Tabelle gemessen, **ohne** `RETURNING`. Das `.select("id")` in
+`loescheDokumentAction` war also nicht die Ursache; die Prüfung greift
+unabhängig davon. Betroffen waren beide Schreibpfade in
+`wegs/[id]/dokumente/actions.ts`: die Entfernen-Action **und** die
+Upload-Kompensation, die nach einem gescheiterten Versions-Insert die
+Dokumentzeile soft-löscht. Letztere scheiterte nicht still — PostgREST liefert die
+`WITH CHECK`-Ablehnung als harten `42501`, den sie protokollierte. Ungelesen
+blieb die **Trefferzahl**: eine Kompensation, die null Zeilen traf, blieb
+stumm. Das ist ein anderer, kleinerer Defekt als „scheitert unbemerkt", und er
+besteht unabhängig von der RLS-Ablehnung.
+
+**Der Hinweis in `0015` ist dadurch überholt.** Direkt unter der Policy steht
+dort: „No DELETE policy → hard delete blocked. Use UPDATE `deleted_at = now()`
+(soft delete)." Das ist eine *Anweisung*, kein Kommentar zu einer Begründung —
+und sie weist genau den Weg an, den dieselbe Migration versperrt. `0015`
+selbst bleibt unangetastet (Vorwärts-Fix); der Hinweis steht deshalb hier und
+in `AGENTS.md`, wo ein Leser ihn trifft, bevor er eine Stunde verliert.
+
+**Entscheidung: die SELECT-Policy bleibt exakt, wie sie ist.** Die Datenbank
+garantiert weiterhin selbst, dass ein entferntes Dokument unsichtbar ist —
+diese Garantie wandert *nicht* in Anwendungscode. Stattdessen fährt der
+Soft-Delete über `public.dokument_entfernen(p_dokument_id, p_weg_id)`,
+`SECURITY DEFINER`, `set search_path = ''` nach dem Muster von
+`activate_wirtschaftsplan` (`0047`).
+
+Das ist **kein** Widerspruch zu „keine Funktion, kein `SECURITY DEFINER`" aus
+den beiden Abschnitten oben, sondern die Abgrenzung dazu: dort ging es um
+einen **Lesepfad**, für den RLS ausreichte und ein `tenant_id`-Parameter nur
+eine Missbrauchsfläche geöffnet hätte. Hier ist RLS nicht umständlich, sondern
+ein hartes Hindernis — den Schreibpfad gibt es ohne die Funktion gar nicht.
+
+Tragende Eigenschaften, jede einzeln zugesichert (`0069`-Vertrag, Abschnitte
+8–10):
+
+| Eigenschaft | Warum sie trägt |
+| --- | --- |
+| Der Mandant kommt aus `public.tenant_id()`, **nie** aus einem Parameter, und wird explizit abgeglichen | Die Funktion läuft als Owner mit `BYPASSRLS`; RLS auf `document` greift in ihr **nicht**. `tenant_id = v_tenant_id` **ist** die Mandantentrennung, keine Verdopplung davon |
+| `weg_id` muss ebenfalls passen | Hält die Einschränkung der bisherigen Action (`.eq("id", …).eq("weg_id", …)`) aufrecht |
+| Rückgabewert `boolean` | PostgREST meldet für ein `UPDATE` ohne Treffer keinen Fehler. `false` heißt „nichts getroffen" — der Nutzer hört nicht „entfernt", wenn nichts passiert ist |
+| `deleted_at is null` in der `WHERE`-Klausel | Ein bereits entferntes Dokument ist „nichts getroffen", kein Fehler — und wird nicht ein zweites Mal gestempelt. Wiederbeleben kann die Funktion ohnehin nichts |
+| Eigener Agent-Guard (`42501`) | `public.document` trägt **keinen** `*_block_agent_writes`-Trigger — anders als `aufbewahrungsregel`. Der Guard im Funktionskörper ist die einzige Sperre auf diesem Pfad, nicht eine redundante zweite |
+| `revoke all … from public, anon, authenticated, service_role`, dann `grant execute … to authenticated` | Die Funktion ist App-API-Oberfläche, kein Internum |
+
+Der Audit-Eintrag entsteht **nicht** in der Funktion, sondern über den
+bestehenden `document_audit_emit`-Trigger aus `0069`: der Soft-Delete ist ein
+`UPDATE` und löst ihn unverändert aus. Zugesichert, nicht angenommen — der
+Vertrag prüft, dass nach dem Aufruf genau eine `audit_event`-Zeile mit
+`entity_typ = 'document'`, `action = 'update'` und gesetztem `deleted_at` im
+Payload steht. Genau **eine**: derselbe Test belegt damit zugleich, dass der
+zweite Aufruf nichts geschrieben hat.
+
+### `0072` — der Tenant-Abgleich im Join von `aufbewahrung_effektiv`
+
+**Anlass: ein zweiter Befund aus demselben Review.** `0071` joint
+`aufbewahrungsregel` ohne Tenant-Abgleich und begründet das damit, dass die
+`security_invoker`-Sicht `FORCE RLS` vorschaltet und die Regelzeilen deshalb
+schon vor dem Join auf den eigenen Mandanten heruntergefiltert seien.
+
+**Das stimmt für `authenticated` — und nur dafür.** Für einen Aufrufer mit
+`BYPASSRLS` (Table-Owner, Service-Role-Client) sieht `aufbewahrungsregel` alle
+Mandanten gleichzeitig. Halten zwei Mandanten eine Regel für denselben
+`doc_typ`, fächert der Join auf: die Sicht liefert **zwei** Zeilen für diese
+Dokumentart, beide mit der `tenant_id` des Aufrufers gestempelt
+(`public.tenant_id()` ist eine Session-Konstante), aber mit unterschiedlichem
+`jahre` und `herkunft`. Gemessen: acht Zeilen statt sieben.
+
+Damit war die Zusicherung falsch, auf die sich `dokument_uebersicht` beim Join
+ausdrücklich beruft („genau eine Zeile je `(tenant_id, doc_typ)`-Paar", „der
+Join ist also faktisch 1:1, kein Kreuzprodukt") — und pgTAP-Zusicherung 7 in
+`0071` läuft als genau ein solcher Aufrufer.
+
+**Fix:** `and r.tenant_id = public.tenant_id()` kommt in den Join, derselbe
+Ausdruck wie in der `tenant_id`-Ausgabespalte darüber. Die übrig bleibende
+Zeile gehört damit nachweislich zu dem Mandanten, mit dem die Sicht sich nach
+außen stempelt. Ohne Mandanten-Claim ist `public.tenant_id()` `null`, der
+Vergleich also nie wahr — es bleibt der gesetzliche Rückfall, nie eine fremde
+Regel. Die RLS von `aufbewahrungsregel` bleibt die erste Verteidigungslinie;
+der Abgleich ist eine zweite, unabhängige obendrauf.
+
+**Und die Lücke im Test dazu.** Zusicherung 7 hätte den Befund finden können
+und tat es nicht: im Fixture hielt nur Tenant A eine `korrespondenz`-Regel,
+der Join fand also auch ohne Abgleich nur eine Zeile und fächerte nie auf.
+Die Zusicherung *konnte* nicht scheitern — das war die eigentliche Lücke,
+nicht ihr Wortlaut. `0072` gibt Tenant B eine konkurrierende Regel (Marker
+`jahre = 55`, kollisionsfrei zu `77`, `12`, `null` und allen Rückfallwerten)
+und macht Zusicherung 7 zählend statt skalar: bei einer Auffächerung wäre ein
+skalares `(select … from …)` mit `21000` gestorben und hätte den ganzen
+Vertrag mitgerissen, statt sauber `not ok` zu melden.
 
 ### Neu: `public.dokument_uebersicht`
 
@@ -296,6 +413,13 @@ sondern protokolliert den vollständigen Pfad und die Dokument-ID, damit ein
 Betreiber die Datei bei Bedarf über die Admin-Funktion aus 0015 von Hand
 entfernt.
 
+Die **Datenbankseite** dieser Kompensation — die Dokumentzeile ohne Version
+soft-löschen — läuft seit `0072` über `public.dokument_entfernen`. Bis dahin
+war sie ein direktes `UPDATE` und scheiterte deshalb immer an der
+SELECT-Policy. Der Fehler wurde dabei protokolliert (`42501`); was der Pfad
+nie las, war die Trefferzahl. Jetzt wird auch ein „kein Fehler, aber auch kein
+Treffer" protokolliert statt als Erfolg gewertet.
+
 **Bekanntes Restrisiko: gleichzeitige "neue Version".** `neueVersionAction`
 liest die höchste vorhandene `version_no` und schreibt `version_no + 1` —
 zwischen Lesen und Schreiben liegt kein Lock. Laden zwei Personen im selben
@@ -339,19 +463,40 @@ Dazu:
 - neue `doc_typ`-Werte werden angenommen, unbekannte abgelehnt (`23514`)
 - `dokument_datum` ist Pflicht (`23502`)
 - `aufbewahrungsregel` trägt RLS und FORCE RLS; ein fremder Mandant sieht nichts
-- Agent-Writes auf `aufbewahrungsregel` blockiert (`42501`)
-- Audit-Emitter feuert beim Anlegen eines Dokuments und beim Ändern einer Frist
 - Mandantenregel schlägt Rückfall; `frist_herkunft` benennt, welche griff
 - eine Mandantenregel mit `jahre = null` bleibt als „dauerhaft" **und** als
   `frist_herkunft = 'mandantenregel'` erkennbar — nicht mit dem gesetzlichen
-  Rückfall zu verwechseln (12 Zusicherungen insgesamt)
+  Rückfall zu verwechseln
+
+**Nachgetragen in `0072`, weil dieses Dokument und `docs/09-tom-art32.md`
+beides schon zählten, der Vertrag aber dazu schwieg** (Abschnitte 6 und 7):
+
+- Agent-Writes auf `aufbewahrungsregel` blockiert (`42501`) — je eine
+  Zusicherung für `INSERT`, `UPDATE` und `DELETE`, weil ein Trigger auch nur
+  für eine der drei Operationen geschrieben sein könnte. `UPDATE` und `DELETE`
+  zielen auf eine **vorhandene** Zeile: eine Anweisung ohne Treffer würde den
+  Row-Level-Trigger gar nicht erst auslösen und die Zusicherung wertlos machen
+- der Audit-Emitter feuert beim Anlegen einer Frist **und** beim Anlegen eines
+  Dokuments (`0069` hängte ihn dort zum ersten Mal überhaupt an)
+
+Dazu der vollständige Vertrag der Soft-Delete-RPC aus `0072` (Abschnitte
+8–10): Grants, falsche `weg_id`, Agent-Sperre, fremder Mandant, der eigentliche
+Aufruf, die Unsichtbarkeit danach, der zweite Aufruf und der Audit-Eintrag —
+**26 Zusicherungen insgesamt**.
+
+Jede der neuen Zusicherungen wurde rot gesehen, nicht nur grün: mit
+entferntem Tenant-Abgleich, entferntem Agent-Guard, entferntem
+`deleted_at is null`, gedroppten Triggern und einem zusätzlichen
+`anon`-Grant. Eine Zusicherung, die auch ohne den Guard besteht, wäre
+schlechter als keine — auf sie stützt sich ein Compliance-Dokument.
 
 ### pgTAP `0071`
 
-`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 13 Zusicherungen (nach
-Fix Round 2/5 in Task 4 — eine Zusicherung, die den Tenant-Abgleich unter
-BYPASSRLS deutlich testet, kam nach der ersten Fassung mit 12 dazu; siehe
-„Fix Round 1 (Review)" unten für den vorangegangenen Fix):
+`infra/supabase/tests/0071_aufbewahrung_effektiv.sql`, 15 Zusicherungen (13
+nach Fix Round 2/5 in Task 4 — eine Zusicherung, die den Tenant-Abgleich unter
+BYPASSRLS deutlich testet, kam nach der ersten Fassung mit 12 dazu; zwei
+weitere kamen in `0072` für die Auffächerung unter BYPASSRLS hinzu, siehe
+„`0072` — der Tenant-Abgleich im Join" oben):
 `aufbewahrung_effektiv` liefert immer alle sieben Dokumentarten (auch ganz
 ohne Mandantenregel und ohne Dokument), der gesetzliche Rückfall greift ohne
 Regel, eine Mandantenregel schlägt ihn bei Jahren **und** Herkunft, eine
@@ -359,7 +504,7 @@ Mandantenregel mit `jahre = null` bleibt von der statutarisch dauerhaften
 Rückfall-Zeile (`protokoll`) unterscheidbar, und ein fremder Mandant sieht
 seine eigenen Werte, nie die des anderen — geprüft unter
 `set local role authenticated`, nicht als `postgres` (Table-Owner mit
-BYPASSRLS, sonst wäre die Zusicherung vakuos). Drei der 13 gehen zusätzlich
+BYPASSRLS, sonst wäre die Zusicherung vakuos). Drei der 15 gehen zusätzlich
 den vollen Zwei-Hop-Pfad durch `dokument_uebersicht` selbst (nicht nur durch
 `aufbewahrung_effektiv` direkt — im Vertrag nachgezählt, nicht geschätzt):
 zwei davon (Fix Round 1, Abschnitte 3b/6b) mit zwei Mandanten, derselbe
@@ -372,6 +517,14 @@ Mandantenregel (Marker `jahre = 77`) davor bewahrt, auf das gleichartige
 Dokument eines fremden Mandanten durchzuschlagen, wenn RLS auf `document`
 selbst nicht mehr filtert.
 
+Die zwei in `0072` ergänzten Zusicherungen liegen im selben Abschnitt 7 und
+nutzen dieselbe BYPASSRLS-Session: `aufbewahrung_effektiv` bleibt bei genau
+sieben Zeilen, auch wenn zwei Mandanten eine Regel für dieselbe Dokumentart
+halten, und Tenant Bs Marker (`jahre = 55`) taucht nirgends in einer Sicht
+auf, die sich mit Tenant As `tenant_id` stempelt. Beide wurden rot gesehen
+(Sicht ohne Tenant-Abgleich: acht Zeilen, Tenant Bs Wert sichtbar) und grün
+(mit).
+
 ### Modultests
 
 Formularvalidierung (Datum, Pflichtfelder, erlaubte Dateitypen, Größengrenze),
@@ -379,6 +532,15 @@ Anzeigelogik „dauerhaft" statt eines Datums, Migrations-Texttest nach dem Must
 von `0064` und `0067`. Task 4 ergänzt `parseRegelForm`: ein leeres Jahresfeld
 bedeutet dauerhaft (`null`), `"0"` wird abgelehnt — `Number("")` ist `0`, ohne
 die Leerstring-Prüfung zuerst wäre das nicht unterscheidbar.
+
+Seit `0072` mockt `wegs/[id]/dokumente/__tests__/actions.test.ts` nicht mehr
+`.from("document").update(…)`, sondern `rpc("dokument_entfernen", …)` — und
+hält fest, dass die Entfernen-Action `from` gar nicht mehr anfasst. Ein
+direktes `UPDATE` wäre in der echten Datenbank abgelehnt worden; ein Mock, der
+es weiter erlaubt, hätte genau diesen Fehler auf Dauer verdeckt. Neu ist
+außerdem ein Fall für die Upload-Kompensation, die `false` zurückbekommt: kein
+Fehler, aber auch kein Treffer — das muss protokolliert und nicht als Erfolg
+gewertet werden.
 
 Die Fristrechnung wird **nicht** in TypeScript gespiegelt. Sie hat genau eine
 Heimat, und das ist die Datenbank. Dasselbe gilt für die Rückfallwerte selbst

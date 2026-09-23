@@ -31,6 +31,14 @@
 --     Aussagekraft (sie bestehen nachweislich auch ohne es, siehe Fix-Report
 --     Runde 1), weil RLS auf aufbewahrungsregel den fremden Mandanten fuer
 --     sie ohnehin schon vorher ausschliesst
+--   - aufbewahrung_effektiv bleibt auch dann bei genau sieben Zeilen, wenn
+--     ZWEI Mandanten eine Regel fuer dieselbe Dokumentart halten und der
+--     Aufrufer BYPASSRLS traegt (Nachtrag 0072): bis dahin fehlte im Join auf
+--     aufbewahrungsregel der Tenant-Abgleich, der Join faecherte auf und die
+--     Sicht lieferte zwei Zeilen fuer eine Dokumentart — beide mit der
+--     tenant_id des Aufrufers gestempelt, aber mit verschiedenen
+--     jahre/herkunft. Genau die 1:1-Zusicherung, auf die sich
+--     dokument_uebersicht beruft, war damit falsch
 --
 -- infra/supabase/tests/0069_dokumentenablage.sql bleibt unveraendert gueltig:
 -- dokument_uebersicht aendert sich an der Oberflaeche nicht, nur ihre interne
@@ -39,7 +47,7 @@
 
 begin;
 
-select plan(13);
+select plan(15);
 
 -- ===========================================================================
 -- Fixtures
@@ -295,6 +303,41 @@ insert into public.aufbewahrungsregel (tenant_id, doc_typ, jahre, rechtsgrundlag
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid, 'korrespondenz', 77,
         'Marker-Regel fuer den BYPASSRLS-Test (Fix Round 2)');
 
+-- Nachtrag 0072: Tenant B bekommt eine KONKURRIERENDE Regel fuer dieselbe
+-- Dokumentart. Ohne sie kann der Befund, den 0072 schliesst, hier gar nicht
+-- auftreten — bis 0071 hielt nur Tenant A eine korrespondenz-Regel, der Join
+-- fand also auch ohne Tenant-Abgleich nur eine Zeile und faecherte nie auf.
+-- Die Zusicherungen darunter konnten deshalb nicht scheitern; das war die
+-- eigentliche Luecke, nicht ihr Wortlaut.
+--
+-- 55 ist wie 77 ein Markerwert: er kollidiert weder mit einem gesetzlichen
+-- Rueckfall (8/6/10/dauerhaft) noch mit einem anderen Fixture-Wert dieses
+-- Vertrags (12, null, 77). Taucht er irgendwo auf, kann er nur von Tenant B
+-- stammen.
+insert into public.aufbewahrungsregel (tenant_id, doc_typ, jahre, rechtsgrundlage)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb71'::uuid, 'korrespondenz', 55,
+        'Konkurrierende Marker-Regel von Tenant B (Nachtrag 0072)');
+
+-- Die Session traegt weiterhin Tenant As Claims und laeuft als "postgres"
+-- (BYPASSRLS) — aufbewahrungsregel ist fuer sie ungefiltert, beide Regeln
+-- sind gleichzeitig sichtbar. Ohne den Tenant-Abgleich im Join von
+-- aufbewahrung_effektiv (0072) stehen hier acht Zeilen statt sieben, zweimal
+-- 'korrespondenz'.
+select is(
+  (select count(*)::int from public.aufbewahrung_effektiv),
+  7,
+  'unter BYPASSRLS bleibt aufbewahrung_effektiv bei genau sieben Zeilen, auch wenn zwei Mandanten eine Regel fuer dieselbe Dokumentart halten'
+);
+
+-- Und zwar bei der RICHTIGEN Zeile: Tenant Bs Marker darf in einer Sicht,
+-- die sich mit Tenant As tenant_id stempelt, nirgends auftauchen.
+select is(
+  (select count(*)::int from public.aufbewahrung_effektiv
+    where doc_typ = 'korrespondenz' and jahre = 55),
+  0,
+  'Tenant Bs konkurrierende Regel (55 Jahre) erscheint nie in der Sicht, die sich mit Tenant As tenant_id stempelt'
+);
+
 insert into public.document (tenant_id, weg_id, doc_typ, titel, dokument_datum)
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71'::uuid,
         'cccccccc-cccc-4ccc-8ccc-cccccccccc71'::uuid,
@@ -310,16 +353,34 @@ values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb71'::uuid,
 -- NULL bleiben (kein Match auf ae.tenant_id) — schluege das Praedikat fehl
 -- (nur "doc_typ" im Join), saehe Tenant Bs Dokument hier ebenfalls
 -- 2098-12-31 / 'mandantenregel', obwohl Tenant B nie eine solche Regel hatte.
+-- Zaehlend statt skalar (Nachtrag 0072): faechert aufbewahrung_effektiv auf,
+-- erscheint Tenant As Dokument ZWEIMAL in dokument_uebersicht. Ein skalares
+-- "(select ... from ...)" wuerde daran mit 21000 ("more than one row returned by
+-- a subquery used as an expression") sterben und den ganzen Vertrag
+-- abbrechen, statt eine Zusicherung sauber als "not ok" zu melden — und
+-- haette alle folgenden Zusicherungen mitgerissen. Ueber count(*) faellt
+-- beides auf: die Auffaecherung UND ein fehlender Tenant-Abgleich.
 select ok(
-  (
-    (select aufzubewahren_bis = date '2098-12-31' and frist_herkunft = 'mandantenregel'
-       from public.dokument_uebersicht
-      where titel = '0071 BYPASSRLS Tenant A')
-    and
-    (select aufzubewahren_bis is null and frist_herkunft is null
-       from public.dokument_uebersicht
-      where titel = '0071 BYPASSRLS Tenant B')
-  ),
+  -- Erst die reine Kardinalitaet, ohne Wertfilter: faechert
+  -- aufbewahrung_effektiv auf, steht Tenant As Dokument hier zweimal. Ein
+  -- Wertfilter in derselben Bedingung wuerde die Dublette wegfiltern und die
+  -- Auffaecherung unbemerkt durchlassen (genau daran ist die erste Fassung
+  -- dieser Zusicherung gescheitert — gemessen, nicht vermutet).
+  (select count(*)::int from public.dokument_uebersicht
+    where titel = '0071 BYPASSRLS Tenant A') = 1
+  and
+  (select count(*)::int from public.dokument_uebersicht
+    where titel = '0071 BYPASSRLS Tenant A'
+      and aufzubewahren_bis = date '2098-12-31'
+      and frist_herkunft = 'mandantenregel') = 1
+  and
+  (select count(*)::int from public.dokument_uebersicht
+    where titel = '0071 BYPASSRLS Tenant B') = 1
+  and
+  (select count(*)::int from public.dokument_uebersicht
+    where titel = '0071 BYPASSRLS Tenant B'
+      and aufzubewahren_bis is null
+      and frist_herkunft is null) = 1,
   'unter BYPASSRLS (document ungefiltert) verhindert ausschliesslich der explizite Tenant-Abgleich, dass Tenant As Marker-Regel (77 Jahre) auf Tenant Bs gleichartiges Dokument durchschlaegt'
 );
 

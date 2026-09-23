@@ -2,8 +2,8 @@
 
 Last audit: 2026-09-22 (zweiter Durchgang: Betriebsmodell)
 Recommendation: continue
-Confidence: medium — der lokale Codestand ist belegt (`0001`-`0071`, 19 gruene
-pgTAP-Vertraege im CI-Gate mit 355 Zusicherungen, `./scripts/verify.sh` gruen am
+Confidence: medium — der lokale Codestand ist belegt (`0001`-`0072`, 19 gruene
+pgTAP-Vertraege im CI-Gate mit 371 Zusicherungen, `./scripts/verify.sh` gruen am
 2026-09-23). Gesunken gegenueber dem letzten Audit ist die Sicherheit ueber die
 **Cloud**: `0061`-`0067` wurden am 2026-09-20 ausgerollt, aber `supabase
 migration list --linked` lief seither nicht. Der Cloud-Stand ist damit
@@ -14,7 +14,13 @@ auf den tatsaechlichen Codestand korrigiert — reine Faktenwerte, kein neuer
 Audit-Durchgang. Das 2026-09-23-Datum belegt nur, dass `verify.sh` an diesem
 Tag gegen genau diesen Codestand gruen lief, es ist kein neues Audit-Datum.
 `Recommendation`, `Confidence` und die Begruendung dahinter stammen weiterhin
-vom 2026-09-22-Audit und wurden nicht neu bewertet.)*
+vom 2026-09-22-Audit und wurden nicht neu bewertet. Dasselbe gilt fuer die
+Fortschreibung auf `0072` am 2026-09-23: Migrationsspanne und Vertragszahlen
+sind nachgezaehlt (`just test-db-all` → `Files=19, Tests=371`), die Bewertung
+ist es nicht. Insbesondere ist `Confidence: medium` NICHT deshalb bestaetigt,
+weil `0072` einen kritischen Befund geschlossen hat — dass ein solcher Befund
+erst im Branch-Review auffiel, spricht eher fuer eine erneute Pruefung als
+dagegen.)*
 
 Freshness ist maschinell pruefbar: `./scripts/check-project-reality-freshness.sh`
 (git-only, keine Secrets) zaehlt Produktcode-Commits seit dem letzten Refresh
@@ -28,18 +34,25 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
 - Success criteria: Ein Nutzer kann ohne Hilfe eine WEG anlegen, Eigentuemer einladen und den ersten gemeinsamen Workflow abschliessen; die WEG bleibt tenant-isoliert und die Produktgrenzen bleiben ehrlich.
 
 ## Current State
-- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0071`
+- Implemented: Next.js-16-Web-App, FastAPI/LangGraph-Agent, Migrationen `0001`-`0072`
   lokal, RLS-/Audit-/Agent-Guardrails, WEG/Einheiten/Personen/Eigentuemerschaft,
   Versammlung/TOP/Beschluss/Vote/Protokoll, Beschluss-Sammlung, Vorgangszentrale,
   Audit-Konsole und die Self-Managed-SaaS-Foundation (30-Tage-Trial, Registrierung,
   Onboarding-Wizard, Einladung per Link inkl. Annahmeseite).
-  **Seit 2026-09-23 gibt es eine Dokumentenablage** (`0069`-`0071`): der Verwalter
+  **Seit 2026-09-23 gibt es eine Dokumentenablage** (`0069`-`0072`): der Verwalter
   legt Unterlagen je WEG ab, versioniert sie und sieht die geltende
   Aufbewahrungsfrist samt Herkunft — Mandantenregel oder gesetzlicher Rueckfall,
   einstellbar unter `/einstellungen/aufbewahrung`. **Kein Eigentuemerportal** und
   **kein** Erfuellungsweg fuer das Einsichtsrecht nach § 18 Abs. 4 WEG (Rechtsprechung:
   Einsicht beim Verwalter, keine Pflicht zur digitalen Uebersendung) — die Landingpage
-  nennt diese Grenze jetzt ausdruecklich. Details: `docs/specs/2026-09-22-dokumentenablage-design.md`.
+  nennt diese Grenze jetzt ausdruecklich. `0072` schliesst zwei Befunde aus dem
+  Branch-Review: das Entfernen eines Dokuments war seit `0015` strukturell
+  unmoeglich (die SELECT-Policy filtert `deleted_at is null`, PostgreSQL lehnt
+  deshalb jedes UPDATE ab, das `deleted_at` setzt — gemessen, ohne RETURNING),
+  und der Join in `aufbewahrung_effektiv` fuehrte ohne Tenant-Praedikat fuer
+  einen BYPASSRLS-Aufrufer zu einer Auffaecherung. Die SELECT-Policy bleibt
+  unveraendert; der Soft-Delete laeuft jetzt ueber die RPC
+  `public.dokument_entfernen`. Details: `docs/specs/2026-09-22-dokumentenablage-design.md`.
   Der zugehoerige E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und per
   `playwright test --list` statisch geprueft, aber **noch nie ausgefuehrt** — er
   laeuft gegen die Cloud und ist freigabepflichtig (siehe „Next Logical Step").
@@ -63,12 +76,14 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `infra/supabase/tests/0000_rls_katalog.sql` prueft fixture-frei ueber `pg_class`
   und `pg_policy`, dass jede Tabelle in `public` RLS und FORCE RLS traegt, dass jede
   Nicht-Partition mindestens eine Policy hat und dass im Schema `private` keine
-  Tabelle liegt. Gemessen (Stand `0071`): 64 von 64 Tabellen (inkl. der beiden
-  partitionierten Elterntabellen, die der urspruengliche Vorschlag uebersehen
-  haette, und der seit `0069` neuen `aufbewahrungsregel`). Der Vertrag wurde
+  Tabelle liegt. Gemessen (Stand `0072`, das keine Tabelle hinzufuegt): 64 von
+  64 Tabellen (inkl. der beiden partitionierten Elterntabellen, die der
+  urspruengliche Vorschlag uebersehen haette, und der `aufbewahrungsregel` aus
+  `0069`). Der Vertrag wurde
   gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
-  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 19 Vertraege mit 355
-  Zusicherungen.
+  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 19 Vertraege mit 371
+  Zusicherungen (`0072` brachte keinen neuen Vertrag, sondern erweiterte die
+  bestehenden `0069` von 12 auf 26 und `0071` von 13 auf 15).
 - Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
   Bankabgleich, kein Mahnwesen. Das ist bewusst und steht so auf der Landingpage;
   die Dokumentenablage ist seit 2026-09-23 keine Grenze mehr, sondern ein
@@ -79,7 +94,7 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   RAG liefert bewusst `[]`; produktive Agent-Checkpoints und LLMOps-Gates fehlen.
 - Not verified: **Der Cloud-Migrationsstand.** `0061`-`0067` wurden am 2026-09-20 per
   `just db-migrate` ausgerollt; seither lief kein `supabase migration list --linked`.
-  `0068`-`0071` (inkl. der kompletten Dokumentenablage) sind lokal gebaut und
+  `0068`-`0072` (inkl. der kompletten Dokumentenablage) sind lokal gebaut und
   pgTAP-gruen, aber noch nie ausgerollt. Der Abgleich ist freigabepflichtig und
   sollte vor der naechsten produktionsnahen Aussage laufen. Ebenfalls nicht belegt: die Zahlen des letzten vollstaendigen
   E2E-Laufs (einzelne Specs liefen gezielt, ein dokumentierter Gesamtlauf fehlt seit
@@ -163,7 +178,7 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
    Umgebungstrennung, Backup und Betreiberwahl faellig — oder es bleiben
    Demo-Daten.
 2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
-   (freigabepflichtig), `0068`-`0071` per `just db-migrate` ausrollen (freigabepflichtig)
+   (freigabepflichtig), `0068`-`0072` per `just db-migrate` ausrollen (freigabepflichtig)
    und einen vollstaendigen `just e2e`-Lauf dokumentieren — inklusive des ersten
    jemals ausgefuehrten Laufs von `apps/web/e2e/dokumente.spec.ts` (bisher nur
    `--list`-geprueft, nie gegen eine echte Umgebung gelaufen).

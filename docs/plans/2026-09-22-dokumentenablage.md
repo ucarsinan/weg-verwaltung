@@ -12,11 +12,11 @@
 
 ## Abweichungen zwischen Plan und Umsetzung
 
-**Status: umgesetzt (Tasks 1–6, 2026-09-23).** Dieser Plan beschreibt den Stand
+**Status: umgesetzt (Tasks 1–7, 2026-09-23).** Dieser Plan beschreibt den Stand
 *vor* der Implementierung. Wo er von dem abweicht, was tatsächlich gebaut und
 committet wurde, steht das hier — nicht, weil der Plan falsch war (Pläne sind
 Annahmen, keine Zusagen), sondern weil ein Leser sonst etwas glaubt, das der
-Code nicht mehr tut. Details je Task: `.superpowers/sdd/2026-09-22-dokumentenablage/task-{1..6}-report.md`
+Code nicht mehr tut. Details je Task: `.superpowers/sdd/2026-09-22-dokumentenablage/task-{1..7}-report.md`
 und `progress.md` im selben Verzeichnis (Rulings 1–26).
 
 Maßgeblich für das WAS ist weiterhin `docs/specs/2026-09-22-dokumentenablage-design.md`
@@ -39,9 +39,10 @@ Maßgeblich für das WAS ist weiterhin `docs/specs/2026-09-22-dokumentenablage-d
 2. **`0069` hat 12 Zusicherungen, nicht 11.** Der Plan schreibt `select
    plan(11)` und erwartet elf Zusicherungen (Schritt 3, 4, 6, 8 unten). Die
    tatsächliche Migration `infra/supabase/tests/0069_dokumentenablage.sql`
-   zählt `select plan(12)` — eine zusätzliche Zusicherung aus dem Review kam
-   dazu (Mandantenregel mit `jahre = null` bleibt von „dauerhaft" per
-   Rückfall unterscheidbar). `0071` zählt inzwischen `plan(13)`.
+   zählte nach Task 1 `select plan(12)` — eine zusätzliche Zusicherung aus dem
+   Review kam dazu (Mandantenregel mit `jahre = null` bleibt von „dauerhaft"
+   per Rückfall unterscheidbar). Nach Task 7 (`0072`) steht sie bei
+   `plan(26)`, `0071` bei `plan(15)` (vorher 13) — siehe Abweichung 9.
 3. **`baueStoragePfad` trägt ein Versionssegment.** Der Plan (Task 2, Schritt
    5) baut `<tenant>/<weg>/<doc_typ>/<dokumentId>.<ext>`. Tatsächlich:
    `<tenant>/<weg>/<doc_typ>/<dokumentId>-v<version_no>-<eindeutig>.<ext>` —
@@ -92,7 +93,32 @@ Maßgeblich für das WAS ist weiterhin `docs/specs/2026-09-22-dokumentenablage-d
    `0071` zieht den kompletten Rückfall-`CASE` aus `0069` in
    `public.aufbewahrung_effektiv`; `dokument_uebersicht` liest seither von
    dort statt selbst zu rechnen.
-8. **Das Upload-Limit steht im Plan bereits korrekt bei 10 MB.** Zur
+9. **Task 7 brachte eine weitere Migration, `0072` — und eine bewusste
+   Ausnahme von „kein `SECURITY DEFINER`".** Der Plan sieht Task 7 gar nicht
+   vor; er entstand aus dem Branch-Review. Zwei Befunde:
+
+   a) **Der Soft-Delete war strukturell unmöglich, nicht nur fehlerhaft.**
+   `document_select_own_tenant` (`0015`) filtert `deleted_at is null`, und
+   PostgreSQL verlangt, dass die neue Zeile eines `UPDATE` unter der
+   SELECT-Policy sichtbar bleibt. Ein `UPDATE`, das `deleted_at` setzt, wird
+   deshalb *immer* abgelehnt — betroffen waren beide Schreibpfade in
+   `actions.ts`. Die Policy bleibt unverändert; der Schreibpfad wanderte in
+   `public.dokument_entfernen`, `SECURITY DEFINER`. Das widerspricht
+   Abweichung 1 **nicht**, sondern grenzt sie ab: dort ging es um einen
+   Lesepfad, für den RLS ausreichte und ein `tenant_id`-Parameter nur eine
+   Missbrauchsfläche geöffnet hätte. Die neue Funktion nimmt deshalb auch
+   keinen `tenant_id`-Parameter, sondern löst den Mandanten über
+   `public.tenant_id()` auf und gleicht ihn explizit ab.
+
+   b) **Der Join in `aufbewahrung_effektiv` (Abweichung 7) fächerte auf.**
+   Ohne Tenant-Prädikat lieferte die Sicht für einen Aufrufer mit `BYPASSRLS`
+   zwei Zeilen je Dokumentart, sobald zwei Mandanten eine Regel für dieselbe
+   Art hielten. `0072` ergänzt `and r.tenant_id = public.tenant_id()`.
+
+   `0072` brachte **keine** neue Vertragsdatei: die Zusicherungen erweitern
+   `0069` (12 → 26) und `0071` (13 → 15). Die `justfile`-Listen bleiben
+   deshalb unverändert.
+10. **Das Upload-Limit steht im Plan bereits korrekt bei 10 MB.** Zur
    Vollständigkeit gegen die Liste der bekannten Abweichungen geprüft: dieser
    Plan selbst nennt an keiner Stelle 25 MB (nur `docs/specs/…-design.md`
    dokumentiert ausdrücklich und korrekt, dass ursprünglich 25 MB vorgesehen
@@ -110,7 +136,7 @@ Stellen), die Routen unter `/wegs/[id]/dokumente` und
 - **Migrationsnummer `0069`.** Erste Zeile exakt: `-- WEG-Verwaltung migration 0069: <Beschreibung>`. `sql-lint` erzwingt Header und lückenlose Nummerierung.
 - **Jede neue Tabelle in `public`** trägt `enable row level security` **und** `force row level security` und mindestens eine Policy — sonst wird `infra/supabase/tests/0000_rls_katalog.sql` rot.
 - **Keine Tabelle in `private`.** Derselbe Vertrag.
-- **Fachliche Werte gehören als Daten in die Datenbank**, nicht als Konstante in den Code. Einzige Ausnahme hier: der gesetzliche Rückfall in `private._aufbewahrung_jahre`, und die Sicht meldet ihn als solchen. **Abweichung 1:** Diese Funktion wurde nicht gebaut — der Rückfall ist inline in der Sicht (seit `0071` in `public.aufbewahrung_effektiv`), siehe „Abweichungen zwischen Plan und Umsetzung" oben.
+- **Fachliche Werte gehören als Daten in die Datenbank**, nicht als Konstante in den Code. Einzige Ausnahme hier: der gesetzliche Rückfall in `private._aufbewahrung_jahre`, und die Sicht meldet ihn als solchen. **Abweichung 1:** Diese Funktion wurde nicht gebaut — der Rückfall ist inline in der Sicht (seit `0071` in `public.aufbewahrung_effektiv`), siehe „Abweichungen zwischen Plan und Umsetzung" oben. **Abweichung 9:** Für den *Schreib*pfad gilt das Gegenteil — dort ist eine `SECURITY DEFINER`-Funktion (`0072`) nicht Bequemlichkeit, sondern die einzige Möglichkeit.
 - **Upload-Grenze 10 MB**, an genau zwei Stellen und mit derselben Zahl: `serverActions.bodySizeLimit` in `apps/web/next.config.ts` und `file_size_limit` des Buckets `weg-docs`.
 - **Sicherheitsinvarianten bleiben hart:** RLS, Append-only auf `document_version`, Agent-Schreibsperre. Nicht konfigurierbar machen.
 - **Dokumentationspflicht:** Betroffene `.md`-Dateien im selben Commit nachziehen, nicht später.
@@ -122,9 +148,10 @@ Stellen), die Routen unter `/wegs/[id]/dokumente` und
 | Datei | Verantwortung |
 | --- | --- |
 | `infra/supabase/migrations/0069_dokumentenablage.sql` | Schema-Erweiterung, Regeltabelle, ~~Rückfall-Funktion~~ (inline in der Sicht, Abweichung 1), Sicht, Audit-Emitter |
-| `infra/supabase/tests/0069_dokumentenablage.sql` | pgTAP-Vertrag (12 Zusicherungen, Abweichung 2), rechnet die Frist von Hand nach |
+| `infra/supabase/tests/0069_dokumentenablage.sql` | pgTAP-Vertrag (26 Zusicherungen: 12 nach Task 1, Abweichung 2; +14 in Task 7, Abweichung 9), rechnet die Frist von Hand nach |
 | `infra/supabase/migrations/0070_weg_docs_bucket_limit.sql` | **nicht im Plan vorgesehen** — Bucket-Grenze `weg-docs` auf 10 MB (Task 3) |
-| `infra/supabase/migrations/0071_aufbewahrung_effektiv.sql` + `infra/supabase/tests/0071_aufbewahrung_effektiv.sql` | **nicht im Plan vorgesehen** — eigenständige Rückfall-Sicht (Abweichung 7), 13 Zusicherungen |
+| `infra/supabase/migrations/0071_aufbewahrung_effektiv.sql` + `infra/supabase/tests/0071_aufbewahrung_effektiv.sql` | **nicht im Plan vorgesehen** — eigenständige Rückfall-Sicht (Abweichung 7), 15 Zusicherungen (13 nach Task 4, +2 in Task 7) |
+| `infra/supabase/migrations/0072_dokument_entfernen.sql` | **nicht im Plan vorgesehen** — Soft-Delete als `SECURITY DEFINER`-RPC, Tenant-Abgleich im Join von `aufbewahrung_effektiv` (Abweichung 9). Kein eigener Vertrag: die Zusicherungen liegen in `0069` und `0071` |
 | `apps/web/src/lib/supabase/database.types.gen.ts` | neu erzeugt |
 | `apps/web/src/lib/supabase/database.types.ts` | `DocTyp`, `FristHerkunft` von Hand ergänzt |
 | `apps/web/src/modules/dokumente/aufbewahrung.ts` | Anzeigelogik der Frist — **keine** Fristrechnung |
@@ -635,7 +662,7 @@ just test-db-all
 
 Erwartet: `Files=18, Tests=341, Result: PASS` (17 + 1 Datei, 330 + 11 Zusicherungen).
 **Tatsächlich nach allen sechs Tasks: `Files=19, Tests=355`** — zwei neue
-Vertragsdateien (`0069` mit 12, `0071` mit 13 Zusicherungen), nicht eine; siehe
+Vertragsdateien (`0069` mit inzwischen 26, `0071` mit 15 Zusicherungen), nicht eine; siehe
 „Abweichungen" oben, Punkte 2 und 7.
 
 - [ ] **Step 9: Commit**

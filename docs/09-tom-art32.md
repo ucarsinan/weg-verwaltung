@@ -135,7 +135,19 @@ Zusage: **er schlägt vor, er schreibt nicht.**
 | Agent ist keine Datenbankrolle | Agentenrechte sind ein `actor_type`/GUC, keine Rolle mit Grants | `0046_least_privilege.sql`: „agent is not a DB role" | belegt |
 | Schreibsperre auf allen Finanztabellen | `tg_finance_allocation_block_agent_writes()` wirft `42501` | `0061`–`0067`, je ein pgTAP-Fall pro Vertrag | belegt |
 | Lebenszyklus-Aktionen für Agenten gesperrt | `erstelle_abrechnung`, `beschliesse_abrechnung`, `erstelle_vermoegensbericht` u. a. prüfen `app.actor_type` | `0063`, `0065` | belegt |
+| Schreibsperre auf den Aufbewahrungsfristen | derselbe Trigger auf `aufbewahrungsregel` | `0069`; zugesichert erst seit `0072` (je ein Fall für `INSERT`, `UPDATE`, `DELETE` im `0069`-Vertrag) | belegt |
+| Dokumente entfernen für Agenten gesperrt | `dokument_entfernen()` prüft `app.actor_type` und wirft `42501`. Die Datenbank weist eine als Agent markierte Anfrage zurück (zugesichert); die **Markierung setzt die Agent-Laufzeit heute nicht** — `_inject_actor_type_header` in `apps/agent/app/tools/runtime.py` ist ein `pass` hinter `TODO(actor-type)`. Der Guard ist damit Verteidigung in der Tiefe für den Tag, an dem ein Schreibwerkzeug entsteht | `0072`, Abschnitt 8 im `0069`-Vertrag | belegt (DB-Seite) |
 | Pseudonymisierung vor Übergabe an ein Sprachmodell | Klarnamen durch stabile Hash-IDs ersetzen | — | offen |
+
+**Zur Reichweite der `actor_type`-Zeilen.** Alle vier Sperren oben
+(Finanztabellen, Lebenszyklus-Aktionen, Aufbewahrungsfristen, Dokumente
+entfernen) hängen daran, dass eine Anfrage als Agent markiert ankommt. Der Header
+`X-Actor-Type`, der `app.actor_type` setzt, wird derzeit von **keinem**
+Agent-Aufruf gesendet (`TODO(actor-type)`, siehe Zeile oben). Heute ist
+dadurch nichts exponiert — die Werkzeugoberfläche des Agenten ist lesend —,
+aber die Sperren sind damit belegt als *Datenbankverhalten*, nicht als
+durchlaufener Ende-zu-Ende-Pfad. Diese Unterscheidung ist genau die, die
+§ 9.6 unten einfordert; sie gehört auch hierher, nicht nur dort.
 
 **Die Pseudonymisierung ist geplant, nicht umgesetzt.** `03-security-model.md`
 3.8 beschreibt sie als Zielzustand. Solange sie fehlt, darf kein Prompt mit
@@ -164,15 +176,25 @@ sie die am besten belegte.
 
 | Maßnahme | Umsetzung | Nachweis | Status |
 | --- | --- | --- | --- |
-| Datenbankverträge als ausführbare Tests | 19 pgTAP-Verträge, 355 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
+| Datenbankverträge als ausführbare Tests | 19 pgTAP-Verträge, 371 Zusicherungen | `just test-db-all`, Liste im `justfile` | belegt |
 | Mandantentrennung katalogweit zugesichert | 5 Zusicherungen über `pg_class`/`pg_policy`, fixture-frei | `just test-security-db`, `infra/supabase/tests/0000_rls_katalog.sql` | belegt |
 | Verträge blockieren die Auslieferung | CI-Job `db-regression (pgTAP)` läuft bei jedem Pull Request | `.github/workflows/ci.yml` | belegt |
-| Anwendungstests | 524 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
+| Anwendungstests | 525 Unit- und Modultests, Lint, Typprüfung, Build | `./scripts/verify.sh`, CI-Job `web` | belegt |
 | Browsertests gegen die echte Umgebung | Playwright-Suite | `just e2e` | belegt |
 | Migrationsnummern lückenlos und reviewt | CI-Job `sql-lint` | `.github/workflows/ci.yml` | belegt |
 | Ausrollen nur aus geprüftem Stand | `scripts/db-migrate-guard.sh`: nichts Uncommittetes, `HEAD` = `origin/main`, getippte Bestätigung | Migration in `justfile`, Skript im Repo | belegt |
 
-**Zum letzten Punkt.** Bis zum 20. September 2026 konnte jede Datei im
+**Zu den Vertragszahlen: eine Zusicherung zu zählen heißt nicht, sie zu
+haben.** Am 23. September 2026 fiel im Branch-Review auf, dass der Vertrag zur
+Dokumentenablage (`0069`) die Agenten-Schreibsperre und die Audit-Emitter zwar
+in seinem eigenen Scope-Kommentar nannte — und dieses Dokument sie in § 9.4
+als „belegt" führte — aber keine einzige Zusicherung dazu enthielt. Das ist
+die gefährlichere Sorte Lücke: nicht eine fehlende Maßnahme, sondern ein
+Nachweis, der auf nichts zeigt. `0072` trägt sie nach, jede einzeln rot
+gesehen (Trigger gedroppt, Guard entfernt) und nicht nur grün. Wo diese Datei
+künftig „belegt" schreibt, muss die Zusicherung nachweislich scheitern können.
+
+**Zum vorletzten Punkt.** Bis zum 20. September 2026 konnte jede Datei im
 Migrationsverzeichnis in die Produktionsdatenbank gelangen — committet oder
 nicht, reviewt oder nicht. Der Guard schließt das. Er ist ausdrücklich
 erwähnenswert, weil er eine **organisatorische** Maßnahme (Vier-Augen-Prinzip
@@ -251,3 +273,4 @@ mit dem, was dann tatsächlich läuft, nicht mit dem, was vorgesehen war.
 | 2026-09-22 | Backup-Konzept als § 10 ergänzt; 9.7 präzisiert: der Free-Plan hat gar keine Backups, und ein logischer Restore stellt die Audit-Kette nicht wieder her. Nachweis: `docs/10-backup-und-wiederherstellung.md`. |
 | 2026-09-22 | Trennungskontrolle von „teilweise" auf „belegt": `0000_rls_katalog.sql` sichert RLS, FORCE RLS, Policy-Pflicht und das leere Schema `private` katalogweit zu. 9.7 um die erledigte Maßnahme gekürzt. |
 | 2026-09-23 | § 9.6 auf 19 pgTAP-Verträge / 355 Zusicherungen und 524 Anwendungstests nachgezogen — Migrationen `0069`-`0071` (Dokumentenablage, Aufbewahrungsfristen) brachten zwei neue Verträge hinzu. Migrationsstand jetzt `0071`, lokal; noch nicht in der Cloud ausgerollt. |
+| 2026-09-23 | `0072`: § 9.4 um zwei Zeilen ergänzt (Agenten-Schreibsperre auf `aufbewahrungsregel`, Agenten-Sperre in `dokument_entfernen()`). § 9.6 auf 371 Zusicherungen / 525 Anwendungstests nachgezogen — keine neuen Verträge, die bestehenden `0069` (12 → 26) und `0071` (13 → 15) wurden erweitert. Dazu ein Absatz in § 9.6: `0069` zählte die Agenten-Sperre und die Audit-Emitter als abgedeckt, ohne sie zuzusichern; `0072` trägt das nach. Migrationsstand jetzt `0072`, lokal; noch nicht in der Cloud ausgerollt. Fix-Runde 1: die neue § 9.4-Zeile benennt jetzt den ruhenden Header-Injektor (`TODO(actor-type)`) statt nur die DB-Sperre, dazu ein Absatz zur Reichweite aller `actor_type`-Zeilen. |
