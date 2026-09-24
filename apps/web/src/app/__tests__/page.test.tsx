@@ -21,11 +21,30 @@ describe("LandingPage", () => {
     expect(registrationLinks[0]).toHaveAttribute("href", "/registrieren");
   });
 
-  it("makes the product boundaries visible", () => {
+  it("advertises the document store with its § 18 Abs. 4 WEG boundary", () => {
     render(<LandingPage />);
 
+    // Pins the substance, not just the heading: what it does (ablegen,
+    // versionieren, Aufbewahrungsfrist) and what it explicitly is not (kein
+    // Eigentümerportal, keine Erfüllung von § 18 Abs. 4 WEG durch Versand).
     expect(
-      screen.getByText(/Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung/i),
+      screen.getByText(
+        /Unterlagen je WEG ablegen, versionieren und mit Aufbewahrungsfrist führen/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Kein Eigentümerportal/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/§ 18 Abs\. 4 WEG gewährt weiterhin der Verwalter/i),
+    ).toBeInTheDocument();
+  });
+
+  it("makes the remaining product boundaries visible", () => {
+    render(<LandingPage />);
+
+    // Dokumentenablage left this list on 2026-09-23 — it is now a shipped
+    // feature (pinned separately above), not a boundary.
+    expect(
+      screen.getByText(/Keine Bankanbindung, kein Mahnwesen und keine Rechtsberatung/i),
     ).toBeInTheDocument();
     expect(screen.getByText("12,90 €")).toBeInTheDocument();
     expect(screen.getByText("Für 3–10 Einheiten")).toBeInTheDocument();
@@ -46,5 +65,25 @@ describe("PricesPage", () => {
         .getAllByRole("link", { name: /30 Tage kostenlos starten/i })
         .some((link) => link.getAttribute("href") === "/registrieren?plan=start"),
     ).toBe(true);
+  });
+
+  it("carries the same document store and boundary copy as the landing page", () => {
+    render(<PricesPage />);
+
+    // preise/page.tsx received the identical text as page.tsx (Task 6). This
+    // pins that mirror explicitly, so an edit to one page without the other
+    // fails a test instead of only drifting silently.
+    expect(
+      screen.getByText(
+        /Unterlagen je WEG ablegen, versionieren und mit Aufbewahrungsfrist führen/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Kein Eigentümerportal/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/§ 18 Abs\. 4 WEG gewährt weiterhin der Verwalter/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Keine Bankanbindung, kein Mahnwesen und keine Rechtsberatung/i),
+    ).toBeInTheDocument();
   });
 });

@@ -117,6 +117,22 @@ export type VerteilungsschluesselQuelle =
   | "beschluss"
   | "manuell";
 
+/** Dokumentart (Migration 0069). Bestimmt die Aufbewahrungsfrist. */
+export type DocTyp =
+  | "beschluss"
+  | "protokoll"
+  | "doku"
+  | "rechnung"
+  | "vertrag"
+  | "bescheid"
+  | "korrespondenz";
+
+/**
+ * Herkunft der Aufbewahrungsfrist in `dokument_uebersicht` (Migration 0069):
+ * eine gepflegte Mandantenregel oder der gesetzliche Rueckfallwert.
+ */
+export type FristHerkunft = "mandantenregel" | "gesetzlicher_rueckfall";
+
 export type Json =
   | string
   | number
@@ -990,6 +1006,14 @@ export type Database = Overwrite<
                 p_resolution_id?: string | null;
               };
               Returns: undefined;
+            };
+            // Soft-Delete der Dokumentenablage (Migration 0072). Signatur
+            // manuell nachgetragen wie die uebrigen RPCs hier —
+            // database.types.gen.ts kennt sie noch nicht (Regenerieren
+            // erfordert einen Cloud-Zugriff).
+            dokument_entfernen: {
+              Args: { p_dokument_id: string; p_weg_id: string };
+              Returns: boolean;
             };
             erstelle_vermoegensbericht: {
               Args: { p_weg_id: string; p_jahr: number };

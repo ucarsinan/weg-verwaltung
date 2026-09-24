@@ -1,4 +1,5 @@
 import {
+  Archive,
   Building2,
   IdCard,
   ShieldCheck,
@@ -20,4 +21,5 @@ export const SETTINGS_SUBNAV: readonly SettingsNavItem[] = [
   { label: "Mandant", href: "/einstellungen/mandant", icon: Building2 },
   { label: "Sicherheit", href: "/einstellungen/sicherheit", icon: ShieldCheck },
   { label: "Mitglieder & Rollen", href: "/einstellungen/mitglieder", icon: UsersRound },
+  { label: "Aufbewahrung", href: "/einstellungen/aufbewahrung", icon: Archive },
 ] as const;

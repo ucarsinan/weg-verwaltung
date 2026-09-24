@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, FileText, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -82,9 +82,10 @@ export default function PricesPage() {
       </section>
 
       <section className="border-y border-[color:var(--color-border)] bg-[color:var(--color-secondary)]">
-        <div className="mx-auto grid max-w-5xl gap-6 px-6 py-10 sm:px-8 md:grid-cols-2">
+        <div className="mx-auto grid max-w-5xl gap-6 px-6 py-10 sm:px-8 md:grid-cols-3">
           <div className="flex gap-3"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" /><div><h2 className="text-sm font-semibold">Ein Bereich nur für eure WEG</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Alle Eigentümer erhalten ihr eigenes Konto und arbeiten getrennt von anderen Gemeinschaften.</p></div></div>
-          <div><h2 className="text-sm font-semibold">Was noch nicht enthalten ist</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, keine Dokumentenablage, kein Mahnwesen und keine Rechtsberatung.</p></div>
+          <div className="flex gap-3"><FileText className="mt-0.5 size-5 shrink-0 text-[color:var(--color-ai-violet)]" aria-hidden="true" /><div><h2 className="text-sm font-semibold">Dokumentenablage für die Verwaltung</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Unterlagen je WEG ablegen, versionieren und mit Aufbewahrungsfrist führen. Kein Eigentümerportal — die Einsicht nach § 18 Abs. 4 WEG gewährt weiterhin der Verwalter.</p></div></div>
+          <div><h2 className="text-sm font-semibold">Was noch nicht enthalten ist</h2><p className="mt-1 text-sm leading-6 text-[color:var(--color-muted-foreground)]">Keine Bankanbindung, kein Mahnwesen und keine Rechtsberatung.</p></div>
         </div>
       </section>
 
