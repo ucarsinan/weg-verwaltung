@@ -41,8 +41,9 @@ Trust-Quelle.
 
 ## Statusgrenzen
 
-- E2E-Specs liegen unter `e2e/`; ein aktueller Cloud-E2E-Lauf wurde in diesem
-  Audit nicht ausgeführt.
+- E2E-Specs liegen unter `e2e/`; der volle Cloud-E2E-Lauf vom 2026-09-25 (in
+  zwei Teilen wegen eines plattenspeicherbedingten Abbruchs) bestand 98 von
+  100 Tests, 2 übersprungen, 0 fehlgeschlagen.
 - Die Sidebar ist desktop-first; eine vollständige mobile Navigation ist offen.
 - MFA-Flow (TOTP-Enrolment + Verification — `tenant_admin` und
   `verwalter_mitarbeiter` pflicht, siehe `docs/03` §3.3).
