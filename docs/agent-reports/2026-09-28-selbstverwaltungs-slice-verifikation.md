@@ -124,8 +124,15 @@ Vorschau prüfenswert ist. Der persistierte Beweis liegt jetzt in
 | --- | --- | --- |
 | `just typecheck` | `pass` | tsc und mypy ohne Befund |
 | `playwright test selbstverwaltung` | `pass` | 5 von 5 (2 Auth-Setups, 3 Tests), 21,8 s |
+| `playwright test scenarios` | `pass` | 7 von 7, 32,0 s — nachgeholt, weil die geänderte Datei zunächst ungeprüft blieb und die CI kein Playwright ausführt |
 | `./scripts/verify.sh` | `pass` | siehe Commit |
-| `just e2e` (volle Suite) | `skipped` | nicht erneut gelaufen; die neue Datei wurde isoliert geprüft |
+| `just e2e` (volle Suite) | `skipped` | Nur die beiden berührten Dateien wurden geprüft. Die übrigen 19 Specs sind auf diesem Zweig nicht gelaufen — sie wurden auch nicht angefasst. |
+
+**Zur CI-Abdeckung:** `.github/workflows/` führt kein Playwright aus. Die
+grünen PR-Prüfungen decken Lint, Typecheck, Unit-Tests, Codegen-Drift,
+SQL-Lint und die pgTAP-Verträge ab — **keinen** E2E-Test. Eine Änderung an
+einer Spec-Datei wird also von der CI nicht validiert; das muss von Hand
+geschehen und wurde hier nachgeholt.
 
 ## Git-Status
 
