@@ -1,10 +1,11 @@
 # Dokumentenablage Design
 
 Datum: 2026-09-22
-Status: umgesetzt (Tasks 1–7, abgeschlossen 2026-09-23) — Migrationen `0069`-`0072` lokal
-gebaut und pgTAP-gruen, Cloud-Rollout steht noch aus (freigabepflichtig). Der
-E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und `--list`-geprueft,
-aber noch nie ausgefuehrt.
+Status: umgesetzt (Tasks 1–7, abgeschlossen 2026-09-23) — Migrationen `0069`-`0072` sind
+seit dem 2026-09-25 auch in der Cloud ausgerollt und verifiziert (`supabase
+migration list --linked`, `Remote`-Spalte gefuellt fuer `0067`-`0072`). Der
+E2E-Spec `apps/web/e2e/dokumente.spec.ts` lief am 2026-09-25 erstmals (Tests
+18-20, alle gruen, Teil eines Gesamtlaufs von 98 von 100 bestandenen Tests).
 Migration: `0069` (erweitert um `0070`, `0071`, `0072`)
 
 ## Ziel
@@ -574,15 +575,22 @@ was die Sicht liefert (`formatJahreLabel`), sie berechnet nichts nach.
 
 ### E2E `dokumente.spec.ts`
 
+**Lief am 2026-09-25** als Teil des Gesamtlaufs (siehe `AGENTS.md`): alle drei
+Fälle unten bestanden, eingebettet in einen Lauf von 98 von 100 bestandenen
+Tests (2 übersprungen, 0 fehlgeschlagen, nach einem plattenspeicherbedingten
+Abbruch in zwei Teilen).
+
 1. Dokument hochladen → erscheint in der Liste mit korrekter Frist
 2. Neue Version hochladen → Zähler steigt, alte Version bleibt lesbar
 3. **Frist für Rechnungen in den Einstellungen von 8 auf 10 Jahre ändern → die
    Frist in der Dokumentenliste ändert sich mit**
 
 Schritt 3 ist der Beweis, dass die Regel Daten sind und nicht Code. Ohne ihn
-bliebe „einstellbar" eine Behauptung.
+bliebe „einstellbar" eine Behauptung — am 2026-09-25 lief genau dieser Beweis
+durch.
 
-**Datenresiduum ist permanent, nicht nur unaufgeräumt.** Jeder vollständige
+**Datenresiduum ist permanent, nicht nur unaufgeräumt — und seit dem
+2026-09-25-Lauf real, nicht mehr nur Designbeschreibung.** Jeder vollständige
 Lauf hinterlässt im Cloud-Tenant 3 `weg`-Zeilen, 3 `document`-Zeilen (eine
 davon über `dokument_entfernen` soft-gelöscht, bleibt aber in der Tabelle
 stehen), 4 `document_version`-Zeilen und 4 Objekte im Bucket `weg-docs`

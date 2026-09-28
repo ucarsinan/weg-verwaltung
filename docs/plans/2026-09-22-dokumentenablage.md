@@ -163,7 +163,7 @@ Stellen), die Routen unter `/wegs/[id]/dokumente` und
 | `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/neu/page.tsx` + `upload-form.tsx` | Hochladen |
 | `apps/web/src/app/(dashboard)/wegs/[id]/dokumente/[dokumentId]/page.tsx` + `neue-version-form.tsx` + `entferne-dokument-button.tsx` | Versionen, Herunterladen, neue Version, Entfernen (die beiden Formulare fehlten im Plan) |
 | `apps/web/src/app/(dashboard)/einstellungen/aufbewahrung/page.tsx` + `regel-form.tsx` + `actions.ts` | Fristregeln bearbeiten |
-| `apps/web/e2e/dokumente.spec.ts` | der Beweis, dass die Regel Daten ist — geschrieben, **nie ausgeführt** (freigabepflichtig, Ruling 2/25) |
+| `apps/web/e2e/dokumente.spec.ts` | der Beweis, dass die Regel Daten ist — lief am 2026-09-25 erstmals (Tests 18-20 bestanden, Teil eines Gesamtlaufs von 98 von 100 bestandenen Tests) |
 
 ---
 

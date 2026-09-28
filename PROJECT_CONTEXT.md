@@ -39,8 +39,8 @@ Das Projekt ist ein Portfolio-Produkt mit starkem Sicherheitsfokus: Mandanten-Is
 
 ## Aktueller Zustand
 
-Lokal existieren Web-App, Agent-Service und Supabase-Migrationen bis `0067`.
+Lokal existieren Web-App, Agent-Service und Supabase-Migrationen bis `0072`.
 Die Pflichtkette aus § 28 WEG — Wirtschaftsplan, Jahresabrechnung, Vermoegensbericht — ist im Datenmodell vollstaendig.
-Der Cloud-Migrationsstand ist nicht automatisch belegt und muss vor produktionsnahen Aussagen direkt verifiziert werden; zuletzt ausgerollt am 2026-09-20, seither kein `supabase migration list --linked`.
+Der Cloud-Migrationsstand ist seit dem 2026-09-25 verifiziert (`supabase migration list --linked`, `Remote`-Spalte gefuellt fuer `0067`-`0072`); vor produktionsnahen Aussagen sollte das bei jeder neu hinzugekommenen Migration erneut geprueft werden.
 Massgeblich fuer den realen Stand ist `PROJECT_REALITY.md`.
 RAG-Retrieval ist Scaffold und liefert bewusst `[]`, bis Datenpipeline und Eval-Gates vorhanden sind.

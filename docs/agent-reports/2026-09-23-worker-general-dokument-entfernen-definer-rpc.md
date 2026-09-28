@@ -33,6 +33,15 @@ durchlaufen, die Cloud kennt die Funktion nicht, und die Agenten-Sperre in
 der Funktion ist heute nicht erreichbar, weil die Agent-Laufzeit den dafür
 nötigen Header nicht setzt.
 
+**Nachtrag 2026-09-25:** Die beiden ersten der drei oben genannten Lücken sind
+seither geschlossen — `just e2e` hat den Pfad am 2026-09-25 erstmals
+durchlaufen (Test 19 von `apps/web/e2e/dokumente.spec.ts`, bestanden, Teil
+eines Gesamtlaufs von 98 von 100 bestandenen Tests), und die Cloud kennt die
+Funktion seit demselben Tag (`0072` per `just db-migrate` ausgerollt,
+verifiziert per `supabase migration list --linked`). Die dritte — die
+Agenten-Sperre ist mangels Header-Injektion nicht erreichbar — besteht
+unveraendert fort.
+
 ## Handfester Fahrplan
 
 | Reihenfolge | Schritt | Datei/Bereich | Warum? | Freigabe nötig? |
@@ -130,8 +139,8 @@ nötigen Header nicht setzt.
 
 | Risiko | Bedeutung | Nächster Schritt |
 | --- | --- | --- |
-| `just e2e` hat den `dokument_entfernen`-Pfad nie durchlaufen | Der einzige Test, der RLS, die Funktion und die UI gemeinsam prüft, ist unausgeführter Code | Gezielten Lauf von `dokumente.spec.ts` freigeben |
-| Cloud steht auf `0067`, `dokument_entfernen` existiert dort nicht | Jede Aussage über den Cloud-Zustand ist unbelegt | `supabase migration list --linked` freigeben |
+| ~~`just e2e` hat den `dokument_entfernen`-Pfad nie durchlaufen~~ — behoben am 2026-09-25 | Test 19 von `dokumente.spec.ts` hat den Pfad über die echte Oberfläche und echte RLS ausgeführt und bestanden | Keiner mehr — erledigt |
+| ~~Cloud steht auf `0067`, `dokument_entfernen` existiert dort nicht~~ — behoben am 2026-09-25 | `0072` ist per `just db-migrate` ausgerollt und per `supabase migration list --linked` verifiziert | Keiner mehr — erledigt |
 | `_inject_actor_type_header` ist inaktiv | Die Agenten-Sperre in `dokument_entfernen` ist Verteidigung in der Tiefe, kein durchlaufener Pfad | Vor dem ersten schreibenden Agent-Werkzeug implementieren |
 | Definer-Oberfläche wächst ohne Katalog-Guard | Eine künftige Funktion Nr. 13 fiele keinem Vertrag auf | Positivliste analog `0000_rls_katalog.sql` entwerfen |
 | E2E-Residuum wächst mit jedem Lauf dauerhaft | Cloud-Tenant sammelt unlöschbare Test-Daten | Kein Fix vorgesehen; vor jedem Lauf bewusst freigeben |
@@ -142,5 +151,5 @@ nötigen Header nicht setzt.
 | --- | --- | --- |
 | P1 | `_inject_actor_type_header` implementieren (`apps/agent/app/tools/runtime.py:160-178`) | Ohne sie feuert keine der vier `actor_type`-Sperren in der Praxis; muss vor dem ersten schreibenden Agent-Werkzeug stehen |
 | P2 | Katalogweiten Definer-Guard entwerfen, modelliert auf `0000_rls_katalog.sql` | `0055_advisor_hardening.sql` zählt einzeln auf; unbeschränktes Wachstum der `authenticated`-Definer-Oberfläche |
-| P2 | `just e2e` einmal freigegeben laufen lassen | Einziger unausgeführter Beweis-Posten der gesamten Dokumentenablage-Funktionalität |
-| P2 | Cloud-Migrationsstand verifizieren (`supabase migration list --linked`) | Cloud und lokaler Code laufen seit fünf Migrationen (`0068`-`0072`) auseinander |
+| ~~P2~~ erledigt 2026-09-25 | ~~`just e2e` einmal freigegeben laufen lassen~~ | Lief am 2026-09-25 (Teil eines Gesamtlaufs von 98 von 100 bestandenen Tests) |
+| ~~P2~~ erledigt 2026-09-25 | ~~Cloud-Migrationsstand verifizieren (`supabase migration list --linked`)~~ | `Remote`-Spalte am 2026-09-25 gefüllt für `0067`-`0072` |

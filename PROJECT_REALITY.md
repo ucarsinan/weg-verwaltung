@@ -4,10 +4,12 @@ Last audit: 2026-09-22 (zweiter Durchgang: Betriebsmodell)
 Recommendation: continue
 Confidence: medium — der lokale Codestand ist belegt (`0001`-`0072`, 19 gruene
 pgTAP-Vertraege im CI-Gate mit 371 Zusicherungen, `./scripts/verify.sh` gruen am
-2026-09-23). Gesunken gegenueber dem letzten Audit ist die Sicherheit ueber die
-**Cloud**: `0061`-`0067` wurden am 2026-09-20 ausgerollt, aber `supabase
-migration list --linked` lief seither nicht. Der Cloud-Stand ist damit
-plausibel, nicht belegt.
+2026-09-23). Die Cloud-Unsicherheit, die den 2026-09-22-Audit gegenueber seinem
+Vorgaenger herabstufte, ist seit dem 2026-09-25 aufgeloest: `0068`-`0072`
+wurden an diesem Tag per `just db-migrate` ausgerollt, und `supabase migration
+list --linked` zeigt die `Remote`-Spalte gefuellt fuer `0067` bis `0072` (die
+fruehere Ausrollung von `0061`-`0067` am 2026-09-20 eingeschlossen). Der
+Cloud-Migrationsstand ist damit belegt, nicht mehr nur plausibel.
 
 *(Migrationsspanne, Vertragszahlen und das `verify.sh`-Laufdatum am 2026-09-23
 auf den tatsaechlichen Codestand korrigiert — reine Faktenwerte, kein neuer
@@ -20,7 +22,12 @@ sind nachgezaehlt (`just test-db-all` → `Files=19, Tests=371`), die Bewertung
 ist es nicht. Insbesondere ist `Confidence: medium` NICHT deshalb bestaetigt,
 weil `0072` einen kritischen Befund geschlossen hat — dass ein solcher Befund
 erst im Branch-Review auffiel, spricht eher fuer eine erneute Pruefung als
-dagegen.)*
+dagegen. Ebenso am 2026-09-25: der Cloud-Absatz oben ist auf den verifizierten
+Rollout- und E2E-Stand nachgezogen — per `supabase migration list --linked`
+und dem dokumentierten `just e2e`-Lauf belegte Faktenwerte, keine neue
+Bewertung. `Confidence: medium` bleibt unveraendert; dass der Cloud-Stand jetzt
+belegt statt nur plausibel ist, hebt die Einstufung nicht automatisch an — das
+bliebe einem echten Audit-Durchgang vorbehalten.)*
 
 Freshness ist maschinell pruefbar: `./scripts/check-project-reality-freshness.sh`
 (git-only, keine Secrets) zaehlt Produktcode-Commits seit dem letzten Refresh
@@ -53,9 +60,12 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   einen BYPASSRLS-Aufrufer zu einer Auffaecherung. Die SELECT-Policy bleibt
   unveraendert; der Soft-Delete laeuft jetzt ueber die RPC
   `public.dokument_entfernen`. Details: `docs/specs/2026-09-22-dokumentenablage-design.md`.
-  Der zugehoerige E2E-Spec `apps/web/e2e/dokumente.spec.ts` ist geschrieben und per
-  `playwright test --list` statisch geprueft, aber **noch nie ausgefuehrt** — er
-  laeuft gegen die Cloud und ist freigabepflichtig (siehe „Next Logical Step").
+  Der zugehoerige E2E-Spec `apps/web/e2e/dokumente.spec.ts` lief am 2026-09-25
+  erstmals: Test 18 (Upload), Test 19 (neue Version **und** Entfernen aus der
+  Liste — der einzige Pfad, der `public.dokument_entfernen` ausuebt) und Test 20
+  (eine geaenderte Aufbewahrungsregel wirkt sich auf die Liste aus) bestanden
+  alle drei (siehe „Next Logical Step" fuer den vollstaendigen Lauf und sein
+  Datenresiduum).
   **Die Pflichtkette aus § 28 WEG ist seit dem 2026-09-20 im Datenmodell vollstaendig:**
   Wirtschaftsplan mit positionsgenauer Verteilung (`0060`), Zahlungseingaenge und
   offene Posten (`0061`), Ausgaben und Erhaltungsruecklage (`0062`), Jahresabrechnung
@@ -92,19 +102,26 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `0039_sollstellung_option_b.sql`. Der SaaS-Slice hat
   weiterhin keinen Billing-Adapter; der Mailversand laeuft im Resend-Sandbox-Modus.
   RAG liefert bewusst `[]`; produktive Agent-Checkpoints und LLMOps-Gates fehlen.
-- Not verified: **Der Cloud-Migrationsstand.** `0061`-`0067` wurden am 2026-09-20 per
-  `just db-migrate` ausgerollt; seither lief kein `supabase migration list --linked`.
-  `0068`-`0072` (inkl. der kompletten Dokumentenablage) sind lokal gebaut und
-  pgTAP-gruen, aber noch nie ausgerollt. Der Abgleich ist freigabepflichtig und
-  sollte vor der naechsten produktionsnahen Aussage laufen. Ebenfalls nicht belegt: die Zahlen des letzten vollstaendigen
-  E2E-Laufs (einzelne Specs liefen gezielt, ein dokumentierter Gesamtlauf fehlt seit
-  dem 2026-09-19) — **`apps/web/e2e/dokumente.spec.ts` wurde noch kein einziges Mal
-  ausgefuehrt**, nur `playwright test --list` bestaetigt, dass die drei Faelle
-  geparst werden —, produktives Web-/Agent-Hosting, Backup/Restore und
+- Not verified: produktives Web-/Agent-Hosting, Backup/Restore und
   Incident-Runbook, AVV und Art.-30-Verzeichnis, Support/SLA, Pricing-Akzeptanz.
   Advisors zeigen unveraendert 7x `auth_rls_initplan`-WARN und 1x `duplicate_index`-WARN
   (im `AGENTS.md`-Backlog). In der Frankfurt-Cloud liegen seit dem 2026-09-21 bewusst
-  stehengelassene Demo-Daten.
+  stehengelassene Demo-Daten — seit dem 2026-09-25-E2E-Lauf zusaetzlich 3 `weg`-,
+  3 `document`- und 4 `document_version`-Zeilen sowie 4 Storage-Objekte in
+  `weg-docs`, alle strukturell unloeschbar (append-only-Trigger plus
+  `on delete restrict` auf beiden FKs, siehe „Next Logical Step").
+  **Der Cloud-Migrationsstand ist seit dem 2026-09-25 verifiziert:** `0068`-`0072`
+  wurden an diesem Tag per `just db-migrate` ausgerollt, und `supabase migration
+  list --linked` zeigt die `Remote`-Spalte gefuellt fuer `0067` bis `0072`.
+  **Der Gesamtlauf der E2E-Suite liegt jetzt vor**, in zwei Teilen wegen eines
+  plattenspeicherbedingten Abbruchs: Teil 1 (`just e2e`) deckte Tests 1-83 von
+  100 ab — 81 bestanden, 2 uebersprungen (`test.skip`: `finanz-wp-zero-mea`,
+  `sollstellung-unit-no-mea`), 0 fehlgeschlagen —, dann brach der Prozess mit
+  `ENOSPC` ab, kein Testfehler. Teil 2 (die drei restlichen Spec-Dateien direkt
+  per Playwright) lief vollstaendig gruen: 19 von 19 Tests bestanden. Zusammen:
+  98 bestanden, 2 uebersprungen, 0 fehlgeschlagen von 100 —
+  `apps/web/e2e/dokumente.spec.ts` lief darin zum ersten Mal ueberhaupt
+  (Tests 18-20, alle gruen).
 - Betriebsmodell: Am 2026-09-22 wurde entschieden, den Betrieb vor dem ersten
   Kundenvertrag auf EU-Anbieter umzustellen — der in `02-architecture-deployment.md`
   vorgesehene Ausloeser („ab erstem Vertrag") wurde vorgezogen. Entschieden:
@@ -151,12 +168,16 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   entfaellt der bisher groesste fachliche Vorwand fuer neue Breite. Der naechste
   Drift waere, weitere Fachfunktionen zu bauen, bevor das Backup-Regime steht. „KI-First" bleibt kein tragfaehiger Kaufgrund, solange kein messbarer
   Zeit-/Fehlervorteil im Kernworkflow belegt ist.
-- Risks: Ein nicht verifizierter Cloud-Stand ist ein stiller Risikoposten — die
-  Anwendung laeuft gegen Frankfurt, und die Annahme „Cloud = lokal" ist genau die
-  Annahme, die `0045`/`0058`/`0059` schon einmal widerlegt haben (siehe Memory
-  „Cloud Schema Drift"). Ein Full-Suite-Claim erzeugt falsche Erwartungen. Echter
-  Zahlungsverkehr oder Rechtsberatung wuerden Produkt- und Compliance-Grenzen
-  wesentlich erweitern.
+- Risks: Der Cloud-Stand war bis zum 2026-09-25 unverifiziert; seit dem Rollout
+  von `0068`-`0072` an diesem Tag ist er es nicht mehr. Die allgemeine Annahme
+  „Cloud = lokal" bleibt trotzdem riskant, sobald wieder lokale Migrationen
+  entstehen, die nicht sofort ausgerollt werden — `0045`/`0058`/`0059` haben
+  genau diese Annahme schon einmal widerlegt (siehe Memory „Cloud Schema
+  Drift"). Ein Full-Suite-Claim braucht weiterhin den ehrlichen Hinweis auf den
+  ENOSPC-bedingten Split des 2026-09-25-Laufs und die 2 uebersprungenen Faelle
+  (98 von 100 bestanden, nicht 100 von 100), sonst erzeugt er falsche
+  Erwartungen. Echter Zahlungsverkehr oder Rechtsberatung wuerden Produkt- und
+  Compliance-Grenzen wesentlich erweitern.
 
 ## Next Logical Step
 
@@ -177,17 +198,24 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
    Stop/continue rule: Sobald echte Daten anstehen, ist das Paket aus
    Umgebungstrennung, Backup und Betreiberwahl faellig — oder es bleiben
    Demo-Daten.
-2. Step: Cloud-Migrationsstand per `supabase migration list --linked` abgleichen
-   (freigabepflichtig), `0068`-`0072` per `just db-migrate` ausrollen (freigabepflichtig)
-   und einen vollstaendigen `just e2e`-Lauf dokumentieren — inklusive des ersten
-   jemals ausgefuehrten Laufs von `apps/web/e2e/dokumente.spec.ts` (bisher nur
-   `--list`-geprueft, nie gegen eine echte Umgebung gelaufen).
-   Der letzte belegte Gesamtlauf stammt vom 2026-09-19.
-   **Vor der Freigabe zu wissen:** dieser eine Lauf hinterlaesst permanentes
-   Datenresiduum im Cloud-Tenant — 3 `weg`-, 3 `document`- und 4
-   `document_version`-Zeilen sowie 4 Objekte im Bucket `weg-docs`, keine davon
-   je entfernbar (append-only-Trigger plus `on delete restrict` auf beiden
-   FKs, 0015). Details im Kopfkommentar von `apps/web/e2e/dokumente.spec.ts`.
+2. Erledigt am 2026-09-25: Der Cloud-Migrationsstand ist per `supabase
+   migration list --linked` abgeglichen — die `Remote`-Spalte ist gefuellt fuer
+   `0067` bis `0072` — und `0068`-`0072` sind per `just db-migrate` ausgerollt.
+   Ein vollstaendiger `just e2e`-Lauf ist dokumentiert, in zwei Teilen wegen
+   eines plattenspeicherbedingten Abbruchs (`ENOSPC`, kein Testfehler): Teil 1
+   deckte Tests 1-83 von 100 ab (81 bestanden, 2 uebersprungen per
+   `test.skip`, 0 fehlgeschlagen), Teil 2 die drei restlichen Spec-Dateien
+   direkt per Playwright (19 von 19 bestanden). Zusammen 98 bestanden, 2
+   uebersprungen, 0 fehlgeschlagen von 100 — der erste jemals ausgefuehrte Lauf
+   von `apps/web/e2e/dokumente.spec.ts` eingeschlossen (Tests 18-20, alle
+   gruen; Test 19 uebt `public.dokument_entfernen` erstmals ueber die echte
+   Oberflaeche aus).
+   **Das dabei entstandene Datenresiduum ist nicht mehr hypothetisch:** der Lauf
+   hat 3 `weg`-, 3 `document`- und 4 `document_version`-Zeilen sowie 4 Objekte
+   im Bucket `weg-docs` im Cloud-Tenant hinterlassen, keine davon entfernbar
+   (append-only-Trigger plus `on delete restrict` auf beiden FKs, 0015) — und
+   waechst mit jedem weiteren Lauf weiter. Details im Kopfkommentar von
+   `apps/web/e2e/dokumente.spec.ts`.
 3. Erledigt am 2026-09-22: Das leere Forward-Fenster von `audit_verify_chain()`
    war eine NULL-Falle in `0050`, derselben Klasse wie `0064`. `0045` pruefte
    `valid_after_seq is null or seq > valid_after_seq`; `0050` verlor den
