@@ -98,3 +98,29 @@ export function pruefeVerteilung(input: {
 
   return { ok: false, differenz: differenzCent / CENT };
 }
+
+/**
+ * Prueft, ob die Abrechnungsspitze ueberhaupt eine Bezugsgroesse hat.
+ *
+ * Nach § 28 Abs. 2 WEG beschliessen die Eigentuemer ueber die Spitze — den
+ * Saldo aus den nach Wirtschaftsplan geschuldeten Vorschuessen und den
+ * tatsaechlichen Kosten. Ohne aktivierten Plan gibt es keine Vorschuesse:
+ * `abrechnung_spitze` liefert dann `soll_vorschuesse = 0`, und die vollen
+ * Jahreskosten erscheinen als Nachschuss.
+ *
+ * Das ist nicht zwingend falsch — eine WEG kann ihr erstes Jahr ohne Plan
+ * gewirtschaftet haben. Aber dem Wert sieht niemand an, ob er "kein Plan"
+ * oder "Plan mit null" bedeutet, und Fehler, die sich auf die Spitze
+ * auswirken, sind genau die, an denen ein Beschluss vor Gericht kippt.
+ * Deshalb wird die Lage gekennzeichnet statt verhindert.
+ */
+export function pruefeVorschussBasis(input: {
+  hatAktivenWirtschaftsplan: boolean;
+  summeSollVorschuesse: number;
+}): { ok: true } | { ok: false; grund: "kein_aktiver_plan" } {
+  if (input.hatAktivenWirtschaftsplan || inCent(input.summeSollVorschuesse) > 0) {
+    return { ok: true };
+  }
+
+  return { ok: false, grund: "kein_aktiver_plan" };
+}

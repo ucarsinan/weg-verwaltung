@@ -254,12 +254,30 @@ Reise und prueft persistierten Zustand: 72 Sollstellungen, Betraege exakt,
 Summe gleich Gesamtkosten, Abrechnungsspitze ausgeglichen. Gruen am
 2026-09-28.
 
-**Was dabei offen blieb:** zwoelf Befunde, zwei davon erzeugen still falsches
-Geld — unvollstaendige MEA werden ohne Warnung zu niedrig verteilt, und eine
-Jahresabrechnung ohne aktivierten Plan weist jedem Eigentuemer die vollen
-Jahreskosten als Nachschuss aus. Beide sind durch Charakterisierungstests
-festgehalten, keiner ist behoben. Vollstaendige Liste mit Fahrplan:
+**Was dabei offen blieb:** zwoelf Befunde. Vollstaendige Liste mit Fahrplan:
 `docs/agent-reports/2026-09-28-selbstverwaltungs-slice-verifikation.md`.
+
+**Die beiden Geldfehler sind seit dem 2026-09-28 behoben** (`0073`):
+
+- **Befund 1 und 4 — unvollstaendige Miteigentumsanteile.**
+  `activate_wirtschaftsplan` prueft jetzt, dass die Summe der MEA-Brueche genau
+  ein Ganzes ergibt, und weist sonst mit `22023` ab, bevor eine Sollstellung
+  entsteht. Geprueft wird der Bruch gegen 1, nie der Zaehler gegen 1000 — der
+  Nenner ist gesetzlich nicht festgelegt. Eine WEG ohne Einheiten faellt in
+  dieselbe Sperre; bisher meldete die Aktivierung dort Erfolg und erzeugte
+  nichts. **Der Generator blieb unangetastet**: Normalisierung des Alt-Pfads
+  liesse die erfassten Einheiten den Anteil einer fehlenden mittragen, statt
+  das Datenproblem zu zeigen.
+- **Befund 2 — Jahresabrechnung ohne aktivierten Plan.** Nicht gesperrt,
+  sondern gekennzeichnet: Eine WEG kann ihr erstes Jahr legitim ohne Plan
+  gewirtschaftet haben. Die Abrechnungsseite weist jetzt darauf hin, dass ohne
+  Plan keine Soll-Vorschuesse existieren und die vollen Kosten als Nachschuss
+  erscheinen. Nach § 28 Abs. 2 WEG ist die Spitze die Gegenueberstellung mit
+  den Soll-Werten des **rechtsgueltigen** Wirtschaftsplans; Fehler, die sich
+  auf die Spitze auswirken, sind genau die, an denen ein Beschluss kippt.
+
+Offen bleiben die neun uebrigen Befunde, darunter die Sackgasse fuer
+mandantenlose Nutzer (Befund 3).
 
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im

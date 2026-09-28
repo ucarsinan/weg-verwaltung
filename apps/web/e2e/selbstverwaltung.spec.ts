@@ -265,20 +265,19 @@ test.describe("Selbstverwaltungs-Slice", () => {
   });
 
   /**
-   * Charakterisierungstest — dokumentiert einen **Fehler**, er repariert ihn
-   * nicht.
+   * War ein Charakterisierungstest, ist jetzt eine Zusicherung.
    *
-   * Befund 1 im Report: Nichts prüft, ob die MEA-Anteile einer WEG auf den
-   * Nenner aufgehen. `0060:255-268` verteilt den rohen Bruch. Drei Einheiten
-   * à 250/1000 ergeben 75 % — die Gemeinschaft berechnet dauerhaft ein
-   * Viertel zu wenig Hausgeld, ohne Warnung, und die Formularvorschau zeigt
-   * dieselbe zu niedrige Zahl.
+   * Befund 1 im Report: Nichts prüfte, ob die MEA-Anteile einer WEG auf das
+   * Ganze aufgehen. `0060:255-268` verteilt den rohen Bruch, drei Einheiten à
+   * 250/1000 ergaben 9.000 statt 12.000 € — ein Viertel der Kosten wurde
+   * niemandem berechnet.
    *
-   * Dieser Test sichert das heutige Verhalten zu. Wird der Fehler behoben,
-   * wird er rot — das ist beabsichtigt und der einzige Weg, einen stillen
-   * Rechenfehler nicht wieder aus den Augen zu verlieren.
+   * Migration `0073` prüft das seit dem 2026-09-28 bei der Aktivierung, also
+   * bevor Geld entsteht. Der Generator selbst blieb unangetastet: Ihn zu
+   * normalisieren hieße, die drei erfassten Einheiten für 100 % zahlen zu
+   * lassen, statt das Datenproblem zu zeigen.
    */
-  test("selbstverwaltung-mea-luecke: unvollständige MEA belasten die Gemeinschaft zu niedrig", async ({
+  test("selbstverwaltung-mea-luecke: unvollständige MEA verhindern die Aktivierung", async ({
     page,
   }) => {
     const marke = Date.now();
@@ -300,24 +299,40 @@ test.describe("Selbstverwaltungs-Slice", () => {
       bezeichnung: `Wirtschaftsplan ${JAHR}`,
       gesamtkosten: 12_000,
     });
-    await activateWirtschaftsplanFixture(page, planId);
 
+    // Nicht die Fixture verwenden — die sichert den Erfolg zu. Hier ist das
+    // Scheitern der Gegenstand.
+    const ctx = await rest(page);
+    const antwort = await page.request.post(
+      `${ctx.url}/rest/v1/rpc/activate_wirtschaftsplan`,
+      { headers: headers(ctx), data: { p_wirtschaftsplan_id: planId } },
+    );
+
+    expect(
+      antwort.ok(),
+      "die Aktivierung muss abgewiesen werden (0073)",
+    ).toBe(false);
+    const fehler = (await antwort.json()) as { code?: string };
+    expect(
+      fehler.code,
+      "eigener Code, damit die Oberfläche die Ursache benennen kann",
+    ).toBe("22023");
+
+    // Der eigentliche Punkt: Es ist kein Geld entstanden.
     const sollstellungen = await select<{ betrag: string }>(
       page,
       `sollstellung?wirtschaftsplan_id=eq.${planId}&select=betrag`,
     );
-    const summe = sollstellungen.reduce((acc, row) => acc + Number(row.betrag), 0);
+    expect(
+      sollstellungen,
+      "ein abgewiesener Plan erzeugt keine einzige Forderung",
+    ).toHaveLength(0);
 
-    // Fachlich richtig wären 12.000 €. Tatsächlich sind es 9.000 € — die
-    // fehlenden 250/1000 werden niemandem berechnet.
-    expect(
-      summe,
-      "heutiges Verhalten: 75 % der Gesamtkosten, ohne Warnung (Befund 1)",
-    ).toBe(9_000);
-    expect(
-      summe,
-      "sobald diese Zusicherung rot wird, ist Befund 1 behoben",
-    ).not.toBe(12_000);
+    const [plan] = await select<{ status: string }>(
+      page,
+      `wirtschaftsplan?id=eq.${planId}&select=status`,
+    );
+    expect(plan.status, "der Plan bleibt Entwurf").toBe("entwurf");
   });
 
   /**
@@ -365,8 +380,10 @@ test.describe("Selbstverwaltungs-Slice", () => {
       `${ctx.url}/rest/v1/rpc/erstelle_abrechnung`,
       { headers: headers(ctx), data: { p_weg_id: wegId, p_jahr: JAHR } },
     );
-    // Der Aufruf gelingt — das ist Teil des Befunds.
+    // Der Aufruf gelingt weiterhin — eine WEG kann ihr erstes Jahr ohne Plan
+    // gewirtschaftet haben. Gesperrt wird nicht, gekennzeichnet schon.
     expect(abrechnung.ok()).toBe(true);
+    const abrechnungId = (await abrechnung.json()) as string;
 
     const spitzen = await select<{
       soll_vorschuesse: string;
@@ -387,5 +404,13 @@ test.describe("Selbstverwaltungs-Slice", () => {
         "jeder Eigentümer schuldet die vollen 5.000 € als Nachschuss",
       ).toBe(5_000);
     }
+
+    // Seit 0073-Begleitänderung: Die Lage muss auf der Seite stehen, sonst
+    // sieht niemand dem Wert an, ob er „kein Plan" oder „Plan mit null" meint.
+    await page.goto(`/wegs/${wegId}/finanzen/abrechnungen/${abrechnungId}`);
+    await expect(
+      page.getByRole("alert").filter({ hasText: /kein Wirtschaftsplan aktiviert/ }),
+      "die Abrechnung weist auf den fehlenden Wirtschaftsplan hin",
+    ).toBeVisible();
   });
 });

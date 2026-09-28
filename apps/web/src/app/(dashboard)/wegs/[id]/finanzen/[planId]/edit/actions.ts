@@ -56,6 +56,13 @@ function mapLifecycleError(code?: string): string {
     return "Für dieses Jahr ist bereits ein anderer Wirtschaftsplan aktiv.";
   }
 
+  // 0073 vergibt fuer die MEA-Vorbedingung bewusst einen eigenen Code. Jeder
+  // 23514 der Aktivierung landet sonst in derselben Sammelmeldung darunter,
+  // und der Nutzer erfuehre nicht, dass es an den Anteilen liegt.
+  if (code === "22023") {
+    return "Die Miteigentumsanteile dieser WEG ergeben nicht genau ein Ganzes. Solange sie nicht aufgehen, würde ein Teil der Kosten niemandem berechnet — bitte die Anteile der Einheiten prüfen.";
+  }
+
   if (code === "23514") {
     return "Der Statuswechsel ist fachlich nicht erlaubt.";
   }

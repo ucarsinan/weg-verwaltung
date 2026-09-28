@@ -13,6 +13,7 @@ import {
   ABRECHNUNGS_STATUS_LABEL,
   SPITZEN_ART_LABEL,
   pruefeVerteilung,
+  pruefeVorschussBasis,
   spitzenArt,
   summiereSpitzen,
 } from "@/modules/finanzen";
@@ -117,6 +118,24 @@ export default async function AbrechnungDetailPage({
     sollVorschuesse: Number(row.soll_vorschuesse),
     spitze: Number(row.spitze),
   }));
+
+  // Ohne aktivierten Wirtschaftsplan gibt es keine geschuldeten Vorschuesse,
+  // und die vollen Jahreskosten erscheinen als Nachschuss. Der Zahl sieht man
+  // das nicht an — deshalb hier nachfragen statt raten zu lassen.
+  const { count: aktivePlaene } = await supabase
+    .from("wirtschaftsplan")
+    .select("id", { count: "exact", head: true })
+    .eq("weg_id", abrechnung.weg_id)
+    .eq("jahr", abrechnung.jahr)
+    .neq("status", "entwurf");
+
+  const vorschussBasis = pruefeVorschussBasis({
+    hatAktivenWirtschaftsplan: (aktivePlaene ?? 0) > 0,
+    summeSollVorschuesse: spitzen.reduce(
+      (summe, zeile) => summe + zeile.sollVorschuesse,
+      0,
+    ),
+  });
 
   const { data: ruecklage } = await supabase
     .from("ruecklage_entwicklung")
@@ -241,6 +260,19 @@ export default async function AbrechnungDetailPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!vorschussBasis.ok && (
+            <p
+              role="alert"
+              className="mb-4 rounded-md border border-[var(--color-border)] p-3 text-sm text-amber-700 dark:text-amber-400"
+            >
+              Für {abrechnung.jahr} wurde kein Wirtschaftsplan aktiviert.
+              Deshalb sind die Soll-Vorschüsse null, und die vollen Kosten
+              erscheinen unten als Nachschuss. Falls für dieses Jahr Hausgeld
+              geschuldet war, fehlt der Plan — dann sollte er vor dem Beschluss
+              aktiviert werden.
+            </p>
+          )}
+
           {spitzen.length === 0 ? (
             <p
               role="status"

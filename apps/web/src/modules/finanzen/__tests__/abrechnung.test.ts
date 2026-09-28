@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { pruefeVerteilung, spitzenArt, summiereSpitzen } from "../abrechnung";
+import {
+  pruefeVerteilung,
+  pruefeVorschussBasis,
+  spitzenArt,
+  summiereSpitzen,
+} from "../abrechnung";
 import type { SpitzeZeile } from "../abrechnung";
 
 /** Whg A zahlt nach, Whg B bekommt zurück — wie im pgTAP-Vertrag. */
@@ -91,5 +96,45 @@ describe("pruefeVerteilung", () => {
         anzahlKostenpositionen: 2,
       }),
     ).toEqual({ ok: false, differenz: -100 });
+  });
+});
+
+describe("pruefeVorschussBasis", () => {
+  it("meldet die fehlende Bezugsgröße, wenn kein Plan aktiviert wurde", () => {
+    expect(
+      pruefeVorschussBasis({
+        hatAktivenWirtschaftsplan: false,
+        summeSollVorschuesse: 0,
+      }),
+    ).toEqual({ ok: false, grund: "kein_aktiver_plan" });
+  });
+
+  it("ist zufrieden, sobald ein Plan aktiviert wurde", () => {
+    expect(
+      pruefeVorschussBasis({
+        hatAktivenWirtschaftsplan: true,
+        summeSollVorschuesse: 0,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("vertraut den Vorschüssen auch ohne Planzählung", () => {
+    // Fällt die Zählung aus (count null), sind vorhandene Sollstellungen
+    // Beweis genug — lieber keine Warnung als eine falsche.
+    expect(
+      pruefeVorschussBasis({
+        hatAktivenWirtschaftsplan: false,
+        summeSollVorschuesse: 4800,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("wertet Centbeträge unterhalb eines Cents nicht als Vorschuss", () => {
+    expect(
+      pruefeVorschussBasis({
+        hatAktivenWirtschaftsplan: false,
+        summeSollVorschuesse: 0.001,
+      }),
+    ).toEqual({ ok: false, grund: "kein_aktiver_plan" });
   });
 });

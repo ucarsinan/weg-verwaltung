@@ -158,6 +158,14 @@ weil eine Einheit spaeter verkauft wurde.
      MEA einer WEG auf 1 summieren; ohne Normalisierung bliebe ein Teil des
      Positionsbetrags unverteilt. § 16 Abs. 2 WEG verteilt "im Verhaeltnis der
      Miteigentumsanteile", und der Plan muss vollstaendig finanziert sein.
+   - **Seit `0073` steht der Rueckfall unter einer Vorbedingung.** Der Alt-Pfad
+     selbst ist unveraendert byte-identisch — aber `activate_wirtschaftsplan`
+     weist Plaene ab, deren WEG-Anteile nicht auf genau ein Ganzes aufgehen
+     (`22023`). Gemessen am 2026-09-28 erzeugten drei Einheiten à 250/1000
+     Sollstellungen ueber 9.000 statt 12.000 EUR; ein Viertel der Kosten wurde
+     niemandem berechnet. Der Generator blieb bewusst unangetastet:
+     Normalisierung des Alt-Pfads liesse die erfassten Einheiten den Anteil
+     einer fehlenden mittragen, statt das Datenproblem zu zeigen.
 3. `0067_gemischte_verteilungsschluessel.sql` (umgesetzt, 2026-09-20)
    - Entschieden wurde **Komposition statt Diskriminator-Spalte**: eine neue
      Tabelle `verteilungsschluessel_teil (version_id, teil_version_id, gewicht)`
