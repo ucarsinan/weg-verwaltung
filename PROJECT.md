@@ -8,7 +8,7 @@ Dieser Status konsolidiert den lokalen Stand. Der reale Codezustand gilt vor ael
 
 **Nicht in diesem Audit verifiziert:** produktives Web-/Agent-Hosting, Backup/Restore. (Der Cloud-Migrationsstand und die Zahlen des letzten vollstaendigen Cloud-E2E-Laufs sind seit dem 2026-09-25 verifiziert — siehe `PROJECT_REALITY.md`.)
 
-**Ampel:** Gruen fuer den lokalen Codestand — Worktree sauber, `main` aktuell, alle CI-Gates auf PR #22 gruen. Gelb fuer Release-Readiness: es fehlen Backup/Wiederherstellung sowie AVV und Art.-30-Verzeichnis. Rot bleibt jeder Claim Richtung „produktionsreif" oder „DSGVO-konform", solange diese Punkte offen sind.
+**Ampel:** Gruen fuer den lokalen Codestand — Worktree sauber, `main` aktuell, alle CI-Gates auf PR #29 gruen. Gelb fuer Release-Readiness: es fehlen Backup/Wiederherstellung sowie AVV und Art.-30-Verzeichnis. Rot bleibt jeder Claim Richtung „produktionsreif" oder „DSGVO-konform", solange diese Punkte offen sind.
 
 **Test-/Validierungsstatus:** `./scripts/verify.sh` lief am 2026-09-20 komplett gruen: 452 Vitest-Tests in 58 Dateien, 0 Lint-Fehler, tsc und mypy `--strict` sauber, Build sauber. Das CI-Gate `just test-db-all` fuehrt 15 pgTAP-Vertraege gegen eine ephemere lokale Postgres-Instanz aus; fuenf weitere Vertragsdateien sind bewusst nicht verdrahtet (`0001_rls_negative.sql` ist vollstaendig auskommentiert, `0039` ungenutzt, `0050`/`0052`/`0054` rot — siehe `AGENTS.md`-Backlog). Massgeblich fuer die inhaltliche Bewertung ist `PROJECT_REALITY.md`.
 
