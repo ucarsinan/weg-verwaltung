@@ -49,10 +49,20 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.getByLabel(/bezeichnung/i).fill("Plan 2026");
     await costsInput.fill("24000");
     await page.getByRole("button", { name: /speichern/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen$`));
   });
 
-  test("scenario-new-weg-onboarding: onboarding a new WEG with units, allocating MEAs, creating a new plan and verifying Hausgeld/Sollstellung", async ({ page }) => {
+  /**
+   * Der Titel hiess frueher "… and verifying Hausgeld/Sollstellung". Das war
+   * zu viel versprochen: Der Test aktiviert den Plan nie, und ohne Aktivierung
+   * gibt es keine Sollstellungen. Was er prueft, ist die Live-Vorschau im
+   * Formular (`wirtschaftsplan-form.tsx:176-193`) — wertvoll, aber eben eine
+   * Client-Berechnung, keine persistierte Forderung.
+   *
+   * Der persistierte Beweis liegt in `selbstverwaltung.spec.ts`
+   * (Sollstellungen aus der Tabelle) und `finanzen.spec.ts:286`.
+   */
+  test("scenario-new-weg-onboarding: WEG, Einheiten und Wirtschaftsplan-Entwurf ueber die Oberflaeche — die Hausgeld-Vorschau rechnet richtig", async ({ page }) => {
     // 1. Create a new WEG
     await page.goto("/wegs/new");
     const wegNameVal = `Onboard-WEG-${Date.now()}`;
@@ -88,13 +98,16 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
     await page.getByLabel(/bezeichnung/i).fill("First Plan");
     await costsInput.fill("12000");
 
-    // Verify calculations: Apt 1 -> 400/1000 * 12000 = 4800 / 12 = 400€
+    // Vorschau, nicht Datenbank: Apt 1 -> 400/1000 * 12000 = 4800 / 12 = 400€
     // Apt 2 -> 600/1000 * 12000 = 7200 / 12 = 600€
+    // Dieselbe Formel steckt im Generator (0060:255-268) — die Vorschau
+    // bestaetigt ihn also auch dann, wenn beide falsch rechnen. Die
+    // persistierte Gegenprobe steht in selbstverwaltung.spec.ts.
     await expect(page.getByText("400,00")).toBeVisible();
     await expect(page.getByText("600,00")).toBeVisible();
 
     await page.getByRole("button", { name: /speichern/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen`));
+    await expect(page).toHaveURL(new RegExp(`/wegs/${wegId}/finanzen$`));
   });
 
   test("scenario-multi-tenant-simultaneous-billing: Tenant A and Tenant B concurrently perform operations verifying separation", async ({ browser }) => {

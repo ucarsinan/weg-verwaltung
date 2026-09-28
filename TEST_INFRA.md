@@ -129,4 +129,34 @@
 - **Catalogue-wide RLS is asserted** since 2026-09-22 by `infra/supabase/tests/0000_rls_katalog.sql` (`just test-security-db`, also part of `just test-db-all`). Five fixture-free assertions over `pg_class`/`pg_policy`: RLS on, FORCE RLS on, at least one policy per non-partition, no tables in schema `private`, and a lower bound proving the catalogue query sees anything at all. Measured against local `0072`: 64 of 64 tables (`0072` adds no table) (`relkind in ('r','p')`, including the two partitioned parents and the `aufbewahrungsregel` from `0069`) are covered. Verified to fail, not only to pass — a probe table without RLS drops three of the five assertions.
 - Audit cold-storage archive/detach/drop is intentionally non-destructive in active tenant UI tests; destructive execution stays disabled until a privileged export + manifest + HMAC-verify job exists.
 - Finanzen create/edit/delete exists locally. Direct `sollstellung` writes are treated as blocked by the migration contract; controlled generation is insert-only and tied to the Wirtschaftsplan flow.
-- E2E specs exist under `apps/web/e2e/` (20 files, including `dokumente.spec.ts`). The full suite ran on 2026-09-25, in two parts after a disk-full crash: part 1 (`just e2e`) covered tests 1-83 of 100 (81 passed, 2 skipped via `test.skip` — `finanz-wp-zero-mea`, `sollstellung-unit-no-mea` — 0 failed) before the process died with `ENOSPC`, not a test failure; part 2 ran the remaining three spec files (`scenarios`, `versammlungen`, `wegs`) directly through Playwright after freeing disk space (19 of 19 passed). Combined: 98 passed, 2 skipped, 0 failed of 100. `dokumente.spec.ts` ran for the first time ever in this run — tests 18 (upload), 19 (new version and removal via `public.dokument_entfernen`), and 20 (a changed retention rule shows up in the list) all passed. Its data residue in the Cloud tenant is now real, not only designed-for: this run left 3 `weg`, 3 `document`, 4 `document_version` rows and 4 storage objects, permanent by design (append-only `document_version`, `on delete restrict` FKs to `document` and `weg`, no DELETE policy anywhere in the chain) — see the header comment in `apps/web/e2e/dokumente.spec.ts` for the per-run counts; the residue grows with every future run.
+- E2E specs exist under `apps/web/e2e/` (21 files, including `dokumente.spec.ts` and, since 2026-09-28, `selbstverwaltung.spec.ts`). The full suite ran on 2026-09-25, in two parts after a disk-full crash: part 1 (`just e2e`) covered tests 1-83 of 100 (81 passed, 2 skipped via `test.skip` — `finanz-wp-zero-mea`, `sollstellung-unit-no-mea` — 0 failed) before the process died with `ENOSPC`, not a test failure; part 2 ran the remaining three spec files (`scenarios`, `versammlungen`, `wegs`) directly through Playwright after freeing disk space (19 of 19 passed). Combined: 98 passed, 2 skipped, 0 failed of 100. `dokumente.spec.ts` ran for the first time ever in this run — tests 18 (upload), 19 (new version and removal via `public.dokument_entfernen`), and 20 (a changed retention rule shows up in the list) all passed. Its data residue in the Cloud tenant is now real, not only designed-for: this run left 3 `weg`, 3 `document`, 4 `document_version` rows and 4 storage objects, permanent by design (append-only `document_version`, `on delete restrict` FKs to `document` and `weg`, no DELETE policy anywhere in the chain) — see the header comment in `apps/web/e2e/dokumente.spec.ts` for the per-run counts; the residue grows with every future run.
+
+## Selbstverwaltungs-Slice (2026-09-28)
+
+`apps/web/e2e/selbstverwaltung.spec.ts` defines what "the self-management
+slice" means and proves how far it carries. Three tests, all green on
+2026-09-28 (5 of 5 including the two auth setups, 21.8 s):
+
+- `selbstverwaltung-jahreszyklus` — a six-unit WEG (MEA summing to exactly
+  1000) from creation through owners, allocation key, activated Wirtschaftsplan
+  and expenses to a Jahresabrechnung. Asserts **persisted** state: 72
+  `sollstellung` rows, the exact monthly amount per unit, the sum equal to the
+  annual cost, and `abrechnung_spitze` balancing to zero. Six units because
+  § 19 Abs. 2 Nr. 6 WEG allows an owner-manager only below nine units.
+- `selbstverwaltung-mea-luecke` — **characterisation test, documents a bug.**
+  Three units at 250/1000 produce 9.000 € instead of 12.000 €: nothing checks
+  that MEA fractions add up, and `0060:255-268` distributes the raw fraction.
+  Goes red once the bug is fixed; that is intended.
+- `selbstverwaltung-abrechnung-ohne-plan` — **characterisation test, documents
+  a bug.** Without an activated Wirtschaftsplan, `abrechnung_spitze` reports
+  `soll_vorschuesse = 0`, so every owner owes the full year's cost as a
+  Nachschuss, silently.
+
+Residue per run: three WEGs, two of them with permanent Sollstellungen.
+
+`scenario-new-weg-onboarding` in `scenarios.spec.ts` was retitled in the same
+change. It claimed to verify "Hausgeld/Sollstellung" but never activates the
+plan — what it asserts is the client-side preview in
+`wirtschaftsplan-form.tsx:176-193`. Preview and generator share one formula, so
+that assertion confirms the generator even when both are wrong. The persisted
+counter-proof now lives in `selbstverwaltung.spec.ts`.
