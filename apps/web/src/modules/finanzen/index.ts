@@ -51,6 +51,7 @@ export {
   ABRECHNUNGS_STATUS_LABEL,
   SPITZEN_ART_LABEL,
   pruefeVerteilung,
+  pruefeVorschussBasis,
   spitzenArt,
   summiereSpitzen,
 } from "./abrechnung";

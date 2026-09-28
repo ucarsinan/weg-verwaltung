@@ -58,10 +58,10 @@ festgehalten, damit sie nicht wieder aus dem Blick geraten.
 
 | Status | Prioritaet | Problem | Evidenz | Auswirkung | Konkreter Schritt | Begruendung |
 | --- | --- | --- | --- | --- | --- | --- |
-| `SUPPORTED` | `P1` | MEA wird nie auf Vollständigkeit geprüft; der rohe Bruch wird verteilt | `0060:255-268`; Test `selbstverwaltung-mea-luecke` misst 9.000 statt 12.000 € | Die Gemeinschaft erhebt dauerhaft zu wenig Hausgeld, ohne Warnung | Summe der MEA beim Aktivieren prüfen, Abweichung benennen | Fachlich: Es geht um Geld, das nie eingefordert wird |
-| `SUPPORTED` | `P1` | Jahresabrechnung ohne aktivierten Plan setzt `soll_vorschuesse` auf 0 | View `abrechnung_spitze` (`0063:668`); Test `selbstverwaltung-abrechnung-ohne-plan` misst Spitze 5.000 € bei 5.000 € Kosten | Jeder Eigentümer erhält die vollen Jahreskosten als Nachschuss ausgewiesen | Beim Erstellen prüfen, ob ein aktiver Plan für das Jahr existiert, und sonst warnen | Fachlich: Eine falsche Zahlungsaufforderung an alle Eigentümer |
+| `BEHOBEN 0073` | `P1` | ~~MEA wird nie auf Vollständigkeit geprüft~~; der rohe Bruch wird verteilt | `0060:255-268`; Test `selbstverwaltung-mea-luecke` misst 9.000 statt 12.000 € | Die Gemeinschaft erhebt dauerhaft zu wenig Hausgeld, ohne Warnung | Summe der MEA beim Aktivieren prüfen, Abweichung benennen | Fachlich: Es geht um Geld, das nie eingefordert wird |
+| `BEHOBEN 2026-09-28` | `P1` | ~~Jahresabrechnung ohne aktivierten Plan ist nicht erkennbar~~ — `soll_vorschuesse` steht weiterhin auf 0, die Seite sagt es jetzt | View `abrechnung_spitze` (`0063:668`); Test `selbstverwaltung-abrechnung-ohne-plan` misst Spitze 5.000 € bei 5.000 € Kosten | Jeder Eigentümer erhält die vollen Jahreskosten als Nachschuss ausgewiesen | Beim Erstellen prüfen, ob ein aktiver Plan für das Jahr existiert, und sonst warnen | Fachlich: Eine falsche Zahlungsaufforderung an alle Eigentümer |
 | `SUPPORTED` | `P1` | Mandantenloser Nutzer landet in einer Sackgasse mit Entwicklersatz | `(dashboard)/layout.tsx:9-19` prüft nur die Session; `createWeg` lehnt mit „Kein Mandant im aktuellen JWT-Claim." ab | Wer die Bestätigungsmail in einem anderen Browser öffnet, kommt nie ins Onboarding | Mandantenprüfung in `middleware.ts` oder im Dashboard-Layout, Weiterleitung nach `/onboarding` | Wegführung: Der Nutzer kann sich nicht selbst befreien |
-| `SUPPORTED` | `P2` | Wirtschaftsplan mit null Einheiten aktivierbar | `wirtschaftsplan-edit-form.tsx:202-215` deaktiviert den Knopf nicht; Generator fügt null Zeilen ein | Erfolg wird gemeldet, es entsteht kein Hausgeld | Knopf sperren, solange keine Einheit existiert | Wegführung: stiller Leerlauf |
+| `BEHOBEN 0073` | `P2` | ~~Wirtschaftsplan mit null Einheiten aktivierbar~~ | `wirtschaftsplan-edit-form.tsx:202-215` deaktiviert den Knopf nicht; Generator fügt null Zeilen ein | Erfolg wird gemeldet, es entsteht kein Hausgeld | Knopf sperren, solange keine Einheit existiert | Wegführung: stiller Leerlauf |
 | `SUPPORTED` | `P2` | `erstelle_abrechnung` gelingt in einem Jahr ohne Ausgaben | `0063:425-540` | Eine Abrechnung ohne Kostenpositionen entsteht ohne Hinweis | Leeres Jahr abweisen oder deutlich kennzeichnen | Fachlich: ein Dokument, das nichts aussagt |
 | `SUPPORTED` | `P2` | Aktivierungsfehler falsch beschriftet | `[planId]/edit/actions.ts:46-64` bildet `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte werden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
 | `SUPPORTED` | `P2` | Verteilungsschlüssel ist unsichtbare Vorbedingung | `position-form.tsx:137,164`; `ausgabe-form.tsx:187` — leeres, deaktiviertes Auswahlfeld, Absendeknopf aktiv | Nutzer klickt, bekommt einen Feldfehler und keinen Weg zur Lösung | Link auf `…/verteilungsschluessel/new` in beide Formulare | Wegführung: Sackgasse mit Ausweg, der nicht gezeigt wird |
@@ -185,3 +185,59 @@ geschehen und wurde hier nachgeholt.
 | `P2` | Wegführung um die Finanzen ergänzen (Befund 8) | Wer der App folgt, baut nie einen Wirtschaftsplan |
 | `P2` | Verteilungsschlüssel verlinken (Befund 7) | Zwei Formulare enden ohne Ausweg |
 | `P3` | Entscheiden, ob eine Eigentümersicht gebaut wird | Der Slice ist verwalterseitig belegt; ob er ohne Eigentümer-Einblick als Produkt trägt, ist offen |
+
+---
+
+## Nachtrag 2026-09-28: Befunde 1, 2 und 4 behoben
+
+Migration `0073_wirtschaftsplan_mea_vollstaendigkeit.sql` plus eine
+Begleitänderung in der Weboberfläche. Die übrigen neun Befunde bleiben offen.
+
+**Befund 1 und 4 — eine Sperre an der Aktivierung.** `activate_wirtschaftsplan`
+prüft, dass die Summe der MEA-Brüche genau ein Ganzes ergibt, und weist sonst
+mit `22023` ab — bevor eine Sollstellung entsteht. Eine WEG ohne Einheiten hat
+Summe 0 und fällt in dieselbe Sperre, womit Befund 4 miterledigt ist.
+
+Zwei Entscheidungen, die den Zuschnitt erklären:
+
+- **Der Generator bleibt unangetastet.** `0060` verspricht für den Alt-Zweig
+  ausdrücklich byte-identisches Verhalten. Ihn zu normalisieren hieße
+  außerdem, die drei erfassten Einheiten für 100 % zahlen zu lassen — der
+  Anteil einer fehlenden vierten verschwände still auf die Nachbarn. Die
+  Prüfung gehört an den Moment, in dem Geld entsteht, nicht in die Rechnung.
+- **Geprüft wird der Bruch gegen 1, nie der Zähler gegen 1000.** Der Nenner ist
+  gesetzlich nicht festgelegt; 1000/1000 ist verbreitete Praxis, mehr nicht.
+  Eine WEG darf 1/2 + 250/1000 + 25/100 führen — der Vertrag sichert das zu.
+- **Eigener Errcode `22023` statt `23514`.** Die Oberfläche bildet jeden
+  `23514` der Aktivierung auf dieselbe Sammelmeldung ab (Befund 6). Ein
+  eigener Code macht die Ursache benennbar, ohne Meldungstexte zu parsen.
+  Befund 6 bleibt im Übrigen offen.
+
+**Befund 2 — gekennzeichnet, nicht gesperrt.** Ohne aktivierten Plan gab es
+tatsächlich keine geschuldeten Vorschüsse; `soll_vorschuesse = 0` ist dann
+richtig. Eine WEG kann ihr erstes Jahr legitim ohne Plan gewirtschaftet haben.
+Falsch war nur, dass dem Wert nicht anzusehen war, ob er „kein Plan" oder
+„Plan mit null" bedeutet. Die Abrechnungsseite sagt es jetzt.
+
+Das ist auch juristisch die schärfere Stelle: Nach § 28 Abs. 2 WEG ist die
+Spitze die Gegenüberstellung der Ist-Kosten mit den Soll-Werten des
+**rechtsgültigen** Wirtschaftsplans, und Fehler in der Jahresabrechnung führen
+nach der Rechtsprechung nur dann zur Ungültigkeit, wenn sie sich auf die Spitze
+auswirken. Eine still falsche Spitze ist genau das, woran ein Beschluss kippt.
+
+**Was dabei nicht geschah:** keine rückwirkende Korrektur bereits aktivierter
+Pläne mit unvollständiger MEA. Sollstellungen sind historische Forderungen; sie
+umzuschreiben wäre ein eigener, schwerer Eingriff. Bestehende Daten im
+E2E-Mandanten behalten ihre zu niedrigen Beträge.
+
+**Die Stimmgewichtung** (`0049:482-484`) summiert ebenfalls rohe MEA-Brüche.
+Das ist kein Geld, sondern Stimmrecht, und eine eigene Entscheidung — hier
+nicht angefasst, aber hiermit aktenkundig.
+
+### Checks dieses Nachtrags
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `just test-finance-db` (vor der Migration) | `fail` | 5 von 17 rot — die Sperre existierte noch nicht, genau wie beabsichtigt |
+| `just test-db-all` | `pass` | 20 Dateien, 388 Zusicherungen (vorher 19 / 371) |
+| `./scripts/verify.sh` | `pass` | 538 Web-Tests (vorher 527) |
