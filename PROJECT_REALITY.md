@@ -276,8 +276,16 @@ Summe gleich Gesamtkosten, Abrechnungsspitze ausgeglichen. Gruen am
   den Soll-Werten des **rechtsgueltigen** Wirtschaftsplans; Fehler, die sich
   auf die Spitze auswirken, sind genau die, an denen ein Beschluss kippt.
 
-Offen bleiben die neun uebrigen Befunde, darunter die Sackgasse fuer
-mandantenlose Nutzer (Befund 3).
+- **Befund 3 — die Sackgasse fuer mandantenlose Nutzer.** Wer angemeldet ist,
+  aber keinen Mandanten hat, wird jetzt nach `/onboarding` geleitet statt im
+  Dashboard auf den Entwicklersatz „Kein Mandant im aktuellen JWT-Claim." zu
+  laufen. Ein fehlgeschlagenes `getClaims()` fuehrt ausdruecklich **nicht** zur
+  Umleitung — sonst wuerde eine Netzstoerung oder ein nicht registrierter
+  Access-Token-Hook jeden Nutzer aussperren. `/onboarding` hat dafuer einen
+  Abmelden-Knopf bekommen, sonst waere der Assistent ein Raum ohne Ausgang.
+
+Offen bleiben die acht uebrigen Befunde. Keiner davon erzeugt falsches Geld,
+und keiner sperrt einen Nutzer aus.
 
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im

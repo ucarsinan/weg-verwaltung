@@ -60,7 +60,7 @@ festgehalten, damit sie nicht wieder aus dem Blick geraten.
 | --- | --- | --- | --- | --- | --- | --- |
 | `BEHOBEN 0073` | `P1` | ~~MEA wird nie auf Vollständigkeit geprüft~~; der rohe Bruch wird verteilt | `0060:255-268`; Test `selbstverwaltung-mea-luecke` misst 9.000 statt 12.000 € | Die Gemeinschaft erhebt dauerhaft zu wenig Hausgeld, ohne Warnung | Summe der MEA beim Aktivieren prüfen, Abweichung benennen | Fachlich: Es geht um Geld, das nie eingefordert wird |
 | `BEHOBEN 2026-09-28` | `P1` | ~~Jahresabrechnung ohne aktivierten Plan ist nicht erkennbar~~ — `soll_vorschuesse` steht weiterhin auf 0, die Seite sagt es jetzt | View `abrechnung_spitze` (`0063:668`); Test `selbstverwaltung-abrechnung-ohne-plan` misst Spitze 5.000 € bei 5.000 € Kosten | Jeder Eigentümer erhält die vollen Jahreskosten als Nachschuss ausgewiesen | Beim Erstellen prüfen, ob ein aktiver Plan für das Jahr existiert, und sonst warnen | Fachlich: Eine falsche Zahlungsaufforderung an alle Eigentümer |
-| `SUPPORTED` | `P1` | Mandantenloser Nutzer landet in einer Sackgasse mit Entwicklersatz | `(dashboard)/layout.tsx:9-19` prüft nur die Session; `createWeg` lehnt mit „Kein Mandant im aktuellen JWT-Claim." ab | Wer die Bestätigungsmail in einem anderen Browser öffnet, kommt nie ins Onboarding | Mandantenprüfung in `middleware.ts` oder im Dashboard-Layout, Weiterleitung nach `/onboarding` | Wegführung: Der Nutzer kann sich nicht selbst befreien |
+| `BEHOBEN 2026-09-28` | `P1` | ~~Mandantenloser Nutzer landet in einer Sackgasse mit Entwicklersatz~~ | `(dashboard)/layout.tsx:9-19` prüft nur die Session; `createWeg` lehnt mit „Kein Mandant im aktuellen JWT-Claim." ab | Wer die Bestätigungsmail in einem anderen Browser öffnet, kommt nie ins Onboarding | Mandantenprüfung in `middleware.ts` oder im Dashboard-Layout, Weiterleitung nach `/onboarding` | Wegführung: Der Nutzer kann sich nicht selbst befreien |
 | `BEHOBEN 0073` | `P2` | ~~Wirtschaftsplan mit null Einheiten aktivierbar~~ | `wirtschaftsplan-edit-form.tsx:202-215` deaktiviert den Knopf nicht; Generator fügt null Zeilen ein | Erfolg wird gemeldet, es entsteht kein Hausgeld | Knopf sperren, solange keine Einheit existiert | Wegführung: stiller Leerlauf |
 | `SUPPORTED` | `P2` | `erstelle_abrechnung` gelingt in einem Jahr ohne Ausgaben | `0063:425-540` | Eine Abrechnung ohne Kostenpositionen entsteht ohne Hinweis | Leeres Jahr abweisen oder deutlich kennzeichnen | Fachlich: ein Dokument, das nichts aussagt |
 | `SUPPORTED` | `P2` | Aktivierungsfehler falsch beschriftet | `[planId]/edit/actions.ts:46-64` bildet `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte werden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
@@ -241,3 +241,39 @@ nicht angefasst, aber hiermit aktenkundig.
 | `just test-finance-db` (vor der Migration) | `fail` | 5 von 17 rot — die Sperre existierte noch nicht, genau wie beabsichtigt |
 | `just test-db-all` | `pass` | 20 Dateien, 388 Zusicherungen (vorher 19 / 371) |
 | `./scripts/verify.sh` | `pass` | 538 Web-Tests (vorher 527) |
+
+## Nachtrag 2026-09-28: Befund 3 behoben
+
+`(dashboard)/layout.tsx` leitet mandantenlose Nutzer nach `/onboarding` —
+spiegelbildlich zu `onboarding/page.tsx`, das die Gegenrichtung schon machte.
+
+Zwei Dinge, die die Reparatur erst tragfähig machen:
+
+**Ein fehlgeschlagenes `getClaims()` ist nicht dasselbe wie „kein Mandant".**
+Bei einer JWKS- oder Netzstörung liefert `getTenantClaims` ebenfalls
+`tenantId: null`. Wer darauf umleitet, wirft gültige Nutzer ins Onboarding —
+und wäre der Custom Access Token Hook in einer Umgebung nicht registriert,
+träfe es jeden, samt Schleife. Deshalb wird bei einem Fehler durchgelassen und
+geloggt; das Dashboard zeigt dann wie bisher „nicht verfügbar", was
+diagnostizierbar bleibt. Genau das sichert der vierte Vitest-Fall zu.
+
+**`/onboarding` hat jetzt einen Abmelden-Knopf.** `logoutAction` lebte nur in
+der Dashboard-Hülle. Ohne ihn hätte die Umleitung eine Sackgasse gegen eine
+schlechtere getauscht: Wer sich mit dem falschen Konto anmeldet, käme sonst nur
+über gelöschte Cookies wieder heraus.
+
+**Neue Kopplung, bewusst in Kauf genommen:** `saas-onboarding.spec.ts` hängt
+jetzt daran, dass `refreshSession()` den Claim synchron liefert. Bisher
+renderte die Seite auch ohne Claim und der Test lief grün — aus einer stillen
+Verschlechterung wird ein sichtbarer Fehlschlag. Sachlich richtig, aber der
+wahrscheinlichste neue Flake.
+
+### Checks
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `./scripts/verify.sh` | `pass` | 542 Web-Tests (vorher 538) |
+| `playwright test dashboard` | `pass` | 4 von 4 — die Regressionsprobe: der gesäte Admin wird nicht umgeleitet |
+| `playwright test saas-onboarding` | `pass` | 3 von 3 — Registrierung → Wizard → Dashboard → Einladung → Annahme |
+
+**Acht Befunde bleiben offen**, keiner davon erzeugt falsches Geld.
