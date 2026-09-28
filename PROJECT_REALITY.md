@@ -173,11 +173,14 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   „Cloud = lokal" bleibt trotzdem riskant, sobald wieder lokale Migrationen
   entstehen, die nicht sofort ausgerollt werden — `0045`/`0058`/`0059` haben
   genau diese Annahme schon einmal widerlegt (siehe Memory „Cloud Schema
-  Drift"). Ein Full-Suite-Claim braucht weiterhin den ehrlichen Hinweis auf den
-  ENOSPC-bedingten Split des 2026-09-25-Laufs und die 2 uebersprungenen Faelle
-  (98 von 100 bestanden, nicht 100 von 100), sonst erzeugt er falsche
-  Erwartungen. Echter Zahlungsverkehr oder Rechtsberatung wuerden Produkt- und
-  Compliance-Grenzen wesentlich erweitern.
+  Drift"). Ein Full-Suite-Claim ist seit dem 2026-09-28 belegt: ein
+  durchgehender `just e2e`-Lauf ueber 103 Tests, 101 bestanden, 2
+  uebersprungen, 0 fehlgeschlagen, 7,6 Minuten, ohne Abbruch. **Der Hinweis auf
+  die 2 uebersprungenen Faelle bleibt Pflicht** (`finanz-wp-zero-mea`,
+  `sollstellung-unit-no-mea` tragen `test.skip`) — es sind 101 von 103, nicht
+  103 von 103. Der geteilte Lauf vom 2026-09-25 ist damit historisch und nicht
+  mehr die aktuelle Beleglage. Echter Zahlungsverkehr oder Rechtsberatung
+  wuerden Produkt- und Compliance-Grenzen wesentlich erweitern.
 
 ## Next Logical Step
 
@@ -231,7 +234,38 @@ definierten Ausloesern: `docs/11-betriebsmodell.md` § 11.3.
 
 ## Do Not Build Yet
 - Keine produktive RAG-Pipeline oder weitere Agent-Automation vor dem einfachen Selbstverwaltungs-Onboarding.
-- Keine komplette Buchhaltungs-Suite auf Verdacht; zuerst den Selbstverwaltungs-Slice verifizieren.
+- Keine komplette Buchhaltungs-Suite auf Verdacht; zuerst den Selbstverwaltungs-Slice verifizieren — **Definition und Stand siehe unten.**
+
+### Was der Selbstverwaltungs-Slice ist
+
+Der Begriff stand hier zweimal als Sperre, ohne je definiert zu sein. Seit dem
+2026-09-28 ist er eine konkrete Reise: **Eine WEG mit sechs Einheiten kommt von
+der Anlage bis zur Jahresabrechnung.** Sechs, weil § 19 Abs. 2 Nr. 6 WEG die
+Verwaltung durch einen Eigentümer nur unter neun Sondereigentumsrechten
+zulaesst (und nur, wenn weniger als ein Drittel einen zertifizierten Verwalter
+verlangt) — das ist die reale Groesse dieses Segments.
+
+Die Reise: WEG → Einheiten mit vollstaendigen MEA → Personen und
+Eigentuemerschaften → Verteilungsschluessel → Wirtschaftsplan → **aktivieren**
+→ Sollstellungen → Ausgaben → Jahresabrechnung.
+
+**Verwalterseitig belegt.** `apps/web/e2e/selbstverwaltung.spec.ts` laeuft die
+Reise und prueft persistierten Zustand: 72 Sollstellungen, Betraege exakt,
+Summe gleich Gesamtkosten, Abrechnungsspitze ausgeglichen. Gruen am
+2026-09-28.
+
+**Was dabei offen blieb:** zwoelf Befunde, zwei davon erzeugen still falsches
+Geld — unvollstaendige MEA werden ohne Warnung zu niedrig verteilt, und eine
+Jahresabrechnung ohne aktivierten Plan weist jedem Eigentuemer die vollen
+Jahreskosten als Nachschuss aus. Beide sind durch Charakterisierungstests
+festgehalten, keiner ist behoben. Vollstaendige Liste mit Fahrplan:
+`docs/agent-reports/2026-09-28-selbstverwaltungs-slice-verifikation.md`.
+
+**Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
+Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im
+Web-Code aber nur als Datensatz, nie als Betrachter. Ob der Slice ohne
+Eigentuemer-Einblick als Produkt traegt, ist eine offene Entscheidung und
+bewusst nicht Teil dieser Verifikation.
 - Keine destruktive Audit-Cold-Storage-Funktion vor Export-, Manifest- und HMAC-Verify-Prozess.
 - Keine „produktionsreif“, „DSGVO-konform“, „rechtssicher“ oder Full-WEG-Suite-Claims ohne juristische und operative Belege.
 
