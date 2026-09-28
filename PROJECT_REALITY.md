@@ -173,11 +173,14 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   „Cloud = lokal" bleibt trotzdem riskant, sobald wieder lokale Migrationen
   entstehen, die nicht sofort ausgerollt werden — `0045`/`0058`/`0059` haben
   genau diese Annahme schon einmal widerlegt (siehe Memory „Cloud Schema
-  Drift"). Ein Full-Suite-Claim braucht weiterhin den ehrlichen Hinweis auf den
-  ENOSPC-bedingten Split des 2026-09-25-Laufs und die 2 uebersprungenen Faelle
-  (98 von 100 bestanden, nicht 100 von 100), sonst erzeugt er falsche
-  Erwartungen. Echter Zahlungsverkehr oder Rechtsberatung wuerden Produkt- und
-  Compliance-Grenzen wesentlich erweitern.
+  Drift"). Ein Full-Suite-Claim ist seit dem 2026-09-28 belegt: ein
+  durchgehender `just e2e`-Lauf ueber 103 Tests, 101 bestanden, 2
+  uebersprungen, 0 fehlgeschlagen, 7,6 Minuten, ohne Abbruch. **Der Hinweis auf
+  die 2 uebersprungenen Faelle bleibt Pflicht** (`finanz-wp-zero-mea`,
+  `sollstellung-unit-no-mea` tragen `test.skip`) — es sind 101 von 103, nicht
+  103 von 103. Der geteilte Lauf vom 2026-09-25 ist damit historisch und nicht
+  mehr die aktuelle Beleglage. Echter Zahlungsverkehr oder Rechtsberatung
+  wuerden Produkt- und Compliance-Grenzen wesentlich erweitern.
 
 ## Next Logical Step
 

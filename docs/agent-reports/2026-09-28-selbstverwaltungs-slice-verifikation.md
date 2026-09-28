@@ -126,7 +126,7 @@ Vorschau prüfenswert ist. Der persistierte Beweis liegt jetzt in
 | `playwright test selbstverwaltung` | `pass` | 5 von 5 (2 Auth-Setups, 3 Tests), 21,8 s |
 | `playwright test scenarios` | `pass` | 7 von 7, 32,0 s — nachgeholt, weil die geänderte Datei zunächst ungeprüft blieb und die CI kein Playwright ausführt |
 | `./scripts/verify.sh` | `pass` | siehe Commit |
-| `just e2e` (volle Suite) | `skipped` | Nur die beiden berührten Dateien wurden geprüft. Die übrigen 19 Specs sind auf diesem Zweig nicht gelaufen — sie wurden auch nicht angefasst. |
+| `just e2e` (volle Suite) | `pass` | 103 Tests: 101 bestanden, 2 übersprungen (`test.skip`), 0 fehlgeschlagen, 7,6 Minuten, kein Abbruch — der erste vollständige Lauf in einem Stück. Der Lauf vom 2026-09-25 musste nach `ENOSPC` geteilt werden. |
 
 **Zur CI-Abdeckung:** `.github/workflows/` führt kein Playwright aus. Die
 grünen PR-Prüfungen decken Lint, Typecheck, Unit-Tests, Codegen-Drift,
