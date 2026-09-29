@@ -351,6 +351,9 @@ export type Database = Overwrite<
                     version_nr: number;
                     vorgaenger_wirtschaftsplan_id: string | null;
                     wirksam_ab_monat: number | null;
+                    // Beschlussgrundlage der Aktivierung (Migration 0074) —
+                    // manuell nachgetragen wie die uebrigen Spalten hier.
+                    beschluss_sammlung_entry_id: string | null;
                   }
                 >;
                 Insert: Overwrite<
@@ -363,6 +366,7 @@ export type Database = Overwrite<
                     version_nr?: number;
                     vorgaenger_wirtschaftsplan_id?: string | null;
                     wirksam_ab_monat?: number | null;
+                    beschluss_sammlung_entry_id?: string | null;
                   }
                 >;
                 Update: Overwrite<
@@ -375,6 +379,7 @@ export type Database = Overwrite<
                     version_nr?: number;
                     vorgaenger_wirtschaftsplan_id?: string | null;
                     wirksam_ab_monat?: number | null;
+                    beschluss_sammlung_entry_id?: string | null;
                   }
                 >;
               }

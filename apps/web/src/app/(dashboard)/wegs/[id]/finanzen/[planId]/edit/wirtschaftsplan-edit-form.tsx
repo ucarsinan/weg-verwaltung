@@ -20,6 +20,12 @@ interface Unit {
   mea_nenner: number;
 }
 
+/** Ein zustimmender Eintrag der Beschluss-Sammlung, fertig beschriftet. */
+export interface BeschlussOption {
+  id: string;
+  label: string;
+}
+
 interface WirtschaftsplanEditFormProps {
   wegId: string;
   planId: string;
@@ -33,8 +39,10 @@ interface WirtschaftsplanEditFormProps {
     aktiviert_am: string | null;
     abgeloest_am: string | null;
     archiviert_am: string | null;
+    beschluss_sammlung_entry_id: string | null;
   };
   units: Unit[];
+  beschluesse: BeschlussOption[];
 }
 
 const initialState: WirtschaftsplanEditFormState = {};
@@ -84,6 +92,7 @@ export function WirtschaftsplanEditForm({
   planId,
   initialData,
   units,
+  beschluesse,
 }: WirtschaftsplanEditFormProps) {
   const updateWithIds = updateWirtschaftsplanAction.bind(null, wegId, planId);
   const [state, formAction] = useActionState(updateWithIds, initialState);
@@ -95,10 +104,22 @@ export function WirtschaftsplanEditForm({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLifecycleActionPending, setIsLifecycleActionPending] =
     useState(false);
+  const [beschlussId, setBeschlussId] = useState(
+    initialData.beschluss_sammlung_entry_id ?? "",
+  );
   const isDraft = initialData.status === "entwurf";
   const canArchive =
     initialData.status === "entwurf" || initialData.status === "abgeloest";
   const canCreateNachtrag = initialData.status === "aktiv";
+
+  // 0074 verlangt die Beschlussgrundlage am GESPEICHERTEN Plan. Der
+  // Aktivieren-Knopf steht ausserhalb des Formulars, eine bloss ausgewaehlte,
+  // aber nicht gespeicherte Zuordnung zaehlt also nicht — sonst liefe der Nutzer
+  // in "kein Beschluss zugeordnet", obwohl er gerade einen gewaehlt hat.
+  const beschlussGespeichert = initialData.beschluss_sammlung_entry_id !== null;
+  const beschlussUngespeichert =
+    (beschlussId || null) !== initialData.beschluss_sammlung_entry_id;
+  const kannAktivieren = isDraft && beschlussGespeichert;
 
   const numCosts = useMemo(() => {
     const normalized = gesamtkosten.replace(",", ".");
@@ -202,7 +223,7 @@ export function WirtschaftsplanEditForm({
           {isDraft ? (
             <button
               type="button"
-              disabled={isLifecycleActionPending}
+              disabled={isLifecycleActionPending || !kannAktivieren}
               onClick={() =>
                 runLifecycleAction(() =>
                   activateWirtschaftsplan(wegId, planId),
@@ -244,6 +265,34 @@ export function WirtschaftsplanEditForm({
             </button>
           ) : null}
         </div>
+
+        {isDraft && !kannAktivieren ? (
+          <p
+            role="status"
+            className="mt-3 text-sm text-[color:var(--color-muted-foreground)]"
+          >
+            {beschluesse.length === 0 ? (
+              // Der Ausweg, der sonst fehlte — dieselbe Lehre wie bei Befund 7:
+              // eine Vorbedingung zu benennen, ohne den Weg dorthin zu zeigen,
+              // ist eine Sackgasse.
+              <>
+                Zum Aktivieren fehlt der Beschluss über die Vorschüsse. Für diese
+                WEG ist noch kein zustimmender Beschluss erfasst.{" "}
+                <Link
+                  href={`/wegs/${wegId}/beschluss-sammlung/new`}
+                  className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+                >
+                  Beschluss erfassen
+                </Link>
+                .
+              </>
+            ) : beschlussUngespeichert ? (
+              "Die gewählte Beschlussgrundlage ist noch nicht gespeichert. Bitte unten speichern, danach lässt sich der Plan aktivieren."
+            ) : (
+              "Zum Aktivieren fehlt der Beschluss über die Vorschüsse — bitte unten zuordnen und speichern."
+            )}
+          </p>
+        ) : null}
       </div>
 
       <form action={formAction} className="space-y-6" noValidate>
@@ -379,6 +428,72 @@ export function WirtschaftsplanEditForm({
               {state.errors.wirksam_ab_monat.join(" ")}
             </p>
           ) : null}
+        </div>
+
+        <div className="space-y-1">
+          <label
+            htmlFor="beschluss_sammlung_entry_id"
+            className="block text-sm font-medium"
+          >
+            Beschlussgrundlage
+          </label>
+          {/*
+            Bewusst KEIN `required`: Ein Entwurf entsteht, bevor die Versammlung
+            beschliesst — genau das ist die Reihenfolge des § 28 Abs. 1 WEG. Die
+            Pflicht greift erst beim Aktivieren, wo aus dem Plan Geld wird.
+          */}
+          <select
+            id="beschluss_sammlung_entry_id"
+            name="beschluss_sammlung_entry_id"
+            value={beschlussId}
+            onChange={(event) => setBeschlussId(event.target.value)}
+            disabled={!isDraft || beschluesse.length === 0}
+            aria-invalid={
+              state.errors?.beschluss_sammlung_entry_id ? true : undefined
+            }
+            aria-describedby={
+              state.errors?.beschluss_sammlung_entry_id
+                ? "beschluss-error"
+                : "beschluss-hint"
+            }
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm disabled:opacity-60"
+          >
+            <option value="">— noch nicht zugeordnet —</option>
+            {beschluesse.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {state.errors?.beschluss_sammlung_entry_id ? (
+            <p
+              id="beschluss-error"
+              role="alert"
+              className="text-sm text-red-600 dark:text-red-400"
+            >
+              {state.errors.beschluss_sammlung_entry_id.join(" ")}
+            </p>
+          ) : (
+            <p
+              id="beschluss-hint"
+              className="text-sm text-[color:var(--color-muted-foreground)]"
+            >
+              {beschluesse.length === 0 ? (
+                <>
+                  Für diese WEG ist noch kein zustimmender Beschluss erfasst.{" "}
+                  <Link
+                    href={`/wegs/${wegId}/beschluss-sammlung/new`}
+                    className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+                  >
+                    Beschluss erfassen
+                  </Link>
+                  .
+                </>
+              ) : (
+                "Der Beschluss der Eigentümer über die Vorschüsse — er begründet die Zahlungspflicht, der Plan ist die Vorlage (§ 28 Abs. 1 WEG). Zum Aktivieren erforderlich. Umlaufbeschlüsse zählen."
+              )}
+            </p>
+          )}
         </div>
 
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">

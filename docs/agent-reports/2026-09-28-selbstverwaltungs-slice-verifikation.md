@@ -66,7 +66,7 @@ festgehalten, damit sie nicht wieder aus dem Blick geraten.
 | `BEHOBEN 2026-09-29` | `P2` | ~~Aktivierungsfehler falsch beschriftet~~ — die Meldung der Datenbank wird jetzt ausgewertet statt verworfen | `[planId]/edit/actions.ts:46-64` bildete `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte wurden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
 | `BEHOBEN 2026-09-29` | `P2` | ~~Verteilungsschlüssel ist unsichtbare Vorbedingung~~ — der Hinweis trägt jetzt den Link | `position-form.tsx:137,164`; `ausgabe-form.tsx:187` — leeres, deaktiviertes Auswahlfeld, Absendeknopf aktiv | Nutzer klickt, bekommt einen Feldfehler und keinen Weg zur Lösung | Link auf `…/verteilungsschluessel/new` in beide Formulare | Wegführung: Sackgasse mit Ausweg, der nicht gezeigt wird |
 | `BEHOBEN 2026-09-29` | `P2` | ~~Die Wegführung überspringt die gesamten Finanzen~~ — der Wirtschaftsplan steht jetzt in der Leiter, vor der Versammlung | `wegs/[id]/page.tsx:227-267`: Adresse → Einheiten → Personen → Versammlung | Wer der App folgt, baut nie einen Wirtschaftsplan | Finanzen in die Leiter aufnehmen | Wegführung: die Kernaufgabe fehlt im Vorschlag |
-| `BEHOBEN 0074` (Datenbank) | `P1` | ~~Wirtschaftsplan und Beschluss sind nicht verbunden~~ — die Aktivierung verlangt jetzt einen Eintrag der Beschluss-Sammlung | `wirtschaftsplan` (0036, 0047) hatte kein Feld dafür; `activate_wirtschaftsplan` erzeugte Sollstellungen ohne jeden Bezug auf einen Beschluss | Zahlungsforderungen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet | Aktivierung an einen Beschluss binden | Fachlich: bestreitet ein Eigentümer die Forderung, hat das System keine Antwort |
+| `BEHOBEN 0074` | `P1` | ~~Wirtschaftsplan und Beschluss sind nicht verbunden~~ — die Aktivierung verlangt einen Eintrag der Beschluss-Sammlung, und der Entwurf hat ein Auswahlfeld dafür | `wirtschaftsplan` (0036, 0047) hatte kein Feld dafür; `activate_wirtschaftsplan` erzeugte Sollstellungen ohne jeden Bezug auf einen Beschluss | Zahlungsforderungen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet | Aktivierung an einen Beschluss binden | Fachlich: bestreitet ein Eigentümer die Forderung, hat das System keine Antwort |
 | `SUPPORTED` | `P2` | `anfechtungsstatus` ist strukturell toter Buchstabe | `beschluss_sammlung_entry` ist append-only (`0005:86-112`), die in `0005:5-7` behauptete Projektion aus `beschluss_anfechtung_event` existiert nicht, und für diese Event-Kette gibt es überhaupt keinen Schreibpfad | Ein für unwirksam erklärter Beschluss lässt sich nicht erfassen — und berührte die darauf beruhenden Sollstellungen auch dann nicht | Event-Kette und Projektion bauen; `sollstellung.buchungstyp = 'korrektur'` (`0039:36-62`) ist der vorhandene, leere Anknüpfungspunkt | Fachlich: die Grundlage kann entfallen, die Forderung bleibt |
 | `SUPPORTED` | `P3` | Versammlung ohne `termin_von` ist eine Sackgasse | `versammlungen/new/actions.ts`; Einladung, Stimmen und Feststellung scheitern danach | Der Fehler zeigt sich erst drei Schritte später | Termin zur Pflicht machen oder früh warnen | Wegführung: späte Rückmeldung |
 | `SUPPORTED` | `P3` | `castVote` scheitert als stiller No-Op | `abstimmung/actions.ts:57,76-81,97-103` — `return` ohne Zustand | Die Seite rendert unverändert, niemand erfährt warum | Fehlerzustand zurückgeben | Wegführung: unsichtbares Scheitern |
@@ -533,3 +533,55 @@ Spalte nicht.
 **Kein E2E.** Die Cloud kennt die Spalte bis zum `db-migrate` nicht; ein Lauf
 wäre rot aus dem falschen Grund. Der UI-Pfad `e2e/helpers/finanzen.ts` bleibt bis
 PR B rot (`finanzen.spec.ts:249`, `finanzen-positionen.spec.ts:140`).
+
+## Nachtrag 2026-09-29: Befund 13 vollständig — die Oberfläche (PR B)
+
+`0074` ist am 2026-09-29 ausgerollt; die Cloud trägt die Spalte. Damit folgt der
+zweite Teil: der Entwurf bekommt ein Auswahlfeld für die Beschlussgrundlage.
+
+**Das Auswahlfeld ist bewusst nicht `required`.** Ein Entwurf entsteht, bevor die
+Versammlung beschließt — genau die Reihenfolge des § 28 Abs. 1 WEG. Die Pflicht
+greift erst beim Aktivieren, wo aus dem Plan Geld wird. Angeboten werden nur
+zustimmende Beschlüsse (`positiv_beschluss`, `umlaufbeschluss`); einen
+abgelehnten Antrag zu zeigen, den `0074` ohnehin abweist, wäre eine falsche
+Fährte.
+
+**Der Versatz, an dem eine neue Sackgasse entstanden wäre.** Der Aktivieren-Knopf
+steht **außerhalb** des Formulars. Wer einen Beschluss auswählt und ohne
+Speichern aktiviert, liefe in „kein Beschluss zugeordnet" — obwohl er gerade
+einen gewählt hat. Der Knopf hängt deshalb am **gespeicherten** Stand, und der
+Hinweis darunter unterscheidet die drei Lagen: kein Beschluss in der WEG
+(Link auf `beschluss-sammlung/new`), ausgewählt aber ungespeichert („bitte
+speichern"), oder keiner zugeordnet.
+
+Dass der Ausweg-Link überhaupt da ist, ist die Lehre aus Befund 7: eine
+Vorbedingung zu benennen, ohne den Weg dorthin zu zeigen, ist eine Sackgasse.
+
+**Neuer Spec `finanzen-beschlussgrundlage.spec.ts`,** zwei Tests: die Sperre samt
+sichtbarem Ausweg, und der volle Weg Beschluss erfassen → zuordnen → speichern →
+aktivieren, mit 24 Sollstellungen als Beweis. Der zweite benutzt einen
+**Umlaufbeschluss ohne Versammlung** — der Fall, der strukturell unmöglich wäre,
+hätte `0074` auf `resolution` verwiesen. Der Spec sichert außerdem zu, dass eine
+nur ausgewählte, ungespeicherte Zuordnung **nicht** genügt.
+
+`e2e/helpers/finanzen.ts` legt den Beschluss jetzt vorab per REST an und prüft,
+dass der Knopf danach freigeschaltet ist — sonst klickte Playwright ins Leere und
+der Test scheiterte erst später am fehlenden Redirect, mit einer Meldung, die auf
+die falsche Ursache zeigt.
+
+### Checks
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `./scripts/verify.sh` | `pass` | **579 Web-Tests** (vorher 577) |
+| `playwright test finanzen-beschlussgrundlage finanzen-positionen` | `pass` | **7 von 7**, 34 Sekunden — der erste Lauf gegen die migrierte Cloud. `finanzen-positionen` ist die Regressionsprobe für den geänderten UI-Helfer. |
+
+**Eine Beobachtung zur Verlässlichkeit der eigenen Läufe:** Der erste
+`verify.sh`-Durchlauf meldete als Hintergrundaufgabe „exit code 0", war aber rot
+— der gemeldete Status war der meiner nachgeschalteten `grep`-Pipeline, nicht
+der des Skripts. Der echte Code steht seit dem Vorfall vom 2026-09-28 im Log
+selbst (`verify-exit=`), und genau deshalb fiel es auf. Dieselbe Klasse Fehler
+wie damals; die Gegenmaßnahme hat getragen.
+
+**Damit ist Befund 13 abgeschlossen.** Offen bleiben fünf der ursprünglichen
+Befunde (5, 9–12) und Befund 14.

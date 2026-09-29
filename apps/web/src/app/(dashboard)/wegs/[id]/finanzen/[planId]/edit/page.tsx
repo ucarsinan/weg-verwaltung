@@ -9,15 +9,46 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Database } from "@/lib/supabase/database.types";
-import { WirtschaftsplanEditForm } from "./wirtschaftsplan-edit-form";
+import {
+  WirtschaftsplanEditForm,
+  type BeschlussOption,
+} from "./wirtschaftsplan-edit-form";
 
 type WegRow = Database["public"]["Tables"]["weg"]["Row"];
 type WirtschaftsplanRow =
   Database["public"]["Tables"]["wirtschaftsplan"]["Row"];
 type UnitRow = Database["public"]["Tables"]["unit"]["Row"];
+type BeschlussSammlungEntryRow =
+  Database["public"]["Tables"]["beschluss_sammlung_entry"]["Row"];
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const DATE_SHORT: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+};
+
+function formatDateDE(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-DE", DATE_SHORT);
+}
+
+// Kurzformen wie auf der Liste der Beschluss-Sammlung.
+const TYP_LABEL: Record<
+  BeschlussSammlungEntryRow["typ"],
+  string
+> = {
+  positiv_beschluss: "Positiv",
+  negativ_beschluss: "Negativ",
+  umlaufbeschluss: "Umlauf",
+};
+
+/** Beschlusstexte sind bis 10.000 Zeichen lang — im Auswahlfeld wird gekürzt. */
+function kuerze(text: string, max = 70): string {
+  const einzeilig = text.replace(/\s+/g, " ").trim();
+  return einzeilig.length > max ? `${einzeilig.slice(0, max - 1)}…` : einzeilig;
+}
 
 export default async function EditWirtschaftsplanPage({
   params,
@@ -49,7 +80,7 @@ export default async function EditWirtschaftsplanPage({
   const { data: plan, error: planError } = await supabase
     .from("wirtschaftsplan")
     .select(
-      "jahr, bezeichnung, gesamtkosten, status, version_nr, wirksam_ab_monat, aktiviert_am, abgeloest_am, archiviert_am",
+      "jahr, bezeichnung, gesamtkosten, status, version_nr, wirksam_ab_monat, aktiviert_am, abgeloest_am, archiviert_am, beschluss_sammlung_entry_id",
     )
     .eq("id", planId)
     .eq("weg_id", wegId)
@@ -65,6 +96,7 @@ export default async function EditWirtschaftsplanPage({
         | "aktiviert_am"
         | "abgeloest_am"
         | "archiviert_am"
+        | "beschluss_sammlung_entry_id"
       >
     >();
 
@@ -86,6 +118,38 @@ export default async function EditWirtschaftsplanPage({
   if (unitsError) {
     console.error("[edit-wirtschaftsplan] units select failed:", unitsError);
   }
+
+  // Nur zustimmende Beschluesse. Ein abgelehnter Antrag begruendet keine
+  // Vorschuesse — 0074 weist ihn ab, ihn hier anzubieten waere eine falsche
+  // Faehrte. Neueste zuerst: den Beschluss zu einem frischen Plan sucht man oben.
+  const { data: beschluesse, error: beschluesseError } = await supabase
+    .from("beschluss_sammlung_entry")
+    .select("id, lfd_nr, datum, typ, beschluss_text")
+    .eq("weg_id", wegId)
+    .in("typ", ["positiv_beschluss", "umlaufbeschluss"])
+    .order("lfd_nr", { ascending: false })
+    .returns<
+      Pick<
+        BeschlussSammlungEntryRow,
+        "id" | "lfd_nr" | "datum" | "typ" | "beschluss_text"
+      >[]
+    >();
+
+  if (beschluesseError) {
+    console.error(
+      "[edit-wirtschaftsplan] beschluss-sammlung select failed:",
+      beschluesseError,
+    );
+  }
+
+  const beschlussOptionen: BeschlussOption[] = (beschluesse ?? []).map(
+    (eintrag) => ({
+      id: eintrag.id,
+      label: `#${eintrag.lfd_nr} — ${formatDateDE(eintrag.datum)} — ${
+        TYP_LABEL[eintrag.typ]
+      } — ${kuerze(eintrag.beschluss_text)}`,
+    }),
+  );
 
   return (
     <section className="mx-auto max-w-3xl space-y-6 px-6 py-12">
@@ -120,6 +184,7 @@ export default async function EditWirtschaftsplanPage({
             planId={planId}
             initialData={plan}
             units={units ?? []}
+            beschluesse={beschlussOptionen}
           />
         </CardContent>
       </Card>
