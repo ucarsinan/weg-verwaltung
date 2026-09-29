@@ -13,6 +13,7 @@ export interface WirtschaftsplanEditFormState {
     bezeichnung?: string[];
     gesamtkosten?: string[];
     wirksam_ab_monat?: string[];
+    beschluss_sammlung_entry_id?: string[];
     _form?: string[];
   };
 }
@@ -81,6 +82,8 @@ interface WirtschaftsplanEditInput {
   bezeichnung: string;
   gesamtkosten: number;
   wirksamAbMonat: number | null;
+  /** `null` bis die Versammlung beschlossen hat; Pflicht erst beim Aktivieren. */
+  beschlussSammlungEntryId: string | null;
 }
 
 export async function updateWirtschaftsplanAction(
@@ -105,6 +108,9 @@ export async function updateWirtschaftsplanAction(
         const gesamtkostenRaw = String(data.get("gesamtkosten") ?? "").trim();
         const wirksamAbMonatRaw = String(
           data.get("wirksam_ab_monat") ?? "",
+        ).trim();
+        const beschlussRaw = String(
+          data.get("beschluss_sammlung_entry_id") ?? "",
         ).trim();
 
         const errors: WirtschaftsplanEditFormState["errors"] = {};
@@ -134,6 +140,16 @@ export async function updateWirtschaftsplanAction(
           ];
         }
 
+        // Leer ist gueltig: der Entwurf entsteht, bevor die Versammlung
+        // beschliesst. Die Pflicht sitzt in activate_wirtschaftsplan (0074).
+        // Geprueft wird nur die Form — ob der Beschluss zur WEG gehoert und
+        // zustimmend ist, prueft die Datenbank, nicht die Oberflaeche.
+        if (beschlussRaw.length > 0 && !UUID_RE.test(beschlussRaw)) {
+          errors.beschluss_sammlung_entry_id = [
+            "Bitte einen Beschluss aus der Liste wählen.",
+          ];
+        }
+
         if (Object.keys(errors).length > 0) {
           return { errors: { errors } };
         }
@@ -144,6 +160,7 @@ export async function updateWirtschaftsplanAction(
             bezeichnung,
             gesamtkosten: gesamtkosten ?? 0,
             wirksamAbMonat: wirksamAbMonat === "invalid" ? null : wirksamAbMonat,
+            beschlussSammlungEntryId: beschlussRaw.length > 0 ? beschlussRaw : null,
           },
         };
       },
@@ -155,6 +172,7 @@ export async function updateWirtschaftsplanAction(
             bezeichnung: input.bezeichnung,
             gesamtkosten: input.gesamtkosten,
             wirksam_ab_monat: input.wirksamAbMonat,
+            beschluss_sammlung_entry_id: input.beschlussSammlungEntryId,
           })
           .eq("id", planId)
           .eq("weg_id", wegId)

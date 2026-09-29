@@ -325,11 +325,13 @@ Planjahr — ein Beschluss darf spaet gefasst werden, auch nach Jahresende. Die
 RPC-Signatur bleibt unveraendert; der Beschluss wird am Entwurf gesetzt, nicht
 beim Aktivieren uebergeben.
 
-**Die Oberflaeche fehlt noch.** `scripts/db-migrate-guard.sh` verlangt die
-Migration auf `origin/main`, bevor sie ausgerollt werden darf, der Merge deployt
-aber zugleich die App — deshalb zwei PRs mit `just db-migrate` dazwischen. Bis
-zum zweiten ist die Aktivierung in der Oberflaeche gesperrt, mit klarer Meldung,
-aber ohne Auswahlfeld.
+**Die Oberflaeche ist seit dem 2026-09-29 nachgezogen.** `0074` ist an diesem
+Tag ausgerollt; der Entwurf hat ein Auswahlfeld fuer die Beschlussgrundlage,
+angeboten werden nur zustimmende Beschluesse. Das Feld ist bewusst nicht
+pflichtig — geplant wird, bevor die Versammlung beschliesst. Der
+Aktivieren-Knopf haengt am GESPEICHERTEN Stand: eine nur ausgewaehlte Zuordnung
+genuegt nicht, und der Hinweis darunter nennt den Grund samt Weg zum Erfassen.
+Beides belegt `apps/web/e2e/finanzen-beschlussgrundlage.spec.ts`.
 
 **Neu notiert — Befund 14: `anfechtungsstatus` ist toter Buchstabe.** Die Spalte
 kann ihren Default nie verlassen: die Tabelle ist append-only, und die in `0005`
@@ -339,9 +341,9 @@ Problem: Entfaellt die Grundlage, bleiben die Sollstellungen unveraendert
 bestehen. `sollstellung.buchungstyp = 'korrektur'` (`0039`) ist der vorhandene,
 leere Anknuepfungspunkt.
 
-Offen bleiben fuenf der urspruenglichen Befunde (5, 9–12), der Web-Teil von
-Befund 13 und der neue Befund 14. Von den fuenf erzeugt keiner falsches Geld und
-keiner sperrt einen Nutzer aus.
+**Befund 13 ist damit abgeschlossen.** Offen bleiben fuenf der urspruenglichen
+Befunde (5, 9–12) und der neue Befund 14. Von den fuenf erzeugt keiner falsches
+Geld und keiner sperrt einen Nutzer aus.
 
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im

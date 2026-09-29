@@ -112,6 +112,10 @@ describe("updateWirtschaftsplanAction", () => {
       bezeichnung: "Wirtschaftsplan 2027",
       gesamtkosten: 24000.5,
       wirksam_ab_monat: null,
+      // 0074: Ein Entwurf ohne Beschlussgrundlage ist gültig — geplant wird,
+      // bevor die Versammlung beschließt. Die Pflicht greift erst beim
+      // Aktivieren.
+      beschluss_sammlung_entry_id: null,
     });
     expect(mockEqPlan).toHaveBeenCalledWith(
       "id",
@@ -127,6 +131,44 @@ describe("updateWirtschaftsplanAction", () => {
     expect(redirect).toHaveBeenCalledWith(
       "/wegs/00000000-0000-0000-0000-000000000001/finanzen",
     );
+  });
+
+  it("persists the Beschlussgrundlage when one is chosen", async () => {
+    const beschlussId = "00000000-0000-0000-0000-0000000000b1";
+    const fd = new FormData();
+    fd.set("jahr", "2027");
+    fd.set("bezeichnung", "Wirtschaftsplan 2027");
+    fd.set("gesamtkosten", "24000");
+    fd.set("beschluss_sammlung_entry_id", beschlussId);
+
+    await updateWirtschaftsplanAction(
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002",
+      {},
+      fd,
+    );
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ beschluss_sammlung_entry_id: beschlussId }),
+    );
+  });
+
+  it("rejects a Beschluss id that is not a uuid", async () => {
+    const fd = new FormData();
+    fd.set("jahr", "2027");
+    fd.set("bezeichnung", "Wirtschaftsplan 2027");
+    fd.set("gesamtkosten", "24000");
+    fd.set("beschluss_sammlung_entry_id", "nicht-aus-der-liste");
+
+    const result = await updateWirtschaftsplanAction(
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002",
+      {},
+      fd,
+    );
+
+    expect(result.errors?.beschluss_sammlung_entry_id).toBeDefined();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("returns year error on unique constraint violation", async () => {
