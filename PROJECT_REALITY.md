@@ -86,14 +86,16 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `infra/supabase/tests/0000_rls_katalog.sql` prueft fixture-frei ueber `pg_class`
   und `pg_policy`, dass jede Tabelle in `public` RLS und FORCE RLS traegt, dass jede
   Nicht-Partition mindestens eine Policy hat und dass im Schema `private` keine
-  Tabelle liegt. Gemessen (Stand `0072`, das keine Tabelle hinzufuegt): 64 von
-  64 Tabellen (inkl. der beiden partitionierten Elterntabellen, die der
-  urspruengliche Vorschlag uebersehen haette, und der `aufbewahrungsregel` aus
+  Tabelle liegt. Gemessen (Stand `0075`): 65 von
+  65 Tabellen (inkl. der beiden partitionierten Elterntabellen, die der
+  urspruengliche Vorschlag uebersehen haette, der `aufbewahrungsregel` aus
+  `0069` und der `weg_zugang` aus `0075` — der ersten neuen Tabelle seit
   `0069`). Der Vertrag wurde
   gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
-  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 19 Vertraege mit 371
+  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 22 Vertraege mit 420
   Zusicherungen (`0072` brachte keinen neuen Vertrag, sondern erweiterte die
-  bestehenden `0069` von 12 auf 26 und `0071` von 13 auf 15).
+  bestehenden `0069` von 12 auf 26 und `0071` von 13 auf 15; `0073`, `0074` und
+  `0075` brachten je einen).
 - Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
   Bankabgleich, kein Mahnwesen. Das ist bewusst und steht so auf der Landingpage;
   die Dokumentenablage ist seit 2026-09-23 keine Grenze mehr, sondern ein
@@ -344,6 +346,22 @@ leere Anknuepfungspunkt.
 **Befund 13 ist damit abgeschlossen.** Offen bleiben fuenf der urspruenglichen
 Befunde (5, 9–12) und der neue Befund 14. Von den fuenf erzeugt keiner falsches
 Geld und keiner sperrt einen Nutzer aus.
+
+**Die RLS trennt seit dem 2026-09-29 erstmals nach Rolle** (`0075`). PR #37
+hatte die Rolle `eigentuemer` aus dem Dashboard ausgesperrt — das war die
+Oberflaeche, nicht die Grenze: PostgREST unter `/rest/v1/*` blieb unberuehrt,
+ein gueltiges Token las weiterhin alles. `public.weg_zugang` haelt jetzt
+explizit fest, wer welche WEG lesen darf, erzwungen auf `weg`, `unit`,
+`ownership` und der Beschluss-Sammlung.
+
+**Bewusst nicht ueber die Eigentuemerkette.** `person.user_id` ist weder
+eindeutig noch validiert, der Trial-Pfad legt gar keine Eigentuemerschaft an,
+und Miteigentuemer haengen an einer anderen Tabelle — vier Befunde, alle im
+Bericht. Eigentum ist eine Fachtatsache, Sichtbarkeit eine Zugriffstatsache.
+`weg_zugang` startet leer; eine Oberflaeche zum Vergeben kommt mit der
+Eigentuemersicht. `person` und die Finanztabellen sind ausgespart, `person`
+wegen der noetigen Einschraenkung auf Spaltenebene. Bericht:
+`docs/agent-reports/2026-09-29-weg-zugang-rollentrennung.md`.
 
 **Eigentuemerseitig gesperrt statt ungeprueft (seit 2026-09-29).** Bei der
 Vorbereitung dieser Entscheidung kam heraus, dass die Rolle `eigentuemer` nicht
