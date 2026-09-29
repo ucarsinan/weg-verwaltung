@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { createPositionAction, type PositionFormState } from "./actions";
 
@@ -161,9 +163,29 @@ export default function PositionForm({
             id="schluessel-hint"
             className="text-sm text-[color:var(--color-muted-foreground)]"
           >
-            {buchbare.length === 0
-              ? "Für diese WEG ist noch kein verwendbarer Verteilungsschlüssel angelegt."
-              : "Ein gemischter Schlüssel verteilt über seine Teile — die müssen auf seiner Detailseite hinterlegt sein."}
+            {schluessel.length === 0 ? (
+              // Ohne Verteilungsschluessel laesst sich keine Position anlegen,
+              // und das Auswahlfeld sagt nur, DASS etwas fehlt. Der Link ist
+              // der Ausweg, der bisher fehlte (Befund 7).
+              <>
+                Für diese WEG ist noch kein Verteilungsschlüssel angelegt.{" "}
+                <Link
+                  href={
+                    `/wegs/${wegId}/finanzen/verteilungsschluessel/new` as Route
+                  }
+                  className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+                >
+                  Verteilungsschlüssel anlegen
+                </Link>
+                .
+              </>
+            ) : buchbare.length === 0 ? (
+              // Schluessel sind da, taugen aber nicht fuer Sollstellungen. Hier
+              // waere ein Link zum Anlegen eine falsche Faehrte.
+              "Keiner der vorhandenen Verteilungsschlüssel lässt sich für Sollstellungen verwenden."
+            ) : (
+              "Ein gemischter Schlüssel verteilt über seine Teile — die müssen auf seiner Detailseite hinterlegt sein."
+            )}
           </p>
         )}
       </div>

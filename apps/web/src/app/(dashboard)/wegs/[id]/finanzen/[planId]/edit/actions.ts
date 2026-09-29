@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { logPostgrestError, runFormAction } from "@/modules/action-kernel";
+import { mapAktivierungsfehler } from "@/modules/finanzen/aktivierungsfehler";
 
 export interface WirtschaftsplanEditFormState {
   errors?: {
@@ -56,11 +57,16 @@ function mapLifecycleError(code?: string): string {
     return "Für dieses Jahr ist bereits ein anderer Wirtschaftsplan aktiv.";
   }
 
-  // 0073 vergibt fuer die MEA-Vorbedingung bewusst einen eigenen Code. Jeder
-  // 23514 der Aktivierung landet sonst in derselben Sammelmeldung darunter,
-  // und der Nutzer erfuehre nicht, dass es an den Anteilen liegt.
+  // Diese Funktion bedient nur noch Archivieren und Nachtrag; die Aktivierung
+  // hat mit mapAktivierungsfehler eine eigene Zuordnung.
+  //
+  // Sie behauptet hier ausdruecklich KEINEN MEA-Fehler mehr: Die
+  // MEA-Vorbedingung aus 0073 sitzt allein in activate_wirtschaftsplan, wird
+  // beim Archivieren und beim Nachtrag also nie geprueft. Ein 22023 kann hier
+  // nur aus der Audit-Kette kommen (0045:153,179 werfen denselben Code fuer
+  // Ausfaelle der HMAC-Kette, und deren Trigger haengen an wirtschaftsplan).
   if (code === "22023") {
-    return "Die Miteigentumsanteile dieser WEG ergeben nicht genau ein Ganzes. Solange sie nicht aufgehen, würde ein Teil der Kosten niemandem berechnet — bitte die Anteile der Einheiten prüfen.";
+    return "Die Aktion ist an einer technischen Prüfung gescheitert. Bitte an die Administration wenden.";
   }
 
   if (code === "23514") {
@@ -269,11 +275,20 @@ export async function activateWirtschaftsplan(
   });
 
   if (error) {
+    // Die Aktivierung bekommt eine eigene Zuordnung statt mapLifecycleError:
+    // Sie ist die einzige der drei Lifecycle-Aktionen, die den Generator
+    // ausfuehrt, und traegt damit Ursachen, die es beim Archivieren und beim
+    // Nachtrag nicht gibt. `message` wird ausgewertet, weil der Code allein
+    // fuenf Ursachen nicht trennt (Befund 6).
+    const { text, intern } = mapAktivierungsfehler(error.code, error.message);
     console.error("[activateWirtschaftsplan] rpc failed", {
       code: error.code,
       hint: error.hint,
+      // Bei internen Ursachen ist der Log die einzige Spur — der Nutzer sieht
+      // absichtlich nur einen technischen Hinweis.
+      ...(intern ? { message: error.message, intern: true } : {}),
     });
-    return { error: mapLifecycleError(error.code) };
+    return { error: text };
   }
 
   revalidatePath(`/wegs/${wegId}/finanzen`);
