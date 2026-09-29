@@ -71,7 +71,7 @@ describe("createTenantInvitationAction", () => {
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "neu@example.test", role: "eigentuemer" }),
+      formData({ email: "neu@example.test", role: "tenant_admin" }),
     );
 
     expect(result).toEqual({
@@ -94,19 +94,37 @@ describe("createTenantInvitationAction", () => {
     expect(result.fieldErrors?.role).toBeTruthy();
   });
 
+  it("refuses to invite an Eigentümer while there is no owner view", async () => {
+    // Das deaktivierte <option> im Formular ist reine Oberfläche. Ohne diese
+    // Prüfung könnte ein selbst gebauter Aufruf die Rolle weiterhin vergeben —
+    // und der Eingeladene sähe das ganze Verwalter-Dashboard, weil die RLS der
+    // Fachtabellen nur nach Mandant filtert.
+    const rpc = vi.fn();
+    mocks.createClient.mockResolvedValue(authClient({ rpc }));
+
+    const result = await createTenantInvitationAction(
+      {},
+      formData({ email: "eigentuemer@example.test", role: "eigentuemer" }),
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.fieldErrors?.role).toContain("keine eigene Ansicht");
+    expect(rpc, "die Einladung darf gar nicht erst entstehen").not.toHaveBeenCalled();
+  });
+
   it("calls create_tenant_invitation with a \\x-hex token_hash and returns the invitation link", async () => {
     const rpc = vi.fn().mockResolvedValue({ error: null });
     mocks.createClient.mockResolvedValue(authClient({ rpc }));
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "Neu@Example.test", role: "eigentuemer" }),
+      formData({ email: "Neu@Example.test", role: "tenant_admin" }),
     );
 
     expect(rpc).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledWith("create_tenant_invitation", {
       p_email: "neu@example.test",
-      p_role: "eigentuemer",
+      p_role: "tenant_admin",
       p_token_hash: expect.stringMatching(/^\\x[0-9a-f]{64}$/),
     });
 
@@ -122,7 +140,7 @@ describe("createTenantInvitationAction", () => {
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "neu@example.test", role: "eigentuemer" }),
+      formData({ email: "neu@example.test", role: "tenant_admin" }),
     );
 
     expect(result).toEqual({
@@ -139,7 +157,7 @@ describe("createTenantInvitationAction", () => {
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "neu@example.test", role: "eigentuemer" }),
+      formData({ email: "neu@example.test", role: "tenant_admin" }),
     );
 
     expect(mocks.send).toHaveBeenCalledOnce();
@@ -159,7 +177,7 @@ describe("createTenantInvitationAction", () => {
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "neu@example.test", role: "eigentuemer" }),
+      formData({ email: "neu@example.test", role: "tenant_admin" }),
     );
 
     expect(result.status).toBe("success");
@@ -174,7 +192,7 @@ describe("createTenantInvitationAction", () => {
 
     const result = await createTenantInvitationAction(
       {},
-      formData({ email: "neu@example.test", role: "eigentuemer" }),
+      formData({ email: "neu@example.test", role: "tenant_admin" }),
     );
 
     expect(result.status).toBe("success");

@@ -345,6 +345,17 @@ leere Anknuepfungspunkt.
 Befunde (5, 9–12) und der neue Befund 14. Von den fuenf erzeugt keiner falsches
 Geld und keiner sperrt einen Nutzer aus.
 
+**Eigentuemerseitig gesperrt statt ungeprueft (seit 2026-09-29).** Bei der
+Vorbereitung dieser Entscheidung kam heraus, dass die Rolle `eigentuemer` nicht
+nur unfertig, sondern offen war: Sie ist einladbar und war im Einladungsformular
+**voreingestellt**, waehrend die RLS der Fachtabellen ausschliesslich nach
+Mandant filtert. Ein so eingeladener Nutzer bekam das vollstaendige
+Verwalter-Dashboard, lesend und schreibend, fuer alle WEGs des Mandanten.
+Geschadet hat es nichts — es gibt keine echten Eigentuemer —, aber die Luecke
+haette sich beim ersten echten Mandanten geschlossen. Das Dashboard weist die
+Rolle jetzt nach `/kein-zugang` ab, und die Einladung bietet sie nicht mehr an.
+Bericht: `docs/agent-reports/2026-09-29-eigentuemerrolle-ohne-schranke.md`.
+
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im
 Web-Code aber nur als Datensatz, nie als Betrachter. Ob der Slice ohne
