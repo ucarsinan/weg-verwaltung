@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { attachBeschlussFixture } from "./fixtures";
+import { assertVollstaendigeMea, attachBeschlussFixture } from "./fixtures";
 
 /**
  * Aktiviert einen Wirtschaftsplan ueber die UI (`entwurf` -> `aktiv`).
@@ -15,9 +15,16 @@ import { attachBeschlussFixture } from "./fixtures";
  * Der Beschluss wird deshalb vorab per REST angelegt und zugeordnet — er ist
  * fuer diese Tests Beiwerk, nicht Gegenstand. Die Zuordnung ueber das
  * Auswahlfeld prueft `finanzen-beschlussgrundlage.spec.ts`.
+ *
+ * Seit 0073 muessen die Miteigentumsanteile der WEG zusammen das Ganze ergeben.
+ * Das wird vorab zugesichert, weil der Knopf hier freigeschaltet BLEIBT: die
+ * Sperre sitzt in der RPC, der Klick liefe also ins Leere und der Test
+ * scheiterte erst am fehlenden Redirect — mit einer Meldung, die auf die
+ * falsche Ursache zeigt.
  */
 export async function activateWirtschaftsplan(page: Page, wegId: string, planId: string) {
   await attachBeschlussFixture(page, { planId, wegId });
+  await assertVollstaendigeMea(page, wegId);
 
   await page.goto(`/wegs/${wegId}/finanzen/${planId}/edit`);
 

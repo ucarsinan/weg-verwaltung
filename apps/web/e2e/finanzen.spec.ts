@@ -237,8 +237,9 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-generate-on-activate: activating creates 12 monthly entries for each unit", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Generate");
-    await createTestUnit(page, localWegId, "GenA", "100", "1000");
-    await createTestUnit(page, localWegId, "GenB", "200", "1000");
+    // Volle Anteile (400 + 600 von 1000): Vorbedingung der Aktivierung seit 0073.
+    await createTestUnit(page, localWegId, "GenA", "400", "1000");
+    await createTestUnit(page, localWegId, "GenB", "600", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2040,
@@ -261,8 +262,9 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-verify-amounts: entry amounts match monthly calculated Hausgeld formula", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Amounts");
-    await createTestUnit(page, localWegId, "AmountA", "100", "1000");
-    await createTestUnit(page, localWegId, "AmountB", "200", "1000");
+    // Volle Anteile (400 + 600 von 1000): Vorbedingung der Aktivierung seit 0073.
+    await createTestUnit(page, localWegId, "AmountA", "400", "1000");
+    await createTestUnit(page, localWegId, "AmountB", "600", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2041,
@@ -279,20 +281,26 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const amounts = ((await res.json()) as Array<{ betrag: number | string }>).map(
       (row) => Number(row.betrag),
     );
-    expect(amounts.filter((amount) => amount === 100)).toHaveLength(12);
-    expect(amounts.filter((amount) => amount === 200)).toHaveLength(12);
+    // 12000 * 0,4 / 12 = 400,00 und 12000 * 0,6 / 12 = 600,00
+    expect(amounts.filter((amount) => amount === 400)).toHaveLength(12);
+    expect(amounts.filter((amount) => amount === 600)).toHaveLength(12);
   });
 
   test("sollstellung-view-details: monthly Sollstellungen are displayed in unit details", async ({ page }) => {
     // Eigene WEG statt der geteilten `wegId`: der Test haengt sonst davon ab,
     // dass ein anderer Test vorher zufaellig einen aktivierten Plan angelegt hat.
     const localWegId = await createTestWeg(page, "Details");
-    const unit = await createTestUnit(page, localWegId, "Details", "100", "1000");
+    // Eine einzige Einheit traegt das Ganze (1000/1000) — Vorbedingung der
+    // Aktivierung seit 0073.
+    const unit = await createTestUnit(page, localWegId, "Details", "1000", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2039,
       bezeichnung: "Wirtschaftsplan Details",
-      gesamtkosten: 12000,
+      // Die Kosten gehen im selben Verhaeltnis mit: der gepruefte Monatsbetrag
+      // bleibt 100,00. Bei 1.000,00 wuerde der hasText-Locator unten als
+      // Teilstring greifen und der Test waere gruen, ohne etwas zu belegen.
+      gesamtkosten: 1200,
     });
     await activateWirtschaftsplanFixture(page, planId);
 
@@ -304,7 +312,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     await expect(
       page.getByText("Monatliche Soll-Zahlungen für diese Wohneinheit."),
     ).toBeVisible();
-    // 12000 * (100/1000) / 12 = 100,00 pro Monat — als echte Tabellenzeile.
+    // 1200 * (1000/1000) / 12 = 100,00 pro Monat — als echte Tabellenzeile.
     await expect(
       page.getByRole("row").filter({ hasText: "100,00" }).first(),
     ).toBeVisible();
@@ -313,7 +321,9 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-no-duplicates: generator is idempotent for existing Sollstellungen", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "Idempotent");
-    await createTestUnit(page, localWegId, "IdempotentA", "100", "1000");
+    // Eine einzige Einheit traegt das Ganze (1000/1000) — Vorbedingung der
+    // Aktivierung seit 0073.
+    await createTestUnit(page, localWegId, "IdempotentA", "1000", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2042,
@@ -355,7 +365,9 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-history-preserved: deleting a posted plan is blocked", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "DeleteBlocked");
-    await createTestUnit(page, localWegId, "DeleteBlocked", "100", "1000");
+    // Eine einzige Einheit traegt das Ganze (1000/1000) — Vorbedingung der
+    // Aktivierung seit 0073.
+    await createTestUnit(page, localWegId, "DeleteBlocked", "1000", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2036,
@@ -456,7 +468,9 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-partial-year: generates all 12 months even if plan is created mid-year", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "PartialYear");
-    await createTestUnit(page, localWegId, "Partial", "100", "1000");
+    // Eine einzige Einheit traegt das Ganze (1000/1000) — Vorbedingung der
+    // Aktivierung seit 0073.
+    await createTestUnit(page, localWegId, "Partial", "1000", "1000");
     const planId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2043,
@@ -515,18 +529,22 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
   test("sollstellung-overlapping-years: adjacent years generate independent Sollstellung entries", async ({ page }) => {
     const { token, url, key } = await getSupabaseRequestContext(page);
     const localWegId = await createTestWeg(page, "AdjacentYears");
-    await createTestUnit(page, localWegId, "Adjacent", "100", "1000");
+    // Eine einzige Einheit traegt das Ganze (1000/1000) — Vorbedingung der
+    // Aktivierung seit 0073.
+    // Die Kosten gehen im selben Verhaeltnis mit, damit die beiden geprueften
+    // Monatsbetraege 100,00 und 200,00 bleiben.
+    await createTestUnit(page, localWegId, "Adjacent", "1000", "1000");
     const firstPlanId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2044,
       bezeichnung: "Wirtschaftsplan Adjacent 2044",
-      gesamtkosten: 12000,
+      gesamtkosten: 1200,
     });
     const secondPlanId = await createWirtschaftsplanFixture(page, {
       wegId: localWegId,
       jahr: 2045,
       bezeichnung: "Wirtschaftsplan Adjacent 2045",
-      gesamtkosten: 24000,
+      gesamtkosten: 2400,
     });
     await activateWirtschaftsplanFixture(page, firstPlanId);
     await activateWirtschaftsplanFixture(page, secondPlanId);
@@ -539,7 +557,7 @@ test.describe("Feature 3: Finanzmodul (Wirtschaftsplan) & Feature 4: Sollstellun
     const rows = (await res.json()) as Array<{ wirtschaftsplan_id: string; betrag: number | string }>;
 
     // Beide Jahre stehen nebeneinander: 12 Monate je Plan, unterschiedliche
-    // Betraege (12000 -> 100,00 / 24000 -> 200,00 bei MEA 100/1000).
+    // Betraege (1200 -> 100,00 / 2400 -> 200,00 bei MEA 1000/1000).
     const first = rows.filter((row) => row.wirtschaftsplan_id === firstPlanId);
     const second = rows.filter((row) => row.wirtschaftsplan_id === secondPlanId);
     expect(first).toHaveLength(12);
