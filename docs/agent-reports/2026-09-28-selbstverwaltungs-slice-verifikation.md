@@ -66,7 +66,8 @@ festgehalten, damit sie nicht wieder aus dem Blick geraten.
 | `BEHOBEN 2026-09-29` | `P2` | ~~Aktivierungsfehler falsch beschriftet~~ — die Meldung der Datenbank wird jetzt ausgewertet statt verworfen | `[planId]/edit/actions.ts:46-64` bildete `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte wurden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
 | `BEHOBEN 2026-09-29` | `P2` | ~~Verteilungsschlüssel ist unsichtbare Vorbedingung~~ — der Hinweis trägt jetzt den Link | `position-form.tsx:137,164`; `ausgabe-form.tsx:187` — leeres, deaktiviertes Auswahlfeld, Absendeknopf aktiv | Nutzer klickt, bekommt einen Feldfehler und keinen Weg zur Lösung | Link auf `…/verteilungsschluessel/new` in beide Formulare | Wegführung: Sackgasse mit Ausweg, der nicht gezeigt wird |
 | `BEHOBEN 2026-09-29` | `P2` | ~~Die Wegführung überspringt die gesamten Finanzen~~ — der Wirtschaftsplan steht jetzt in der Leiter, vor der Versammlung | `wegs/[id]/page.tsx:227-267`: Adresse → Einheiten → Personen → Versammlung | Wer der App folgt, baut nie einen Wirtschaftsplan | Finanzen in die Leiter aufnehmen | Wegführung: die Kernaufgabe fehlt im Vorschlag |
-| `SUPPORTED` | `P2` | Wirtschaftsplan und Beschluss sind nicht verbunden | `wirtschaftsplan` (0036, 0047) hat kein `resolution_id`; `activate_wirtschaftsplan` erzeugt Sollstellungen ohne jeden Bezug auf eine Versammlung | Zahlungsforderungen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet | Aktivierung an einen Beschluss binden; `beschluss_sammlung_entry.resolution_id` (0005:13) liegt bereit | Fachlich: bestreitet ein Eigentümer die Forderung, hat das System keine Antwort |
+| `BEHOBEN 0074` (Datenbank) | `P1` | ~~Wirtschaftsplan und Beschluss sind nicht verbunden~~ — die Aktivierung verlangt jetzt einen Eintrag der Beschluss-Sammlung | `wirtschaftsplan` (0036, 0047) hatte kein Feld dafür; `activate_wirtschaftsplan` erzeugte Sollstellungen ohne jeden Bezug auf einen Beschluss | Zahlungsforderungen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet | Aktivierung an einen Beschluss binden | Fachlich: bestreitet ein Eigentümer die Forderung, hat das System keine Antwort |
+| `SUPPORTED` | `P2` | `anfechtungsstatus` ist strukturell toter Buchstabe | `beschluss_sammlung_entry` ist append-only (`0005:86-112`), die in `0005:5-7` behauptete Projektion aus `beschluss_anfechtung_event` existiert nicht, und für diese Event-Kette gibt es überhaupt keinen Schreibpfad | Ein für unwirksam erklärter Beschluss lässt sich nicht erfassen — und berührte die darauf beruhenden Sollstellungen auch dann nicht | Event-Kette und Projektion bauen; `sollstellung.buchungstyp = 'korrektur'` (`0039:36-62`) ist der vorhandene, leere Anknüpfungspunkt | Fachlich: die Grundlage kann entfallen, die Forderung bleibt |
 | `SUPPORTED` | `P3` | Versammlung ohne `termin_von` ist eine Sackgasse | `versammlungen/new/actions.ts`; Einladung, Stimmen und Feststellung scheitern danach | Der Fehler zeigt sich erst drei Schritte später | Termin zur Pflicht machen oder früh warnen | Wegführung: späte Rückmeldung |
 | `SUPPORTED` | `P3` | `castVote` scheitert als stiller No-Op | `abstimmung/actions.ts:57,76-81,97-103` — `return` ohne Zustand | Die Seite rendert unverändert, niemand erfährt warum | Fehlerzustand zurückgeben | Wegführung: unsichtbares Scheitern |
 | `SUPPORTED` | `P3` | Feststellung hat elf Ursachen und eine Meldung | `abstimmung/actions.ts:36-41` | Die am schlechtesten diagnostizierbare Stelle der App | Ursachen auffächern | Wegführung: nicht diagnostizierbar |
@@ -404,3 +405,131 @@ geprüft), der Lauf belegt also das Rendern, nicht die Priorisierung. Die trägt
 `wegs/__tests__/next-step.test.ts`.
 
 **Fünf Befunde bleiben offen** (5, 9–12), dazu der neue Befund 13.
+
+## Nachtrag 2026-09-29: Befund 13 datenbankseitig behoben (0074)
+
+`activate_wirtschaftsplan` verlangt jetzt einen Verweis auf einen Eintrag der
+Beschluss-Sammlung. Ohne ihn entsteht keine Sollstellung.
+
+### Die Rechtslage, die die Bauform vorgibt
+
+Recherchiert vor der Umsetzung, und sie hat drei Annahmen widerlegt:
+
+**Ein Beschluss ist keine Versammlung.** § 23 Abs. 3 WEG kennt den
+Umlaufbeschluss, seit der Reform in Textform, also auch per E-Mail; er trägt den
+Wirtschaftsplan ausdrücklich. Grundsätzlich braucht er Allstimmigkeit, die ein
+vorgeschalteter Beschluss auf Mehrheit absenken kann.
+
+**Ein Beschluss darf spät kommen — sogar nach Ablauf des Wirtschaftsjahres.** Die
+Verzögerung macht ihn nicht unwirksam; zu regeln sind dann Rückwirkung,
+Fälligkeit und die Anrechnung geleisteter Zahlungen, nicht die Zulässigkeit.
+
+**Die Fortgeltung beschlossener Vorschüsse ist umstritten** — eine Ansicht liest
+sie aus dem Gesetzeswortlaut, die andere verlangt einen eigenen Beschluss; der
+BGH hat einen konkreten Fortgeltungsbeschluss für zulässig erklärt, eine
+generelle Klausel dagegen der Vereinbarung zugewiesen (V ZR 2/18). Das berührt
+diesen Befund nur am Rand, denn Fortgeltung heißt *kein neuer Plan*.
+
+Daraus folgt: Die Bindung ist eine Pflicht auf **Nachweis**, nicht auf
+**Verfahren**. Wie der Beschluss zustande kam, schreibt `0074` nicht vor, und
+eine Datumsprüfung gegen das Planjahr wäre fachlich falsch — was der Vertrag
+ausdrücklich zusichert, damit es niemand „nachbessert".
+
+### Zwei Entscheidungen gegen den Augenschein
+
+**Verweisziel ist `beschluss_sammlung_entry`, nicht `resolution`.**
+`resolution.meeting_id` ist `not null` (`0004:86`) — ein Verweis darauf hätte den
+Umlaufbeschluss strukturell unmöglich gemacht. Die Beschluss-Sammlung hängt an
+der WEG, ist append-only, der Fremdschlüssel kann also nie ins Leere zeigen, und
+sie trägt die zitierfähige `lfd_nr` nach § 24 Abs. 7 WEG.
+
+Das weicht bewusst von den zwei bestehenden Vorbildern ab
+(`abrechnung.resolution_id` `0063:60`, `verteilungsschluessel_version.resolution_id`
+`0056:67`). Beide zeigen auf `resolution` und können einen manuell erfassten
+Umlaufbeschluss deshalb nicht referenzieren — **eine latente Schwäche dort, kein
+Vorbild.** Hinzu kommt, dass `beschliesse_abrechnung` ihren `resolution_id`
+ungeprüft durchschreibt (`0063:634`): keine WEG-Zugehörigkeit, keine Prüfung auf
+Zustimmung. `0074` prüft beides.
+
+**Die RPC-Signatur bleibt `(uuid)`.** Es gibt keinen Präzedenzfall für eine
+geänderte `public.`-RPC-Signatur — dafür einen Überladungs-Unfall: `0047` hat
+`private._generate_sollstellungen_for_plan(uuid, integer)` angelegt, ohne die
+alte `(uuid)`-Variante zu droppen. Sie steht seit 26 Migrationen unbemerkt in
+jeder Datenbank. Bei einer PostgREST-exponierten Funktion wäre das schlimmer
+(`PGRST203`), ein `drop function` hätte 14 E2E-Specs gebrochen und
+`tests/0056:632-649` als Hard-Error mitgerissen.
+
+Deshalb wird der Beschluss **am Entwurf** gesetzt und von der RPC nur gelesen.
+Das ist auch fachlich richtig: geplant wird, bevor die Versammlung beschließt.
+
+### Die Stelle, an der die Reparatur ein Loch geworden wäre
+
+`tg_wirtschaftsplan_prevent_effective_rewrite` (`0047:305-339`) listet seine
+geschützten Spalten **zweimal namentlich** auf. Eine neue Spalte fällt durch
+beide. Ohne die Erweiterung hätte jeder authentifizierte Nutzer die
+Beschlussgrundlage eines **aktiven** Plans austauschen können — die Bindung wäre
+Dekoration gewesen. Der Vertrag sichert das über `pg_get_triggerdef` zu.
+
+### Warum die Spalte nullable bleibt
+
+Ein `not null` oder ein Check über den Status wäre auf der Cloud nicht
+migrierbar: dort liegen aktive Pläne aus dem `0047`-Backfill und aus E2E-Läufen
+ohne Verweis. Er hätte außerdem `tests/0063`, `0064` und `0065` sofort rot
+gemacht, die `status = 'aktiv'` per GUC-Bypass an der RPC vorbei setzen. Der
+Zwang sitzt in der RPC. **Keine rückwirkende Zuordnung** — Begründung wie
+`0073`: Sollstellungen sind historische Forderungen, ihnen eine Grundlage
+anzudichten, die es damals nicht gab, wäre eine Fälschung.
+
+### Ein Detail, das Tests still entwertet hätte
+
+Die MEA-Prüfung aus `0073` und die neue Beschluss-Prüfung teilen den Code
+`22023`. `0073`s Negativfälle wären also grün geblieben — aber aus dem falschen
+Grund, sobald jemand die Prüfungen umsortiert. Deshalb tragen jetzt **alle fünf**
+Pläne in `tests/0073` eine Beschlussgrundlage, und der Charakterisierungstest
+`selbstverwaltung-mea-luecke` sichert zusätzlich den Meldungstext zu. Dieselbe
+Klasse von Schein-Test, die dieser Bericht schon einmal aufgedeckt hat.
+
+### Befund 14 (neu, nur notiert)
+
+`anfechtungsstatus` ist strukturell toter Buchstabe. `0005:5-7` behauptet, die
+Spalte sei „eine Projektion über diese Event-Kette" — diese Projektion existiert
+nicht, und für `beschluss_anfechtung_event` gibt es überhaupt keinen Schreibpfad.
+Da die Tabelle append-only ist, kann die Spalte ihren Default nie verlassen. Die
+Prüfung in `0074` ist damit heute ein Riegel ohne Auslöser; sie steht dort für den
+Tag, an dem die Kette gebaut wird.
+
+Dahinter liegt das eigentliche Problem: Entfällt die Grundlage, bleiben die
+Sollstellungen. Sie sind per Design unveränderlich, „Grundlage entfallen" lässt
+sich also nicht durch Löschen ausdrücken. Der vorhandene Anknüpfungspunkt ist
+`sollstellung.buchungstyp = 'korrektur'` mit `korrektur_von_sollstellung_id`
+(`0039:36-62`) — **auch dieser Slot ist leer**, nichts schreibt je `'korrektur'`.
+
+### Zwangsreihenfolge: zwei PRs mit einem manuellen Schritt dazwischen
+
+`scripts/db-migrate-guard.sh` verlangt, dass die Migration auf `origin/main`
+liegt, bevor sie ausgerollt werden darf — der Merge deployt aber zugleich die
+App. Käme die App zuerst, griffe sie auf eine Spalte zu, die PostgREST nicht
+kennt (`PGRST204`), und die Bearbeitungsseite bräche. Deshalb:
+
+1. **PR A (dieser):** Migration, Verträge, Fehlermeldungs-Positivliste,
+   REST-E2E-Helfer. Kein Zugriff der App auf die neue Spalte.
+2. `just db-migrate` — Handarbeit. Danach ist die Aktivierung in der Oberfläche
+   **gesperrt**, mit der deutschen Meldung aus der Migration, aber noch ohne
+   Auswahlfeld.
+3. **PR B:** das Auswahlfeld am Entwurf, samt Ausweg-Link auf
+   `beschluss-sammlung/new` — die Lehre aus Befund 7 — und der UI-E2E-Helfer.
+
+`0074` endet mit `notify pgrst, 'reload schema'`. `0068`–`0073` hatten das alle
+weggelassen, was bei reinen Körperänderungen verzeihlich war; bei einer neuen
+Spalte nicht.
+
+### Checks
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `just test-db-all` | `pass` | **21 Dateien, 404 Zusicherungen** (vorher 388), gegen eine ephemere lokale Datenbank. `0074` grün, `0073` mit den neuen Fixtures weiter grün, `0063`/`0064`/`0065` unberührt. Die Migration hat sich dabei auf eine frische Datenbank angewendet. |
+| `./scripts/verify.sh` | siehe Commit | inklusive des neuen Migrationstext-Tests |
+
+**Kein E2E.** Die Cloud kennt die Spalte bis zum `db-migrate` nicht; ein Lauf
+wäre rot aus dem falschen Grund. Der UI-Pfad `e2e/helpers/finanzen.ts` bleibt bis
+PR B rot (`finanzen.spec.ts:249`, `finanzen-positionen.spec.ts:140`).

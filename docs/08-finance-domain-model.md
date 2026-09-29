@@ -16,7 +16,11 @@ Kostenposition -> gueltiger Verteilungsschluessel -> Basiswerte je Einheit
 
 Der aktuelle Code kennt bereits:
 
-- `wirtschaftsplan` als Planversion mit Lifecycle.
+- `wirtschaftsplan` als Planversion mit Lifecycle. Seit `0074` traegt er
+  `beschluss_sammlung_entry_id`: die Aktivierung verlangt den Beschluss, auf dem
+  die Vorschuesse beruhen. Nach § 28 Abs. 1 WEG stellt der Verwalter den Plan
+  auf, und erst der Beschluss der Eigentuemer begruendet die Zahlungspflicht —
+  der Plan ist die Vorlage. Am Entwurf zu setzen, von der RPC nur gelesen.
 - `sollstellung` als historisches, insert-only Ziel pro Einheit und Monat.
 - `unit` mit MEA.
 - `ownership` mit zeitlicher Eigentuemerhistorie.
@@ -73,7 +77,10 @@ Wichtige Felder:
 - `typ`: `mea`, `einheit`, `flaeche`, `verbrauch`, `manuell`, `gemischt`
 - `quelle`: `gesetz`, `teilungserklaerung`, `gemeinschaftsordnung`,
   `beschluss`, `manuell`
-- `resolution_id`, optionaler Beschlussanker
+- `resolution_id`, optionaler Beschlussanker. **Bekannte Schwaeche:**
+  `resolution.meeting_id` ist `not null`, ein manuell erfasster Umlaufbeschluss
+  laesst sich hier also nicht hinterlegen. `wirtschaftsplan` verweist seit `0074`
+  deshalb auf `beschluss_sammlung_entry` statt auf `resolution`.
 - `gueltig_ab`, `gueltig_bis`
 - `parameter`, JSON fuer gemischte Regeln wie Heizkosten 70/30
 

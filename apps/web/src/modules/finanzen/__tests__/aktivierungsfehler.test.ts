@@ -33,6 +33,16 @@ describe("mapAktivierungsfehler", () => {
     ["WEG hat keine Einheiten für die Gleichverteilung.", "23514"],
     ["Diese WEG hat keine Einheiten mit Miteigentumsanteilen.", "22023"],
     ['Verteilungsschlüssel-Typ "neu" wird vom Sollstellung-Generator noch nicht unterstützt.', "0A000"],
+    // 0074 — Beschlussgrundlage
+    [
+      "Dieser Wirtschaftsplan ist keinem Beschluss zugeordnet. Die Vorschüsse entstehen erst durch den Beschluss der Eigentümer (§ 28 Abs. 1 WEG) — bitte den zugehörigen Beschluss der Beschluss-Sammlung zuordnen.",
+      "22023",
+    ],
+    ["Der zugeordnete Beschluss gehört zu einer anderen WEG.", "22023"],
+    [
+      'Beschluss Nr. 4 ist kein zustimmender Beschluss (Typ "negativ_beschluss"). Nur ein angenommener Beschluss begründet Vorschüsse.',
+      "22023",
+    ],
   ])("reicht %s durch", (meldung, code) => {
     expect(mapAktivierungsfehler(code, meldung).text).toBe(meldung);
   });
