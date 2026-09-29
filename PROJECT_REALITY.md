@@ -310,17 +310,38 @@ und 8):
   Trigger feuern bei jeder Aktivierung — ein kaputter Schluessel wurde als
   MEA-Problem gemeldet.
 
-**Neu aufgenommen, nicht gebaut — Befund 13: Sollstellungen entstehen ohne
-Beschluss.** `wirtschaftsplan` hat keine Verbindung zu einem Beschluss;
-`activate_wirtschaftsplan` erzeugt Zahlungsforderungen ohne Versammlung und ohne
-Nachweis, dass ein Beschluss vorlag. Nach § 28 Abs. 1 WEG begruendet erst der
-Beschluss die Pflicht. `beschluss_sammlung_entry` fuehrt `meeting_id` und
-`resolution_id` (`0005`) — die zwei Haelften sind nur nicht verbunden. Das
-beruehrt Migration und Finanzmodell und ist als `P1` vermerkt.
+**Befund 13 — Sollstellungen ohne Beschlussgrundlage — ist seit dem 2026-09-29
+datenbankseitig behoben** (`0074`). `activate_wirtschaftsplan` verlangt jetzt
+einen Verweis auf einen Eintrag der Beschluss-Sammlung; ohne ihn entsteht keine
+Sollstellung. Nach § 28 Abs. 1 WEG stellt der Verwalter den Plan auf, und erst
+der Beschluss der Eigentuemer begruendet die Zahlungspflicht — der Plan ist die
+Vorlage.
 
-Offen bleiben fuenf der urspruenglichen Befunde (5, 9–12) plus der neue Befund
-13. Von den fuenf erzeugt keiner falsches Geld und keiner sperrt einen Nutzer
-aus.
+Verwiesen wird auf `beschluss_sammlung_entry`, **nicht** auf `resolution`:
+`resolution.meeting_id` ist `not null` und haette den Umlaufbeschluss nach
+§ 23 Abs. 3 WEG strukturell ausgeschlossen, der den Wirtschaftsplan ausdruecklich
+traegt. Ebenso bewusst **nicht** geprueft wird das Beschlussdatum gegen das
+Planjahr — ein Beschluss darf spaet gefasst werden, auch nach Jahresende. Die
+RPC-Signatur bleibt unveraendert; der Beschluss wird am Entwurf gesetzt, nicht
+beim Aktivieren uebergeben.
+
+**Die Oberflaeche fehlt noch.** `scripts/db-migrate-guard.sh` verlangt die
+Migration auf `origin/main`, bevor sie ausgerollt werden darf, der Merge deployt
+aber zugleich die App — deshalb zwei PRs mit `just db-migrate` dazwischen. Bis
+zum zweiten ist die Aktivierung in der Oberflaeche gesperrt, mit klarer Meldung,
+aber ohne Auswahlfeld.
+
+**Neu notiert — Befund 14: `anfechtungsstatus` ist toter Buchstabe.** Die Spalte
+kann ihren Default nie verlassen: die Tabelle ist append-only, und die in `0005`
+behauptete Projektion aus `beschluss_anfechtung_event` existiert nicht — fuer
+diese Event-Kette gibt es ueberhaupt keinen Schreibpfad. Dahinter das eigentliche
+Problem: Entfaellt die Grundlage, bleiben die Sollstellungen unveraendert
+bestehen. `sollstellung.buchungstyp = 'korrektur'` (`0039`) ist der vorhandene,
+leere Anknuepfungspunkt.
+
+Offen bleiben fuenf der urspruenglichen Befunde (5, 9–12), der Web-Teil von
+Befund 13 und der neue Befund 14. Von den fuenf erzeugt keiner falsches Geld und
+keiner sperrt einen Nutzer aus.
 
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im

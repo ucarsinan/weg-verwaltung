@@ -173,6 +173,73 @@ values ('e4000000-0000-4000-8000-000000000073'::uuid,
         'b9000000-0000-4000-8000-000000000073'::uuid,
         2073, 'Plan Ueberzaehlig', 12000);
 
+-- ----------------------------------------------------------------------------
+-- 0074: Beschlussgrundlage je WEG
+-- ----------------------------------------------------------------------------
+--
+-- Seit 0074 verlangt die Aktivierung einen Verweis auf einen Eintrag der
+-- Beschluss-Sammlung. Ohne diese Fixtures scheiterten die beiden lives_ok-Faelle
+-- unten.
+--
+-- Bewusst ALLE fuenf Plaene, nicht nur die beiden positiven: Die MEA-Pruefungen
+-- stehen in 0074 vor der Beschluss-Pruefung, die throws_ok-Faelle wuerden also
+-- auch ohne Beschluss gruen bleiben — aber aus dem falschen Grund, und eine
+-- spaetere Umsortierung der Pruefungen wuerde sie still entwerten, statt sie rot
+-- zu machen. Mit Beschluss beweisen sie die MEA-Sperre unabhaengig von der
+-- Reihenfolge.
+--
+-- lfd_nr wird nicht gesetzt — der Trigger aus 0049 vergibt sie je WEG.
+
+insert into public.beschluss_sammlung_entry
+  (id, tenant_id, weg_id, beschluss_text, datum, typ, erstellt_durch)
+values
+  ('ba000000-0000-4000-8000-000000000073'::uuid,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid,
+   'c0000000-0000-4000-8000-000000000073'::uuid,
+   'Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan 2073.',
+   '2073-01-15', 'positiv_beschluss',
+   '11111111-1111-4111-8111-111111111173'::uuid),
+  ('bb000000-0000-4000-8000-000000000073'::uuid,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid,
+   'd0000000-0000-4000-8000-000000000073'::uuid,
+   'Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan 2073.',
+   '2073-01-15', 'positiv_beschluss',
+   '11111111-1111-4111-8111-111111111173'::uuid),
+  ('bc000000-0000-4000-8000-000000000073'::uuid,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid,
+   'f0000000-0000-4000-8000-000000000073'::uuid,
+   'Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan 2073.',
+   '2073-01-15', 'positiv_beschluss',
+   '11111111-1111-4111-8111-111111111173'::uuid),
+  ('bd000000-0000-4000-8000-000000000073'::uuid,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid,
+   'a9000000-0000-4000-8000-000000000073'::uuid,
+   'Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan 2073.',
+   '2073-01-15', 'positiv_beschluss',
+   '11111111-1111-4111-8111-111111111173'::uuid),
+  ('be000000-0000-4000-8000-000000000073'::uuid,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid,
+   'b9000000-0000-4000-8000-000000000073'::uuid,
+   'Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan 2073.',
+   '2073-01-15', 'positiv_beschluss',
+   '11111111-1111-4111-8111-111111111173'::uuid);
+
+update public.wirtschaftsplan
+   set beschluss_sammlung_entry_id = case weg_id
+         when 'c0000000-0000-4000-8000-000000000073'::uuid
+           then 'ba000000-0000-4000-8000-000000000073'::uuid
+         when 'd0000000-0000-4000-8000-000000000073'::uuid
+           then 'bb000000-0000-4000-8000-000000000073'::uuid
+         when 'f0000000-0000-4000-8000-000000000073'::uuid
+           then 'bc000000-0000-4000-8000-000000000073'::uuid
+         when 'a9000000-0000-4000-8000-000000000073'::uuid
+           then 'bd000000-0000-4000-8000-000000000073'::uuid
+         when 'b9000000-0000-4000-8000-000000000073'::uuid
+           then 'be000000-0000-4000-8000-000000000073'::uuid
+       end
+ where tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73'::uuid
+   and jahr = 2073;
+
 -- ============================================================================
 -- Die Sperre
 -- ============================================================================

@@ -1,6 +1,7 @@
 import { test, expect, Page } from "@playwright/test";
 import {
   activateWirtschaftsplanFixture,
+  attachBeschlussFixture,
   createOwnershipFixture,
   createPersonFixture,
   createUnitFixture,
@@ -300,6 +301,12 @@ test.describe("Selbstverwaltungs-Slice", () => {
       gesamtkosten: 12_000,
     });
 
+    // Seit 0074 verlangt die Aktivierung auch eine Beschlussgrundlage, und die
+    // teilt sich den Code 22023 mit der MEA-Sperre. Den Beschluss hier
+    // anzuhängen macht MEA zur EINZIGEN möglichen Ursache — sonst bliebe der
+    // Test grün, wenn die MEA-Prüfung eines Tages verschwindet.
+    await attachBeschlussFixture(page, { planId, wegId });
+
     // Nicht die Fixture verwenden — die sichert den Erfolg zu. Hier ist das
     // Scheitern der Gegenstand.
     const ctx = await rest(page);
@@ -312,11 +319,15 @@ test.describe("Selbstverwaltungs-Slice", () => {
       antwort.ok(),
       "die Aktivierung muss abgewiesen werden (0073)",
     ).toBe(false);
-    const fehler = (await antwort.json()) as { code?: string };
+    const fehler = (await antwort.json()) as { code?: string; message?: string };
     expect(
       fehler.code,
       "eigener Code, damit die Oberfläche die Ursache benennen kann",
     ).toBe("22023");
+    expect(
+      fehler.message,
+      "die Meldung muss die Miteigentumsanteile benennen, nicht den Beschluss",
+    ).toContain("Miteigentumsanteile");
 
     // Der eigentliche Punkt: Es ist kein Geld entstanden.
     const sollstellungen = await select<{ betrag: string }>(

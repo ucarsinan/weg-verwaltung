@@ -49,6 +49,10 @@ const DURCHREICHBARE_PRAEFIXE = [
   "WEG hat keine Einheiten für die Gleichverteilung",
   "Verteilungsschlüssel-Version nicht gefunden",
   "Verteilungsschlüssel-Typ",
+  // 0074 — Beschlussgrundlage der Aktivierung
+  "Dieser Wirtschaftsplan ist keinem Beschluss zugeordnet",
+  "Der zugeordnete Beschluss",
+  "Beschluss Nr. ",
 ] as const;
 
 /**

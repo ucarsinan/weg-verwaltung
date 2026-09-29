@@ -346,17 +346,86 @@ export async function createWirtschaftsplanFixture(
   return id;
 }
 
+function decodeUserIdFromJwt(token: string): string {
+  const payload = token.split(".")[1];
+  const json = Buffer.from(payload, "base64url").toString("utf-8");
+  const claims = JSON.parse(json) as { sub?: string };
+  const sub = claims.sub;
+  if (!sub) throw new Error("JWT is missing sub");
+  return sub;
+}
+
+/**
+ * Legt einen Beschluss-Sammlung-Eintrag an und hängt ihn an den Entwurf.
+ *
+ * Seit 0074 verlangt `activate_wirtschaftsplan` diesen Nachweis: die
+ * Vorschüsse entstehen durch den Beschluss der Eigentümer, nicht durch das
+ * Aufstellen des Plans (§ 28 Abs. 1 WEG). Für Tests, deren Gegenstand die
+ * Aktivierung nicht ist, gehört das zum Fixture-Aufbau wie die Einheiten.
+ *
+ * `lfd_nr` wird nicht gesetzt — der Trigger aus 0049 vergibt sie je WEG.
+ */
+export async function attachBeschlussFixture(
+  page: Page,
+  input: { planId: string; wegId: string; typ?: string; datum?: string },
+): Promise<string> {
+  const ctx = await getSupabaseRequestContext(page);
+
+  const { id } = await insertRow(page, "beschluss_sammlung_entry", {
+    weg_id: input.wegId,
+    beschluss_text:
+      "E2E: Die Gemeinschaft beschliesst die Vorschuesse nach dem Wirtschaftsplan.",
+    datum: input.datum ?? "2026-01-15",
+    typ: input.typ ?? "positiv_beschluss",
+    erstellt_durch: decodeUserIdFromJwt(ctx.token),
+  });
+
+  await patchRows(page, "wirtschaftsplan", `id=eq.${input.planId}`, {
+    beschluss_sammlung_entry_id: id,
+  });
+
+  return id;
+}
+
 /**
  * Aktivierung über dieselbe RPC, die auch die Server Action ruft
  * (`activate_wirtschaftsplan`, docs/07-finance-lifecycle.md) — erst sie
  * erzeugt Sollstellungen. Für Tests, deren Gegenstand die Aktivierung
  * selbst ist, stattdessen helpers/finanzen.ts (UI-Pfad) verwenden.
+ *
+ * Sorgt selbst für die seit 0074 nötige Beschlussgrundlage, falls der Plan noch
+ * keine trägt. Das hält die Signatur unverändert und damit alle vierzehn
+ * Aufrufstellen: der Beschluss ist für diese Tests Beiwerk, nicht Gegenstand.
+ * Wer eine bestimmte Grundlage braucht, ruft vorher attachBeschlussFixture.
  */
 export async function activateWirtschaftsplanFixture(
   page: Page,
   planId: string,
 ): Promise<void> {
   const ctx = await getSupabaseRequestContext(page);
+
+  const planResponse = await page.request.get(
+    `${ctx.url}/rest/v1/wirtschaftsplan?id=eq.${planId}&select=weg_id,beschluss_sammlung_entry_id`,
+    {
+      headers: {
+        apikey: ctx.key,
+        Authorization: `Bearer ${ctx.token}`,
+      },
+    },
+  );
+  expect(
+    planResponse.ok(),
+    `reading wirtschaftsplan(${planId}) failed: ${planResponse.status()}`,
+  ).toBe(true);
+  const [plan] = (await planResponse.json()) as {
+    weg_id: string;
+    beschluss_sammlung_entry_id: string | null;
+  }[];
+  expect(plan, `wirtschaftsplan(${planId}) not found`).toBeTruthy();
+
+  if (!plan.beschluss_sammlung_entry_id) {
+    await attachBeschlussFixture(page, { planId, wegId: plan.weg_id });
+  }
 
   const response = await page.request.post(
     `${ctx.url}/rest/v1/rpc/activate_wirtschaftsplan`,
