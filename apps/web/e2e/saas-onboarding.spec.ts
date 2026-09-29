@@ -94,6 +94,12 @@ test("Onboarding-Wizard legt Trial-WEG an, Einladung wird versendet und angenomm
   await page.goto("/einstellungen/mitglieder");
   const inviteeEmail = `e2e-invitee-${suffix}@example.test`;
   await page.locator("#tenant-invitation-email").fill(inviteeEmail);
+  // Die Rolle wird jetzt ausdrücklich gewählt. Vorher stand das Formular auf
+  // "Eigentümer" voreingestellt — und genau dadurch prüfte dieser Test, ohne es
+  // zu benennen, den Weg eines Eigentümers ins volle Verwalter-Dashboard.
+  // Der Weg, um den es hier geht (Einladung annehmen und arbeiten können), gilt
+  // dem Mitverwalter. Die Sperre für Eigentümer prüft layout.test.tsx.
+  await page.locator("#tenant-invitation-role").selectOption("tenant_admin");
   await page.getByRole("button", { name: /Link erstellen/ }).click();
 
   const invitationLinkInput = page.locator("#invitation-link");

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmailProvider } from "@/modules/saas/email";
 import { renderInvitationEmail } from "@/modules/saas/invitation-email";
 import { generateInvitationToken } from "@/modules/saas/invitation";
-import { requireTenantAdmin } from "@/modules/identity";
+import { EIGENTUEMER_ROLLE, requireTenantAdmin } from "@/modules/identity";
 import {
   isTenantInvitationRole,
   TENANT_MEMBER_ROLE_LABELS,
@@ -55,6 +55,13 @@ export async function createTenantInvitationAction(
   }
   if (!isTenantInvitationRole(roleValue)) {
     fieldErrors.role = "Bitte eine gültige Rolle auswählen.";
+  } else if (roleValue === EIGENTUEMER_ROLLE) {
+    // Das deaktivierte <option> im Formular ist reine Oberflaeche; ohne diese
+    // Pruefung koennte ein selbst gebauter Aufruf die Rolle weiterhin vergeben.
+    // Sie hat keine eigene Ansicht, und die RLS filtert nur nach Mandant — ein
+    // eingeladener Eigentuemer saehe sonst das ganze Verwalter-Dashboard.
+    fieldErrors.role =
+      "Für Eigentümer gibt es noch keine eigene Ansicht. Bitte eine andere Rolle wählen.";
   }
   if (fieldErrors.email || fieldErrors.role) {
     return {

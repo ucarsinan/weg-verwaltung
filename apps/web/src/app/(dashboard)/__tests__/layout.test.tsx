@@ -81,6 +81,42 @@ describe("DashboardLayout", () => {
     expect(mocks.redirect).toHaveBeenCalledWith("/onboarding");
   });
 
+  it("hält die Rolle eigentuemer vom Verwalter-Dashboard fern", async () => {
+    // Die Rolle ist einladbar, hat aber keine eigene Ansicht — und die RLS der
+    // Fachtabellen filtert nur nach Mandant. Ohne diesen Riegel sähe ein
+    // eingeladener Eigentümer jede WEG des Mandanten und könnte sie ändern.
+    await render(
+      authClient({
+        claims: { app_metadata: { tenant_id: "tenant-1", role: "eigentuemer" } },
+      }),
+    );
+
+    expect(mocks.redirect).toHaveBeenCalledWith("/kein-zugang");
+  });
+
+  it("lässt einen Verwalter unverändert durch", async () => {
+    await render(
+      authClient({
+        claims: {
+          app_metadata: { tenant_id: "tenant-1", role: "verwalter_mitarbeiter" },
+        },
+      }),
+    );
+
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("sperrt NICHT aus, wenn die Rolle fehlt", async () => {
+    // Der Grund für die Sperrliste. Eine Positivliste („nur diese Rollen
+    // dürfen rein") würde bei nicht registriertem Access-Token-Hook jeden
+    // aussperren — dieselbe Falle wie beim claimsError-Zweig darunter.
+    await render(
+      authClient({ claims: { app_metadata: { tenant_id: "tenant-1" } } }),
+    );
+
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
   it("leitet NICHT um, wenn die Claims gar nicht geprüft werden konnten", async () => {
     // Der wichtigste Fall. Bei einer JWKS- oder Netzstörung liefert
     // getTenantClaims ebenfalls tenantId null. Wer darauf umleitet, wirft

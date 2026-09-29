@@ -8,6 +8,7 @@ import {
   TENANT_MEMBER_ROLE_LABELS,
   type TenantInvitationState,
 } from "@/modules/settings/admin/types";
+import { EIGENTUEMER_ROLLE } from "@/modules/identity/roles";
 import { Button } from "@/components/ui/button";
 
 const initialState: TenantInvitationState = {};
@@ -15,11 +16,22 @@ const initialState: TenantInvitationState = {};
 function InvitationRoleOptions() {
   return (
     <>
-      {TENANT_INVITATION_ROLES.map((role) => (
-        <option key={role} value={role}>
-          {TENANT_MEMBER_ROLE_LABELS[role]}
-        </option>
-      ))}
+      <option value="" disabled>
+        Rolle wählen …
+      </option>
+      {TENANT_INVITATION_ROLES.map((role) => {
+        // Die Rolle hat keine eigene Ansicht, und die RLS filtert nur nach
+        // Mandant — ein eingeladener Eigentuemer saehe das ganze
+        // Verwalter-Dashboard. Bis es eine Eigentuemersicht gibt, bleibt die
+        // Option sichtbar, aber unwaehlbar; die Action weist sie ausserdem ab.
+        const nochNichtVerfuegbar = role === EIGENTUEMER_ROLLE;
+        return (
+          <option key={role} value={role} disabled={nochNichtVerfuegbar}>
+            {TENANT_MEMBER_ROLE_LABELS[role]}
+            {nochNichtVerfuegbar ? " (noch nicht verfügbar)" : ""}
+          </option>
+        );
+      })}
     </>
   );
 }
@@ -112,7 +124,8 @@ export function TenantInvitationForm({ disabled }: { disabled: boolean }) {
           <select
             id="tenant-invitation-role"
             name="role"
-            defaultValue="eigentuemer"
+            defaultValue=""
+            required
             disabled={isDisabled}
             aria-invalid={state.fieldErrors?.role ? true : undefined}
             aria-describedby={

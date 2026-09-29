@@ -103,7 +103,8 @@ WebAuthn-/Passkey-Support als spätere Erweiterung (nicht MVP).
 
 ### Rollen-Modell
 
-Vier System-Rollen, deklariert in `app_metadata.role`:
+Vier System-Rollen, deklariert in `app_metadata.role`. **Die folgende Liste ist
+der Entwurf, nicht der Stand** — siehe die Warnung darunter:
 
 ```text
 tenant_admin           — Kanzlei-Leitung, sieht alle WEGs des Tenants, kann Mitarbeiter verwalten
@@ -111,6 +112,25 @@ verwalter_mitarbeiter  — Sachbearbeiter, sieht zugewiesene WEGs
 beirat                 — gewählter Beirat einer einzelnen WEG, eingeschränkter Read-Zugang
 eigentuemer            — Eigentümer einer Wohnung, sieht eigene Daten + öffentliche WEG-Daten
 ```
+
+> **Umgesetzt ist davon nur `tenant_admin` (Stand 2026-09-29).** Die RLS der
+> Fachtabellen filtert ausschliesslich nach Mandant, nie nach Rolle:
+> `public.has_role()` wird nur in `tenant_member` (`0008:56`) und der
+> Audit-Konsole (`0050`, `0035`) ausgewertet. Es gibt **keine** Zuweisung von
+> Sachbearbeitern zu einzelnen WEGs, **keinen** eingeschränkten Beirats-Zugang
+> und **keine** Eigentümersicht. Wer eine dieser drei Rollen traegt und ein
+> Mandanten-Claim hat, saehe das vollstaendige Verwalter-Dashboard — lesend und
+> schreibend.
+>
+> `eigentuemer` war bis zum 2026-09-29 die **Voreinstellung** im
+> Einladungsformular und wird seither vom Dashboard-Layout nach `/kein-zugang`
+> abgewiesen und in der Einladung abgelehnt. `verwalter_mitarbeiter` und
+> `beirat` sind nicht einladbar (`TENANT_INVITATION_ROLES`) und damit nicht
+> erreichbar; sie sind bewusst **nicht** mitgesperrt, weil eine Positivliste bei
+> fehlendem Claim jeden aussperren wuerde.
+>
+> Diese Liste darf erst wieder als Stand gelesen werden, wenn die RLS die
+> Unterscheidung wirklich trifft.
 
 Cross-Cutting via RLS-Helper-Funktion in Postgres:
 
