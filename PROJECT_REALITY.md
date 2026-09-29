@@ -284,8 +284,43 @@ Summe gleich Gesamtkosten, Abrechnungsspitze ausgeglichen. Gruen am
   Access-Token-Hook jeden Nutzer aussperren. `/onboarding` hat dafuer einen
   Abmelden-Knopf bekommen, sonst waere der Assistent ein Raum ohne Ausgang.
 
-Offen bleiben die acht uebrigen Befunde. Keiner davon erzeugt falsches Geld,
-und keiner sperrt einen Nutzer aus.
+**Die Wegfuehrung fuehrt seit dem 2026-09-29 zum Wirtschaftsplan** (Befunde 6, 7
+und 8):
+
+- **Befund 8 — der Wirtschaftsplan stand nicht in der Leiter.** Der „naechster
+  Schritt"-Vorschlag der WEG-Seite lautete Einheiten → Personen → Versammlung
+  und kannte den Plan gar nicht. Wer der App folgte, baute nie einen — die Reise
+  oben war nur per Direkteingabe der Adressen erreichbar, und genau so laeuft
+  der E2E-Test sie ab. Der Plan steht jetzt **vor** der Versammlung, weil nach
+  § 28 Abs. 1 WEG der Verwalter ihn aufstellt und die Versammlung auf seiner
+  Grundlage ueber die Vorschuesse beschliesst: erst der Beschluss begruendet die
+  Zahlungspflicht, der Plan ist die Vorlage. Die Logik liegt jetzt als reine
+  Funktion in `wegs/next-step.ts` und ist erstmals getestet; ein Fehler der
+  Zaehlabfrage laesst den Schritt ausfallen, statt „kein Plan" zu behaupten.
+- **Befund 7 — der Verteilungsschluessel war eine unsichtbare Vorbedingung.**
+  Beide Formulare benannten das Fehlen, zeigten aber keinen Ausweg. Der Hinweis
+  traegt jetzt den Link — und nur dann, wenn ueberhaupt kein Schluessel
+  existiert.
+- **Befund 6 — Aktivierungsfehler auf falscher Faehrte.** `23514` trug fuenf
+  Ursachen und eine Meldung („Der Statuswechsel ist fachlich nicht erlaubt."),
+  obwohl nur eine davon ein Statuswechsel ist. Die Meldungen des Generators sind
+  bereits fuer Nutzer formuliert und nennen Zahlen, die nur die Datenbank kennt;
+  sie werden jetzt durchgereicht statt verworfen. **Dabei eine Korrektur an
+  `0073`:** die Audit-Kette wirft fuer HMAC-Ausfaelle ebenfalls `22023`, und ihre
+  Trigger feuern bei jeder Aktivierung — ein kaputter Schluessel wurde als
+  MEA-Problem gemeldet.
+
+**Neu aufgenommen, nicht gebaut — Befund 13: Sollstellungen entstehen ohne
+Beschluss.** `wirtschaftsplan` hat keine Verbindung zu einem Beschluss;
+`activate_wirtschaftsplan` erzeugt Zahlungsforderungen ohne Versammlung und ohne
+Nachweis, dass ein Beschluss vorlag. Nach § 28 Abs. 1 WEG begruendet erst der
+Beschluss die Pflicht. `beschluss_sammlung_entry` fuehrt `meeting_id` und
+`resolution_id` (`0005`) — die zwei Haelften sind nur nicht verbunden. Das
+beruehrt Migration und Finanzmodell und ist als `P1` vermerkt.
+
+Offen bleiben fuenf der urspruenglichen Befunde (5, 9–12) plus der neue Befund
+13. Von den fuenf erzeugt keiner falsches Geld und keiner sperrt einen Nutzer
+aus.
 
 **Eigentuemerseitig ungeprueft.** 54 der 60 Routen liegen im
 Verwalter-Dashboard; die Rolle `eigentuemer` existiert im Datenmodell, im

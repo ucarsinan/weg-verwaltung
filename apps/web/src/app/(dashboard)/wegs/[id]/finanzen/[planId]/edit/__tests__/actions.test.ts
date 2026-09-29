@@ -272,7 +272,11 @@ describe("wirtschaftsplan lifecycle actions", () => {
     );
   });
 
-  it("maps lifecycle constraint violations to an actionable error", async () => {
+  // Befund 6: `23514` traegt bei der Aktivierung fuenf Ursachen. Der Code allein
+  // trennt sie nicht, deshalb wertet die Aktion `message` aus. Die Zuordnung
+  // selbst ist in modules/finanzen/__tests__/aktivierungsfehler.test.ts geprueft;
+  // hier geht es darum, dass die Aktion sie ueberhaupt benutzt.
+  it("names the possible causes when the constraint message is unknown", async () => {
     mockRpc.mockResolvedValue({
       data: null,
       error: { code: "23514", hint: "invalid transition" },
@@ -283,7 +287,28 @@ describe("wirtschaftsplan lifecycle actions", () => {
       "00000000-0000-0000-0000-000000000002",
     );
 
-    expect(result.error).toContain("Statuswechsel");
+    expect(result.error).toContain("Mögliche Ursachen");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("passes the generator's own message through to the user", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "23514",
+        message: "Es fehlen Basiswerte für 2 Einheit(en) zum Stichtag 2026-01-01.",
+      },
+    });
+
+    const result = await activateWirtschaftsplan(
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002",
+    );
+
+    // Vorher stand hier "Der Statuswechsel ist fachlich nicht erlaubt." — der
+    // Nutzer suchte den Fehler beim Status statt bei den Basiswerten.
+    expect(result.error).toContain("Basiswerte");
+    expect(result.error).toContain("2 Einheit(en)");
     expect(redirect).not.toHaveBeenCalled();
   });
 

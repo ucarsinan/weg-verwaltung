@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { createAusgabeAction, type AusgabeFormState } from "./actions";
 
@@ -211,9 +213,24 @@ export default function AusgabeForm({ wegId, schluessel }: AusgabeFormProps) {
             id="schluessel-hint"
             className="text-sm text-[color:var(--color-muted-foreground)]"
           >
-            {schluessel.length === 0
-              ? "Für diese WEG ist noch kein Verteilungsschlüssel angelegt."
-              : "Jede Ausgabe wird in der Jahresabrechnung auf die Einheiten verteilt."}
+            {schluessel.length === 0 ? (
+              // Ohne Verteilungsschluessel laesst sich keine Ausgabe erfassen.
+              // Der Link ist der Ausweg, der bisher fehlte (Befund 7).
+              <>
+                Für diese WEG ist noch kein Verteilungsschlüssel angelegt.{" "}
+                <Link
+                  href={
+                    `/wegs/${wegId}/finanzen/verteilungsschluessel/new` as Route
+                  }
+                  className="underline underline-offset-4 hover:text-[color:var(--color-accent)]"
+                >
+                  Verteilungsschlüssel anlegen
+                </Link>
+                .
+              </>
+            ) : (
+              "Jede Ausgabe wird in der Jahresabrechnung auf die Einheiten verteilt."
+            )}
           </p>
         )}
       </div>

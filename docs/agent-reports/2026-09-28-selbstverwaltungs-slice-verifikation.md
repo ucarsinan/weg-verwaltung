@@ -63,9 +63,10 @@ festgehalten, damit sie nicht wieder aus dem Blick geraten.
 | `BEHOBEN 2026-09-28` | `P1` | ~~Mandantenloser Nutzer landet in einer Sackgasse mit Entwicklersatz~~ | `(dashboard)/layout.tsx:9-19` prüft nur die Session; `createWeg` lehnt mit „Kein Mandant im aktuellen JWT-Claim." ab | Wer die Bestätigungsmail in einem anderen Browser öffnet, kommt nie ins Onboarding | Mandantenprüfung in `middleware.ts` oder im Dashboard-Layout, Weiterleitung nach `/onboarding` | Wegführung: Der Nutzer kann sich nicht selbst befreien |
 | `BEHOBEN 0073` | `P2` | ~~Wirtschaftsplan mit null Einheiten aktivierbar~~ | `wirtschaftsplan-edit-form.tsx:202-215` deaktiviert den Knopf nicht; Generator fügt null Zeilen ein | Erfolg wird gemeldet, es entsteht kein Hausgeld | Knopf sperren, solange keine Einheit existiert | Wegführung: stiller Leerlauf |
 | `SUPPORTED` | `P2` | `erstelle_abrechnung` gelingt in einem Jahr ohne Ausgaben | `0063:425-540` | Eine Abrechnung ohne Kostenpositionen entsteht ohne Hinweis | Leeres Jahr abweisen oder deutlich kennzeichnen | Fachlich: ein Dokument, das nichts aussagt |
-| `SUPPORTED` | `P2` | Aktivierungsfehler falsch beschriftet | `[planId]/edit/actions.ts:46-64` bildet `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte werden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
-| `SUPPORTED` | `P2` | Verteilungsschlüssel ist unsichtbare Vorbedingung | `position-form.tsx:137,164`; `ausgabe-form.tsx:187` — leeres, deaktiviertes Auswahlfeld, Absendeknopf aktiv | Nutzer klickt, bekommt einen Feldfehler und keinen Weg zur Lösung | Link auf `…/verteilungsschluessel/new` in beide Formulare | Wegführung: Sackgasse mit Ausweg, der nicht gezeigt wird |
-| `SUPPORTED` | `P2` | Die Wegführung überspringt die gesamten Finanzen | `wegs/[id]/page.tsx:227-267`: Adresse → Einheiten → Personen → Versammlung | Wer der App folgt, baut nie einen Wirtschaftsplan | Finanzen in die Leiter aufnehmen | Wegführung: die Kernaufgabe fehlt im Vorschlag |
+| `BEHOBEN 2026-09-29` | `P2` | ~~Aktivierungsfehler falsch beschriftet~~ — die Meldung der Datenbank wird jetzt ausgewertet statt verworfen | `[planId]/edit/actions.ts:46-64` bildete `23514` auf „Der Statuswechsel ist fachlich nicht erlaubt." ab | Fehlende Basiswerte wurden als Statusproblem gemeldet | `23514` nach Ursache auffächern, `0A000` ergänzen | Wegführung: schickt auf die falsche Fährte |
+| `BEHOBEN 2026-09-29` | `P2` | ~~Verteilungsschlüssel ist unsichtbare Vorbedingung~~ — der Hinweis trägt jetzt den Link | `position-form.tsx:137,164`; `ausgabe-form.tsx:187` — leeres, deaktiviertes Auswahlfeld, Absendeknopf aktiv | Nutzer klickt, bekommt einen Feldfehler und keinen Weg zur Lösung | Link auf `…/verteilungsschluessel/new` in beide Formulare | Wegführung: Sackgasse mit Ausweg, der nicht gezeigt wird |
+| `BEHOBEN 2026-09-29` | `P2` | ~~Die Wegführung überspringt die gesamten Finanzen~~ — der Wirtschaftsplan steht jetzt in der Leiter, vor der Versammlung | `wegs/[id]/page.tsx:227-267`: Adresse → Einheiten → Personen → Versammlung | Wer der App folgt, baut nie einen Wirtschaftsplan | Finanzen in die Leiter aufnehmen | Wegführung: die Kernaufgabe fehlt im Vorschlag |
+| `SUPPORTED` | `P2` | Wirtschaftsplan und Beschluss sind nicht verbunden | `wirtschaftsplan` (0036, 0047) hat kein `resolution_id`; `activate_wirtschaftsplan` erzeugt Sollstellungen ohne jeden Bezug auf eine Versammlung | Zahlungsforderungen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet | Aktivierung an einen Beschluss binden; `beschluss_sammlung_entry.resolution_id` (0005:13) liegt bereit | Fachlich: bestreitet ein Eigentümer die Forderung, hat das System keine Antwort |
 | `SUPPORTED` | `P3` | Versammlung ohne `termin_von` ist eine Sackgasse | `versammlungen/new/actions.ts`; Einladung, Stimmen und Feststellung scheitern danach | Der Fehler zeigt sich erst drei Schritte später | Termin zur Pflicht machen oder früh warnen | Wegführung: späte Rückmeldung |
 | `SUPPORTED` | `P3` | `castVote` scheitert als stiller No-Op | `abstimmung/actions.ts:57,76-81,97-103` — `return` ohne Zustand | Die Seite rendert unverändert, niemand erfährt warum | Fehlerzustand zurückgeben | Wegführung: unsichtbares Scheitern |
 | `SUPPORTED` | `P3` | Feststellung hat elf Ursachen und eine Meldung | `abstimmung/actions.ts:36-41` | Die am schlechtesten diagnostizierbare Stelle der App | Ursachen auffächern | Wegführung: nicht diagnostizierbar |
@@ -179,11 +180,13 @@ geschehen und wurde hier nachgeholt.
 
 | Prioritaet | Aufgabe | Begruendung |
 | --- | --- | --- |
-| `P1` | MEA-Summenprüfung (Befund 1) | Der einzige Befund, der dauerhaft falsches Geld erzeugt |
-| `P1` | Warnung bei Abrechnung ohne aktivierten Plan (Befund 2) | Falsche Zahlungsaufforderung an alle Eigentümer |
-| `P1` | Mandantenlose Nutzer weiterleiten (Befund 3) | Einzige Sackgasse ohne Selbsthilfe |
-| `P2` | Wegführung um die Finanzen ergänzen (Befund 8) | Wer der App folgt, baut nie einen Wirtschaftsplan |
-| `P2` | Verteilungsschlüssel verlinken (Befund 7) | Zwei Formulare enden ohne Ausweg |
+| ~~`P1`~~ erledigt | MEA-Summenprüfung (Befund 1) | Der einzige Befund, der dauerhaft falsches Geld erzeugt |
+| ~~`P1`~~ erledigt | Warnung bei Abrechnung ohne aktivierten Plan (Befund 2) | Falsche Zahlungsaufforderung an alle Eigentümer |
+| ~~`P1`~~ erledigt | Mandantenlose Nutzer weiterleiten (Befund 3) | Einzige Sackgasse ohne Selbsthilfe |
+| ~~`P2`~~ erledigt | Wegführung um die Finanzen ergänzen (Befund 8) | Wer der App folgt, baut nie einen Wirtschaftsplan |
+| ~~`P2`~~ erledigt | Verteilungsschlüssel verlinken (Befund 7) | Zwei Formulare enden ohne Ausweg |
+| `P1` | Aktivierung an einen Beschluss binden (Befund 13) | Sollstellungen entstehen ohne Nachweis des Beschlusses, der sie nach § 28 Abs. 1 WEG erst begründet |
+| `P2` | Eigene Fehlercodes im SQL statt einer Meldungsliste (Anschluss an Befund 6) | Die Positivliste in `aktivierungsfehler.ts` spiegelt SQL-Text und veraltet still; eigene Codes wären eindeutig und würden auch der Jahresabrechnung helfen |
 | `P3` | Entscheiden, ob eine Eigentümersicht gebaut wird | Der Slice ist verwalterseitig belegt; ob er ohne Eigentümer-Einblick als Produkt trägt, ist offen |
 
 ---
@@ -277,3 +280,127 @@ wahrscheinlichste neue Flake.
 | `playwright test saas-onboarding` | `pass` | 3 von 3 — Registrierung → Wizard → Dashboard → Einladung → Annahme |
 
 **Acht Befunde bleiben offen**, keiner davon erzeugt falsches Geld.
+
+## Nachtrag 2026-09-29: Befunde 6, 7 und 8 behoben — und ein neuer Befund 13
+
+Der Auftrag lautete „der Weg zum ersten Wirtschaftsplan". Eine Webrecherche zu
+§ 28 WEG vorweg hat die Reihenfolge der Wegführung entschieden und dabei einen
+Befund freigelegt, der größer ist als die drei reparierten zusammen.
+
+### Die Rechtslage, die die Reihenfolge vorgibt
+
+Seit dem WEMoG (1.12.2020) sind Zahlenwerk und Beschluss rechtlich getrennt. Der
+Verwalter **stellt den Wirtschaftsplan auf** (§ 28 Abs. 1 S. 2 WEG); die
+Eigentümer **beschließen nur über die Vorschüsse**, nicht mehr über den Plan
+selbst. Der Plan ist die Beschlussvorlage — er erläutert, wie die Zahlungspflicht
+zustande kommt, begründet sie aber nicht. Die Abfolge ist damit: **Plan aufstellen
+→ Versammlung beschließt die Vorschüsse → Zahlungspflicht.**
+
+Daraus folgt unmittelbar, dass der Wirtschaftsplan in der Leiter **vor** die
+Versammlung gehört und nicht dahinter. Bisher endete sie bei der Versammlung und
+kannte den Plan gar nicht — sie führte den Nutzer also zu genau dem Termin, für
+den ihm die Vorlage fehlte.
+
+### Befund 8 — die Leiter kennt jetzt den Wirtschaftsplan
+
+Neu `wegs/next-step.ts`: Die Priorisierung lag als verschachteltes Ternär im
+Rumpf der Server Component, dreifach dupliziert und **nirgends geprüft**. Sie ist
+jetzt eine reine Funktion nach dem Muster von `wegs/address.ts` und zum ersten
+Mal getestet. Die Leiter lautet: Einheiten → Personen → **Wirtschaftsplan** →
+Versammlung → offene Versammlung.
+
+Eine WEG mit laufender Versammlung, aber ohne Plan wird damit auf den Plan
+gestoßen. Das ist beabsichtigt: ohne Vorlage kann die Versammlung nicht
+beschließen.
+
+**`hatWirtschaftsplan` ist `boolean | null`,** und `null` überspringt den Schritt.
+Scheitert die Zählabfrage, darf die App nicht behaupten, es gebe keinen Plan —
+sie würde sonst eine längst planende Gemeinschaft zum Neuanlegen auffordern.
+Dieselbe Unterscheidung wie bei `getClaims()` im Nachtrag zu Befund 3: ein Fehler
+ist nicht dasselbe wie ein leeres Ergebnis.
+
+Der `reason`-Text des Panels nannte „Stammdaten" als Kriterium, obwohl die Leiter
+die Adresse nie prüfte. Er ist mitkorrigiert.
+
+### Befund 7 — der Hinweis trägt jetzt den Ausweg
+
+Beide Formulare hatten den Hinweis bereits, ihm fehlte nur der Link. Muster ist
+der Inline-Satz mit Anschluss-Link aus `beschluss-sammlung/page.tsx:119-133`;
+bewusst nicht `EmptyState`, die im gesamten `finanzen/`-Teilbaum nirgends
+verwendet wird.
+
+In `position-form.tsx` sind die zwei Fälle getrennt: Nur wenn **gar kein**
+Schlüssel existiert, hilft der Link. Existieren Schlüssel, die der Generator
+nicht auflösen kann, wäre er eine falsche Fährte. Heute deckt `GENERATOR_TYPEN`
+alle Typen ab, die Fälle fallen also zusammen — das muss nicht so bleiben.
+
+**Nicht gelöst, nur benannt:** Wer mitten im Formular abbiegt, verliert seine
+Eingaben. Beide Formulare sind uncontrolled, und ein `?next=`-Rücksprung
+existiert im Projekt nur im Auth-Pfad.
+
+### Befund 6 — größer als gedacht, und eine Korrektur an `0073`
+
+Die Erkundung hat die Annahme des Berichts widerlegt: Bei der Aktivierung sind
+**fünf Ursachen** unter `23514` erreichbar, von denen nur eine ein Statuswechsel
+ist — Status (`0073`), fehlender Nachtrags-Vorgänger (`0073`), fehlende
+Basiswerte, Basiswert-Summe 0 und gemischte Regel ohne Teile (alle drei `0067`).
+Eine reine Code→Text-Tabelle kann das nicht trennen.
+
+Der Hebel lag im Weggeworfenen: Die Action nahm nur `error.code`. Die Meldungen
+des Generators sind aber bereits für Nutzer formuliert und nennen Zahlen, die nur
+die Datenbank kennt („Es fehlen Basiswerte für 3 Einheit(en) zum Stichtag
+2026-01-01."). Neu `modules/finanzen/aktivierungsfehler.ts` reicht diese Meldungen
+über eine **Positivliste** durch und übersetzt die zwei englischen
+Entwicklersätze. Positivliste und nicht Sperrliste, damit nie ein interner Satz
+wie `violates check constraint "…"` an den Verwalter durchrutscht; was nicht
+erkannt wird, fällt auf einen Text zurück, der die Ursachen **benennt** statt
+eine zu behaupten.
+
+**Die Korrektur an der eigenen Arbeit vom Vortag:** `0073` hat `22023` eingeführt,
+und die Oberfläche bildete den Code auf „Die Miteigentumsanteile dieser WEG
+ergeben nicht genau ein Ganzes" ab. Aber `0045:153` und `0045:179` werfen
+denselben Code für Ausfälle der HMAC-Kette, und deren Trigger hängen an
+`wirtschaftsplan` und `sollstellung` — sie feuern bei jeder Aktivierung. Ein
+kaputter Audit-Schlüssel wurde damit als MEA-Problem gemeldet, also genau die
+Fehlfährte, die dieser Befund beseitigen sollte. Interne Meldungen (Präfix
+`audit_writer.`) bekommen jetzt einen technischen Text und werden laut geloggt.
+
+`mapLifecycleError` bedient nur noch Archivieren und Nachtrag und behauptet dort
+ebenfalls keinen MEA-Fehler mehr: Die MEA-Vorbedingung sitzt allein in
+`activate_wirtschaftsplan`, wird bei diesen beiden also nie geprüft.
+
+**Bewusst ohne Migration.** Eigene Fehlercodes im SQL wären eindeutig statt
+textbasiert und würden auch der Jahresabrechnung helfen, die dasselbe Problem hat
+(`abrechnungen/actions.ts:98-99`). Aber `just db-migrate` ist Handarbeit, und bis
+zum Ausrollen griffe der Web-Teil für diese Fälle nicht. Als Folgeaufgabe
+vermerkt.
+
+### Befund 13 (neu) — Sollstellungen ohne Beschluss
+
+Aus der Recherche ergibt sich ein Befund, der **nicht** repariert wurde:
+`wirtschaftsplan` hat keine Verbindung zu einem Beschluss. Die Spalten aus `0047`
+sind rein technisch (`status`, `aktiviert_am`, `version_nr`), ein `resolution_id`
+gibt es nicht. `activate_wirtschaftsplan` erzeugt Sollstellungen — also
+Zahlungsforderungen — ohne Versammlung, ohne Beschluss und ohne Nachweis, dass es
+einen gab. Nach § 28 Abs. 1 WEG begründet aber erst der Beschluss die
+Zahlungspflicht.
+
+Bestreitet ein Eigentümer eine Forderung, hat das System auf „worauf beruht das?"
+keine Antwort. Die andere Hälfte liegt fertig da: `beschluss_sammlung_entry`
+führt `meeting_id` und `resolution_id` (`0005:13`).
+
+Das berührt Migration und Finanzmodell und ist damit kein Beiwerk einer
+UI-Aufgabe. Als `P1`-Folgeaufgabe aufgenommen.
+
+### Checks
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `./scripts/verify.sh` | `pass` | 565 Web-Tests (vorher 542) — 8 für die Leiter, 14 für die Fehlerzuordnung, 1 in den bestehenden Action-Tests |
+| `playwright test wegs.spec.ts finanzen-positionen finanzen-ausgaben` | `pass` | 14 von 14, 1,1 Minuten. Belegt, dass die WEG-Seite mit der neuen Zählabfrage und beide geänderten Formulare zur Laufzeit rendern — die CI führt kein Playwright aus, das musste von Hand geschehen. |
+
+**Grenze dieser Probe:** Kein E2E-Test sichert die Leiter-Texte zu (selbst
+geprüft), der Lauf belegt also das Rendern, nicht die Priorisierung. Die trägt
+`wegs/__tests__/next-step.test.ts`.
+
+**Fünf Befunde bleiben offen** (5, 9–12), dazu der neue Befund 13.

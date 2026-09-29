@@ -29,6 +29,7 @@ import { OperationalHero } from "@/components/ui/operational-hero";
 import { SectionHeader } from "@/components/ui/section-header";
 import { LifecycleBadge } from "@/components/ui/status-badge";
 import type { Database } from "@/lib/supabase/database.types";
+import { naechsterSchritt } from "../next-step";
 import { DeletePersonButton } from "./personen/delete-person-button";
 
 // Server Component — RLS scopes all SELECTs to the user's tenant automatically.
@@ -160,6 +161,22 @@ export default async function WegDetailPage({
     console.error("[wegs/[id]] persons select failed:", personsError);
   }
 
+  // Nur die Anzahl, keine Zeilen — die Wegfuehrung braucht bloss "gibt es
+  // ueberhaupt einen Plan?". Muster wie in
+  // finanzen/abrechnungen/[abrechnungId]/page.tsx.
+  const { count: wirtschaftsplanCount, error: wirtschaftsplanError } =
+    await supabase
+      .from("wirtschaftsplan")
+      .select("id", { count: "exact", head: true })
+      .eq("weg_id", id);
+
+  if (wirtschaftsplanError) {
+    console.error(
+      "[wegs/[id]] wirtschaftsplan count failed:",
+      wirtschaftsplanError,
+    );
+  }
+
   const meetingRows: MeetingRow[] = meetings ?? [];
   const unitRows: UnitRow[] = units ?? [];
   const personRows: PersonRow[] = persons ?? [];
@@ -167,6 +184,11 @@ export default async function WegDetailPage({
   const hasUnits = unitRows.length > 0;
   const hasPersons = personRows.length > 0;
   const hasMeetings = meetingRows.length > 0;
+  // null = nicht ermittelbar. Bei einem Abfragefehler darf die Leiter NICHT
+  // behaupten, es gebe keinen Wirtschaftsplan (siehe next-step.ts).
+  const hasWirtschaftsplan = wirtschaftsplanError
+    ? null
+    : (wirtschaftsplanCount ?? 0) > 0;
   const openMeetings = meetingRows.filter(
     (meeting) => meeting.status !== "beendet" && meeting.status !== "abgesagt",
   );
@@ -224,47 +246,14 @@ export default async function WegDetailPage({
           tone: "done",
         },
   ];
-  const nextStep = !hasUnits
-    ? {
-        title: "Wohneinheiten anlegen",
-        description:
-          "Damit Eigentümerschaften und Stimmrechte historisch korrekt abgebildet werden können.",
-        href: `/wegs/${id}/einheiten/new`,
-        label: "Einheit anlegen",
-        tone: "warning" as const,
-      }
-    : !hasPersons
-      ? {
-          title: "Personen erfassen",
-          description:
-            "Für Einladungen, Eigentümerschaften und Abstimmungen fehlen noch Kontakte.",
-          href: `/wegs/${id}/personen/new` as Route,
-          label: "Person anlegen",
-          tone: "warning" as const,
-        }
-      : !hasMeetings
-        ? {
-            title: "Erste Versammlung vorbereiten",
-            description:
-              "Die Grundlagen sind angelegt. Jetzt kann der erste Versammlungsprozess starten.",
-            href: `/wegs/${id}/versammlungen/new`,
-            label: "Versammlung anlegen",
-            tone: "default" as const,
-          }
-        : {
-            title: openMeetings.length > 0
-              ? "Offene Versammlung fortführen"
-              : "Nächste Versammlung planen",
-            description:
-              openMeetings.length > 0
-                ? "Es gibt einen laufenden oder vorbereiteten Versammlungsprozess."
-                : "Die WEG-Grundlagen stehen. Planen Sie den nächsten Verwaltungstermin.",
-            href: openMeetings[0]
-              ? `/versammlungen/${openMeetings[0].id}`
-              : `/wegs/${id}/versammlungen/new`,
-            label: openMeetings[0] ? "Versammlung öffnen" : "Versammlung anlegen",
-            tone: openMeetings.length > 0 ? ("default" as const) : ("success" as const),
-          };
+  const nextStep = naechsterSchritt({
+    wegId: id,
+    hatEinheiten: hasUnits,
+    hatPersonen: hasPersons,
+    hatWirtschaftsplan: hasWirtschaftsplan,
+    hatVersammlungen: hasMeetings,
+    offeneVersammlungId: openMeetings[0]?.id ?? null,
+  });
 
   return (
     <section className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -323,7 +312,7 @@ export default async function WegDetailPage({
         <NextStepPanel
           title={nextStep.title}
           description={nextStep.description}
-          reason="Priorisiert aus Stammdaten, Einheiten, Personen und offenen Versammlungen."
+          reason="Priorisiert aus Einheiten, Personen, Wirtschaftsplan und offenen Versammlungen."
           tone={nextStep.tone}
           action={
             <Button asChild>
