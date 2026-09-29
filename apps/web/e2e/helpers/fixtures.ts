@@ -356,6 +356,57 @@ function decodeUserIdFromJwt(token: string): string {
 }
 
 /**
+ * Zusichert, dass die Miteigentumsanteile dieser WEG zusammen das Ganze
+ * ergeben.
+ *
+ * Seit 0073 aktiviert `activate_wirtschaftsplan` nur bei einer Anteilssumme von
+ * genau 1 (± 0,0001) — eine WEG, der Einheiten fehlen, würde Kosten auf
+ * niemanden verteilen. Eine Fixture, die das verletzt, bekam bisher einen
+ * nackten `400` zurück: die Ursache lag in der Datenbank, die Meldung im Test
+ * zeigte nur auf die Fixture-Zeile. Genau daran sind nach dem Rollout von 0073
+ * drei Specs unbemerkt hängen geblieben.
+ *
+ * Bewusst eine Zusicherung und keine Selbstheilung: eine automatisch ergänzte
+ * Restanteil-Einheit würde die Sollstellungszahlen verschieben, die einige
+ * Tests genau prüfen — und `finanz-wp-unaligned-mea` hat die unvollständige
+ * MEA zum Gegenstand.
+ */
+export async function assertVollstaendigeMea(
+  page: Page,
+  wegId: string,
+): Promise<void> {
+  const ctx = await getSupabaseRequestContext(page);
+
+  const response = await page.request.get(
+    `${ctx.url}/rest/v1/unit?weg_id=eq.${wegId}&select=mea_zaehler,mea_nenner`,
+    { headers: { apikey: ctx.key, Authorization: `Bearer ${ctx.token}` } },
+  );
+  expect(
+    response.ok(),
+    `reading units of weg(${wegId}) failed: ${response.status()}`,
+  ).toBe(true);
+  // `bigint` kommt bei PostgREST als Zahl, nicht als String — anders als die
+  // `numeric`-Betraege, die die Specs durch `Number()` schicken muessen. Eine
+  // Division durch Null ist ausgeschlossen: `unit_mea_positive` (0003:49)
+  // verlangt beide Werte > 0.
+  const units = (await response.json()) as {
+    mea_zaehler: number;
+    mea_nenner: number;
+  }[];
+
+  const summe = units.reduce(
+    (acc, unit) => acc + unit.mea_zaehler / unit.mea_nenner,
+    0,
+  );
+  // Dasselbe Epsilon wie 0073:67 — die Zusicherung darf nicht strenger urteilen
+  // als die Datenbank, sonst scheitert sie an Fällen, die durchgehen würden.
+  expect(
+    Math.abs(summe - 1) <= 0.0001,
+    `die ${units.length} Einheiten dieser WEG tragen zusammen ${(summe * 100).toFixed(2)} % der Anteile, nicht 100 % — seit 0073 verweigert activate_wirtschaftsplan die Aktivierung. Bitte die Fixture vervollständigen.`,
+  ).toBe(true);
+}
+
+/**
  * Legt einen Beschluss-Sammlung-Eintrag an und hängt ihn an den Entwurf.
  *
  * Seit 0074 verlangt `activate_wirtschaftsplan` diesen Nachweis: die
@@ -397,6 +448,9 @@ export async function attachBeschlussFixture(
  * keine trägt. Das hält die Signatur unverändert und damit alle vierzehn
  * Aufrufstellen: der Beschluss ist für diese Tests Beiwerk, nicht Gegenstand.
  * Wer eine bestimmte Grundlage braucht, ruft vorher attachBeschlussFixture.
+ *
+ * Die zweite Vorbedingung — vollständige Miteigentumsanteile seit 0073 — wird
+ * dagegen nur geprüft, nicht hergestellt: siehe assertVollstaendigeMea.
  */
 export async function activateWirtschaftsplanFixture(
   page: Page,
@@ -426,6 +480,8 @@ export async function activateWirtschaftsplanFixture(
   if (!plan.beschluss_sammlung_entry_id) {
     await attachBeschlussFixture(page, { planId, wegId: plan.weg_id });
   }
+
+  await assertVollstaendigeMea(page, plan.weg_id);
 
   const response = await page.request.post(
     `${ctx.url}/rest/v1/rpc/activate_wirtschaftsplan`,

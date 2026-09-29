@@ -585,3 +585,97 @@ wie damals; die Gegenmaßnahme hat getragen.
 
 **Damit ist Befund 13 abgeschlossen.** Offen bleiben fünf der ursprünglichen
 Befunde (5, 9–12) und Befund 14.
+
+## Nachtrag 2026-09-29: `0073` hat eine von sieben Specs nachgezogen
+
+**Der Befund gehört diesem Bericht, weil er aus seiner eigenen Arbeit stammt.**
+`0073` verlangt seit dem Rollout vollständige Miteigentumsanteile, bevor ein
+Wirtschaftsplan aktiviert werden darf. Der Commit `cab8a9d` hat dafür
+`selbstverwaltung.spec.ts` angepasst — und die übrigen sechs Specs, die Pläne
+aktivieren, nicht.
+
+Aufgefallen ist es erst durch einen Regressionslauf für eine andere Arbeit:
+`cross-feature.spec.ts:91` scheiterte mit `activate_wirtschaftsplan … failed:
+400`. Der Produktcode ist richtig, die Tests waren es nicht mehr.
+
+### Warum es einen Tag lang unentdeckt blieb
+
+Vier der sieben aktivierenden Specs bauen **zufällig** vollständige Anteile:
+`finanzen-abrechnung` und `finanzen-positionen` (400 + 600),
+`finanzen-gemischter-schluessel` (50 + 50 von 100), `finanzen-zahlungen`
+(1000/1000). Die drei übrigen bauen WEGs mit `100/1000 + 200/1000` — 30 % —, und
+zwar `cross-feature.spec.ts` (2 Tests), `finanzen.spec.ts` (7) und
+`scenarios.spec.ts` (1).
+
+Beim Schreiben von `0073` hatte ich die Aktivierungspfade über
+`activateWirtschaftsplanFixture` im Blick. Genau die vier gesunden Specs
+bestätigten den Eindruck, es sei nichts zu tun. Der Fehler war nicht die falsche
+Zahl in einer Fixture, sondern dass **nichts die Fixtures zur Vollständigkeit
+zwang** — die Vorbedingung lebte nur in der Datenbank.
+
+### Die Bremse, die den Schaden verdeckte
+
+`cross-feature.spec.ts:12` setzt `test.describe.configure({ mode: "serial" })`.
+Der erste Fehlschlag stoppt die ganze Gruppe: der Lauf meldete „3 did not run",
+darunter `cross-rls-and-sollstellung` — der Mandantentrennungstest. Ein roter
+cross-feature-Lauf verbirgt also immer mehr, als er zeigt. Die serial-Bremse
+bleibt (die Tests teilen Zustand), aber wer den Lauf liest, muss auf „did not
+run" achten und nicht nur auf „failed".
+
+### Die Reparatur, und was sie bewusst nicht anfasst
+
+Zwei Formen, beide so gewählt, dass **jede Zusicherung wörtlich erhalten
+bleibt**, wo das möglich ist:
+
+- **Eine Einheit** trägt das Ganze (`1000/1000`), und die `gesamtkosten` gehen
+  im selben Verhältnis mit. Der geprüfte Monatsbetrag bleibt unverändert. Das
+  vermeidet zugleich eine stille Entwertung: bei `1.000,00` hätte der Locator
+  `hasText: "100,00"` in `sollstellung-view-details` als **Teilstring**
+  gegriffen — der Test wäre grün geblieben, ohne noch etwas zu belegen.
+- **Zwei Einheiten** werden `400 + 600`, die erwarteten Beträge ziehen nach. Ein
+  Verhältnis 1:2 lässt sich nicht mit exakten Dezimalbrüchen auf 1 ergänzen
+  (1/3 + 2/3), und das Ergebnis läge in der Nähe von `v_epsilon = 0,0001`.
+
+Unangetastet bleiben die Tests, deren Gegenstand die Vorschau ist und die
+unvollständig bleiben **müssen**: `finanz-wp-unaligned-mea` (300/1000),
+`finanz-calculate-hausgeld` und `sollstellung-round-off` — letzterer aktiviert
+trotz seines Namens nie.
+
+### Damit es nicht wiederkehrt
+
+`helpers/fixtures.ts:assertVollstaendigeMea` liest die Anteilssumme vor jeder
+Aktivierung und scheitert bei ≠ 1 mit Klartext statt mit einem Statuscode.
+Gerufen aus **beiden** Pfaden — der REST-Fixture und dem UI-Helfer in
+`helpers/finanzen.ts` —, sonst bliebe die Hälfte der Aufrufstellen stumm.
+
+Bewusst eine Zusicherung und keine Selbstheilung: eine automatisch ergänzte
+Restanteil-Einheit würde die Sollstellungszahlen verschieben, die mehrere Tests
+genau prüfen, und sie würde `finanz-wp-unaligned-mea` still verfälschen. Die
+Fixture heilt die Beschlussgrundlage aus `0074` selbst, weil die für diese Tests
+Beiwerk ist; die Anteile sind es nicht — sie bestimmen die geprüften Beträge.
+
+### Checks
+
+| Check | Ergebnis | Hinweis |
+| --- | --- | --- |
+| `./scripts/verify.sh` | `pass` | **583 Web-Tests**, unverändert — die Reparatur liegt ausschliesslich in `e2e/`, das vitest nicht ausführt. Vier Lint-Warnungen bestehen fort, alle aus `scripts/cleanup-e2e-residue.mjs`, keine aus dem Diff. |
+| `playwright test finanzen scenarios cross-feature rls` | `pass` | **63 von 63**, 2 übersprungen (die bekannten `test.skip`), 3,6 Minuten. |
+
+**`cross-feature.spec.ts` lief damit erstmals seit dem Rollout von `0073`
+vollständig durch** — alle fünf Tests, darunter die vier, die der serial-Modus
+im Lauf davor verdeckt hatte. Die zehn RLS-Tests bestätigen zugleich, dass die
+Mandantentrennung unberührt ist.
+
+**Zur Verlässlichkeit der eigenen Läufe, vierter Fall:** Der Lauf, der diesen
+Befund überhaupt aufdeckte, wurde als Hintergrundaufgabe mit „exit code 0"
+gemeldet, während im Log `playwright-exit=1` stand. Gemeldet wird der Status der
+Pipeline, nicht der des Kommandos. Aufgefallen ist es nur, weil der echte Code
+seit dem 2026-09-28 in die Logdatei selbst geschrieben wird. Beim Lauf oben
+stimmten Meldung und Log überein — was den Punkt nicht entkräftet: die
+Übereinstimmung ist Zufall, nicht Zusicherung.
+
+**Eine Korrektur an der Dokumentation aus `0073`:** `TEST_INFRA.md` führte
+`selbstverwaltung-mea-luecke` weiterhin als „characterisation test, documents a
+bug" mit dem Zusatz, er gehe rot, sobald der Fehler behoben sei. `cab8a9d` hat
+den Test umgedreht, den Absatz aber stehen gelassen. Beides ist jetzt
+nachgezogen, ebenso der Migrationsstand, der noch auf `0073` hing.

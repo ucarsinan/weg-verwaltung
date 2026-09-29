@@ -173,13 +173,16 @@ test.describe("Tier 4: Real-World Application Scenarios", () => {
       `Scenario Correction ${Date.now()}`,
       { street: "Szenarioweg" },
     );
+    // 400 + 600 von 1000: seit 0073 aktiviert activate_wirtschaftsplan nur,
+    // wenn die Anteile zusammen das Ganze ergeben. Der Test prueft die Anzahl
+    // der Sollstellungen, keine Betraege — die Verteilung bleibt ihm gleich.
     await createUnitFixture(page, wegId, {
       bezeichnung: `Scenario CorrectionA ${Date.now()}`,
-      meaZaehler: 100,
+      meaZaehler: 400,
     });
     await createUnitFixture(page, wegId, {
       bezeichnung: `Scenario CorrectionB ${Date.now()}`,
-      meaZaehler: 200,
+      meaZaehler: 600,
     });
     const planId = await createWirtschaftsplanFixture(page, {
       wegId,

@@ -90,8 +90,10 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
 
   test("cross-finanz-and-sollstellung: posted Sollstellung entries remain historical after plan cost changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "PlanUpdate");
-    await createTestUnit(page, wegId, "UnitA", "100");
-    await createTestUnit(page, wegId, "UnitB", "200");
+    // 400 + 600 von 1000: seit 0073 aktiviert activate_wirtschaftsplan nur,
+    // wenn die Anteile zusammen das Ganze ergeben.
+    await createTestUnit(page, wegId, "UnitA", "400");
+    await createTestUnit(page, wegId, "UnitB", "600");
     const planId = await createWirtschaftsplan(page, wegId, 2031, 12000);
 
     const { token } = await getSupabaseRequestContext(page);
@@ -106,8 +108,9 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
       (row) => Number(row.betrag),
     );
     expect(beforeAmounts).toHaveLength(24);
-    expect(beforeAmounts).toContain(100);
-    expect(beforeAmounts).toContain(200);
+    // 12000 * 0,4 / 12 = 400,00 und 12000 * 0,6 / 12 = 600,00
+    expect(beforeAmounts).toContain(400);
+    expect(beforeAmounts).toContain(600);
 
     const updateRes = await page.request.patch(
       `${url}/rest/v1/wirtschaftsplan?id=eq.${planId}`,
@@ -182,8 +185,10 @@ test.describe("Tier 3: Cross-Feature Interactions", () => {
 
   test("cross-finanz-and-mea-unit-changes: posted Sollstellungen remain unchanged after MEA changes", async ({ page }) => {
     const wegId = await createTestWeg(page, "UnitMeaUpdate");
-    const unitId = await createTestUnit(page, wegId, "UnitA", "100");
-    const planId = await createWirtschaftsplan(page, wegId, 2032, 12000);
+    // Eine einzige Einheit traegt das Ganze (1000/1000). Die Gesamtkosten gehen
+    // im selben Verhaeltnis mit, damit der gepruefte Monatsbetrag 100,00 bleibt.
+    const unitId = await createTestUnit(page, wegId, "UnitA", "1000");
+    const planId = await createWirtschaftsplan(page, wegId, 2032, 1200);
 
     const { token } = await getSupabaseRequestContext(page);
     await activateWirtschaftsplanFixture(page, planId);
