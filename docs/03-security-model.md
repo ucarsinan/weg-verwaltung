@@ -113,14 +113,27 @@ beirat                 — gewählter Beirat einer einzelnen WEG, eingeschränkt
 eigentuemer            — Eigentümer einer Wohnung, sieht eigene Daten + öffentliche WEG-Daten
 ```
 
-> **Umgesetzt ist davon nur `tenant_admin` (Stand 2026-09-29).** Die RLS der
-> Fachtabellen filtert ausschliesslich nach Mandant, nie nach Rolle:
-> `public.has_role()` wird nur in `tenant_member` (`0008:56`) und der
-> Audit-Konsole (`0050`, `0035`) ausgewertet. Es gibt **keine** Zuweisung von
-> Sachbearbeitern zu einzelnen WEGs, **keinen** eingeschränkten Beirats-Zugang
-> und **keine** Eigentümersicht. Wer eine dieser drei Rollen traegt und ein
-> Mandanten-Claim hat, saehe das vollstaendige Verwalter-Dashboard — lesend und
-> schreibend.
+> **Stand 2026-09-29.** Korrektur einer frueheren Fassung dieses Blocks: Sie
+> behauptete, `public.has_role()` werde „nur in `tenant_member` (`0008:56`) und
+> der Audit-Konsole (`0050`, `0035`)" ausgewertet. Das war falsch. Nachgezaehlt:
+> **elf SELECT-Policies** verzweigen auf die Rolle — die drei genannten plus
+> sieben in der Vorgangszentrale (`0052`) und die Einladungen (`0057:99`) —,
+> dazu 41 Schreib-Policies. Richtig ist die engere Aussage: Auf den
+> **Kern-Fachtabellen** trennte keine Lesepolicy nach Rolle.
+>
+> **Seit `0075` trifft die RLS die Unterscheidung fuer `eigentuemer`**, aber
+> nicht ueber die Eigentuemerkette: `public.weg_zugang` haelt fest, welcher
+> Nutzer welche WEG lesen darf, und die SELECT-Policies auf `weg`, `unit`,
+> `ownership` und `beschluss_sammlung_entry` erzwingen sie. Eigentum ist eine
+> Fachtatsache, Sichtbarkeit eine Zugriffstatsache — die Kette
+> `person.user_id → ownership` traegt keine Sicherheitsgrenze (Begruendung im
+> Kopf von `0075`).
+>
+> **Weiterhin nicht umgesetzt:** `verwalter_mitarbeiter` („sieht zugewiesene
+> WEGs") und `beirat` („eingeschraenkter Read-Zugang"). Beide sind nicht
+> einladbar (`TENANT_INVITATION_ROLES`) und damit nicht erreichbar — das ist
+> Zufall, keine Sicherheit. Ebenfalls offen: `person` (braucht eine
+> Einschraenkung auf Spaltenebene, siehe unten) und die Finanztabellen.
 >
 > `eigentuemer` war bis zum 2026-09-29 die **Voreinstellung** im
 > Einladungsformular und wird seither vom Dashboard-Layout nach `/kein-zugang`
