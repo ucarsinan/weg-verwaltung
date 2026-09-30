@@ -115,6 +115,15 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   **Der Cloud-Migrationsstand ist seit dem 2026-09-25 verifiziert:** `0068`-`0072`
   wurden an diesem Tag per `just db-migrate` ausgerollt, und `supabase migration
   list --linked` zeigt die `Remote`-Spalte gefuellt fuer `0067` bis `0072`.
+  **`0075` ist am 2026-09-30 ausgerollt** (`just db-migrate`, eine Migration):
+  Der Guard bestaetigte `HEAD` gleich `origin/main` (2fb6080), der Dry Run
+  listete genau `0075_weg_zugang.sql`, und `supabase db push` meldete
+  `Applying migration 0075_weg_zugang.sql`. Dass der Push nur diese eine
+  Migration enthielt, belegt zugleich `0073` und `0074` als bereits
+  ausgerollt. **Ein `supabase migration list --linked` ist danach nicht
+  gelaufen** — der Nachweis fuer `0075` ist die Push-Ausgabe, nicht die
+  `Remote`-Spalte. Erst damit greift die Rollentrennung auch ueber
+  `/rest/v1/*` und nicht nur im Dashboard-Riegel aus PR #37.
   **Der Gesamtlauf der E2E-Suite liegt jetzt vor**, in zwei Teilen wegen eines
   plattenspeicherbedingten Abbruchs: Teil 1 (`just e2e`) deckte Tests 1-83 von
   100 ab — 81 bestanden, 2 uebersprungen (`test.skip`: `finanz-wp-zero-mea`,
