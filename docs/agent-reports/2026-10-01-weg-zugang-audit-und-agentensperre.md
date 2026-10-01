@@ -54,7 +54,7 @@ Erledigt (lokal). `weg_zugang` protokolliert jede Vergabe und jeden Entzug und w
 - Lokal, ephemere DB nach Reset und Bootstrap: `just test-db-all` → `Files=26, Tests=523, Result: PASS`.
 - Rot-Beweis wie oben beschrieben, danach DB neu aufgebaut.
 - `./scripts/verify.sh`: siehe Abschlussbericht im Chat.
-- **Nicht gelaufen:** Cloud-Abfragen, E2E.
+- **Nicht gelaufen:** E2E. Cloud-Abfragen: siehe Nachtrag.
 
 ## Offene Risiken
 
@@ -64,3 +64,9 @@ Erledigt (lokal). `weg_zugang` protokolliert jede Vergabe und jeden Entzug und w
 ## Git-Status
 
 Nichts gestaged, nichts committet, nichts gepusht. Branch `claude/0078-weg-zugang-audit` (von `claude/0077-grant-hardening`). Es wurde nichts gepusht.
+
+## Nachtrag: Cloud-Stand (2026-10-01, read-only)
+
+Geprüft mit `supabase db query --linked` (nur Katalog-Abfragen und eine Zeilenzahl, nichts geschrieben): `public.weg_zugang` existiert in der Cloud (`0075` ist ausgerollt), hat **0 Zeilen und 0 Trigger**. Die Lücke aus diesem Report besteht dort also, ist aber folgenlos, solange die Tabelle leer bleibt und es keine Vergabe-Oberfläche gibt. `0078` hat keine Dringlichkeit; es sollte vor der ersten Vergabe in der Cloud liegen.
+
+Rollout-Empfehlung: `0076`–`0078` zusammen in einem `just db-migrate` nach dem Merge der drei PRs (Handarbeit, getipptes `push`), danach `migration list --linked` und dieselben Katalog-Abfragen als Nachweis.

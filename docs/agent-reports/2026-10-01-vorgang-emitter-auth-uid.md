@@ -11,7 +11,7 @@ Teilweise erledigt. Der Produktfehler hinter `0054` und dem Abbruch von `0052` i
 
 ## Was bedeutet das?
 
-Jeder Schreibzugriff auf eine der sieben Vorgangs-Tabellen scheiterte lokal mit `permission denied for schema auth`, weil der Audit-Emitter `auth.uid()` aufrief. Die Annahme in `AGENTS.md`/`justfile`, es sei ein Loch im lokalen Bootstrap, war falsch: `audit_writer` kann `USAGE` auf `auth` nie bekommen (Begründung im Kopf von `0028`). Der Fehler besteht sehr wahrscheinlich auch in der Cloud, ist dort aber **nicht geprüft** (siehe unten).
+Jeder Schreibzugriff auf eine der sieben Vorgangs-Tabellen scheiterte lokal mit `permission denied for schema auth`, weil der Audit-Emitter `auth.uid()` aufrief. Die Annahme in `AGENTS.md`/`justfile`, es sei ein Loch im lokalen Bootstrap, war falsch: `audit_writer` kann `USAGE` auf `auth` nie bekommen (Begründung im Kopf von `0028`). Der Fehler besteht auch in der Cloud (read-only belegt am 2026-10-01, siehe Nachtrag).
 
 ## Handfester Fahrplan
 
@@ -61,9 +61,22 @@ Jeder Schreibzugriff auf eine der sieben Vorgangs-Tabellen scheiterte lokal mit 
 
 ## Offene Risiken
 
-- Ob der Emitter-Fehler in der Cloud live ist, ist nicht geprüft; AGENTS.md vermerkt, dass Cloud-Objekte trotz `migration list` abweichen können.
+- ~~Ob der Emitter-Fehler in der Cloud live ist, ist nicht geprüft;~~ Geprüft, er ist live (Nachtrag); AGENTS.md vermerkt, dass Cloud-Objekte trotz `migration list` abweichen können.
 - Der Fehler tritt nur auf, wenn Vorgangs-Tabellen beschrieben werden; ob die App sie heute beschreibt, habe ich nicht untersucht.
 
 ## Git-Status
 
 Nichts gestaged, nichts committet, nichts gepusht. Branch `claude/0076-vorgang-emitter-jwt` (von `origin/main`). Es wurde nichts gepusht.
+
+## Nachtrag: Cloud-Stand (2026-10-01, read-only)
+
+Geprüft mit `supabase migration list --linked` und Katalog-Abfragen (`supabase db query --linked`, nur SELECT auf Systemkataloge und Zeilenzahlen, keine Nutzdaten, nichts geschrieben).
+
+| Prüfung | Cloud |
+| --- | --- |
+| Migrationen | Remote bis `0075` gefüllt; `0076`–`0078` fehlen |
+| `has_schema_privilege('audit_writer','auth','usage')` | `false` |
+| `tg_emit_vorgang_audit_event` enthält `auth.uid()` | `true` |
+| Zeilen in `vorgang`, `vorgang_timeline_event`; `audit_event` mit `entity_typ like 'vorgang%'` | je 0 |
+
+Der Fehler ist damit in der Cloud **live**: jeder Schreibzugriff auf die sieben Vorgangs-Tabellen scheitert dort mit `42501`. Die App hat Code dafür (`apps/web/src/app/(dashboard)/vorgaenge/actions.ts`, `lib/vorgangszentrale/queries.ts`), einen Vorgang anzulegen schlägt in der Cloud also sehr wahrscheinlich fehl. Das habe ich nicht in der Oberfläche nachgestellt, weil es in die Cloud schreiben würde. Die 0-Zeilen-Befunde passen zu "scheitert" ebenso wie zu "nie genutzt". Es gibt keinen Drift zum lokalen Stand. `0076` ist die dringlichste der drei Migrationen.

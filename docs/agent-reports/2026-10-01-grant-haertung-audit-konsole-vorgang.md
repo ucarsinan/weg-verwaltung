@@ -59,8 +59,20 @@ Supabase vergibt neuen Objekten automatisch Rechte an `anon`, `authenticated` un
 ## Offene Risiken
 
 - Branch baut auf PR #41 auf; ohne `0076` schlägt sql-lint (Lücke in der Nummerierung) fehl.
-- Cloud-Stand der Objekte unbekannt; Grants dort können abweichen.
+- ~~Cloud-Stand der Objekte unbekannt; Grants dort können abweichen.~~ Am 2026-10-01 geprüft: kein Drift, die Lücken bestehen dort (Nachtrag).
 
 ## Git-Status
 
 Nichts gestaged, nichts committet, nichts gepusht. Branch `claude/0077-grant-hardening` (von `claude/0076-vorgang-emitter-jwt`). Es wurde nichts gepusht.
+
+## Nachtrag: Cloud-Stand (2026-10-01, read-only)
+
+Geprüft mit `supabase db query --linked` (nur Katalog-Abfragen, keine Nutzdaten, nichts geschrieben). Die Grant-Lücken aus diesem Report bestehen in der Cloud unverändert:
+
+| Objekt | Cloud |
+| --- | --- |
+| Sieben `vorgang*`-Tabellen | `anon` und `authenticated`: SELECT, INSERT, UPDATE, DELETE |
+| `audit_event_feed`, `audit_reveal_event_payload` | `anon` und `service_role` können ausführen |
+| `audit_payload_reveal`, `audit_integrity_check` | `authenticated`: alle vier Rechte |
+
+Kein Drift zum lokalen Stand. Die Einstufung P3 bleibt: RLS ist erzwungen, es gibt keine DELETE-Policy, und die Timeline-Trigger lehnen UPDATE/DELETE ab; die `vorgang*`-Tabellen sind leer. `0077` ist Härtung ohne Dringlichkeit.
