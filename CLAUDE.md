@@ -1,8 +1,9 @@
 # WEG-Verwaltung - Claude-Hinweise
 
-`AGENTS.md` ist die verbindliche Source of Truth fuer Projektstand,
-Sicherheitsregeln, Pflichtdokumente, Kommandos, Git-Regeln und
-Abschlussberichte. Diese Datei ist absichtlich keine zweite Projektregelquelle
+`AGENTS.md` ist die verbindliche Source of Truth fuer Sicherheitsregeln,
+Pflichtdokumente, Kommandos, Git-Regeln und Abschlussberichte. Den laufenden
+Projektstand (Migrationen, Rollouts, Cloud-Stand) fuehrt
+`docs/12-projektstatus.md`. Diese Datei ist absichtlich keine zweite Projektregelquelle
 und enthaelt keinen eigenen Migrations- oder Projektstatus.
 
 ## Claude-spezifische Arbeitsregel
