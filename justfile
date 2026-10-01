@@ -9,15 +9,14 @@
 #
 # Deliberately NOT listed:
 #   - 0001, 0039: commented-out contract shapes, no runnable assertions.
-#   - 0050, 0052: still red on grants (anon/authenticated default privileges
-#     that `revoke ... from public` does not remove). Not a bootstrap gap; fix
-#     the migrations, do not weaken the tests.
-#   0054 joined the gate with 0076: its failure was a product bug (the Vorgang
-#   audit emitter called auth.uid() as audit_writer, which can never hold USAGE
-#   on schema auth), not a bootstrap gap.
+#   0050, 0052, 0054 are all green and in the gate. 0054 went green with 0076
+#   (a product bug: the Vorgang audit emitter called auth.uid() as audit_writer,
+#   which can never hold USAGE on schema auth); 0050 and 0052 with 0077 (default
+#   grants to anon/authenticated that `revoke ... from public` does not remove).
+#   None of them was a bootstrap gap.
 # ---------------------------------------------------------------------------
 SECURITY_DB_TESTS := "supabase/tests/0000_rls_katalog.sql supabase/tests/0075_weg_zugang.sql"
-AUDIT_DB_TESTS := "supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0054_agent_suggestion_vorgang_anchor.sql supabase/tests/0059_tenant_audit_emitter.sql supabase/tests/0068_audit_verify_chain_window.sql supabase/tests/0069_dokumentenablage.sql supabase/tests/0071_aufbewahrung_effektiv.sql"
+AUDIT_DB_TESTS := "supabase/tests/0002_audit_chain.sql supabase/tests/0046_least_privilege.sql supabase/tests/0050_audit_console_read_api.sql supabase/tests/0055_advisor_hardening.sql supabase/tests/0058_audit_writer_vault_decrypt_grant.sql supabase/tests/0052_vorgangszentrale_foundation.sql supabase/tests/0054_agent_suggestion_vorgang_anchor.sql supabase/tests/0059_tenant_audit_emitter.sql supabase/tests/0068_audit_verify_chain_window.sql supabase/tests/0069_dokumentenablage.sql supabase/tests/0071_aufbewahrung_effektiv.sql"
 FINANCE_DB_TESTS := "supabase/tests/0056_finance_allocation_foundation.sql supabase/tests/0060_wirtschaftsplan_position_allocation.sql supabase/tests/0061_zahlung_und_offene_posten.sql supabase/tests/0062_ausgabe_und_ruecklage.sql supabase/tests/0063_jahresabrechnung.sql supabase/tests/0064_null_safe_writer_guards.sql supabase/tests/0065_vermoegensbericht.sql supabase/tests/0066_abrechnung_entwurf_loeschbar.sql supabase/tests/0067_gemischte_verteilungsschluessel.sql supabase/tests/0073_wirtschaftsplan_mea_vollstaendigkeit.sql supabase/tests/0074_wirtschaftsplan_beschlussgrundlage.sql"
 SAAS_DB_TESTS := "supabase/tests/0057_self_managed_saas_foundation.sql"
 
