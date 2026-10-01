@@ -185,8 +185,8 @@ wird.
 
 Git-Aktionen sind Teil des kontrollierten Agentenprozesses, aber nicht autonom.
 
-- Keine Commits ohne ausdrueckliche Freigabe des Nutzers.
-- Kein Push ohne ausdrueckliche Freigabe des Nutzers.
+- Keine Commits ohne ausdrueckliche Freigabe des Nutzers (Ausnahme: die Pauschalfreigabe aus dem PR-Fluss, Regel 3).
+- Kein Push ohne ausdrueckliche Freigabe des Nutzers (Ausnahme: dieselbe Pauschalfreigabe; ein Force-Push bleibt immer ausgeschlossen).
 - Vor jedem Commit oder Push immer `git status` und relevante `git diff`-Ansichten pruefen.
 - Nur Dateien stagen, die eindeutig zur freigegebenen Aufgabe gehoeren.
 - Fremde, alte oder unklare Worktree-Aenderungen nicht stagen und nicht bereinigen.
@@ -204,7 +204,7 @@ Entstanden aus der Auswertung des Staus bei `0076`-`0078`: drei gestapelte PRs, 
 
 1. **Serien statt Stapel.** Abhaengige Aenderungen (etwa Migrationen, die lueckenlos nummeriert sein muessen) gehen in **einen** PR, die Commits bleiben getrennt. Alternativ strikt seriell: PR, CI gruen, Squash-Merge, erst dann der naechste Branch von `main`. Nie auf einem ungemergten Branch aufbauen. Grund: Ein Squash erzeugt neue Hashes, ein gestapelter Folge-PR traegt die alten Commits weiter und wird `CONFLICTING`; die Reparatur ist ein Rebase mit Force-Push.
 2. **Vor dem Push lokal pruefen:** `./scripts/verify.sh`, bei SQL zusaetzlich `just test-db-all` (danach `colima stop`).
-3. **Eine Aufgabe, ein durchgehender Ablauf:** committen, PR oeffnen, CI abwarten, per Squash mergen, Branch loeschen. Das bleibt an die Git-Regeln unten gebunden: Der Nutzer kann dafuer pro Aufgabe eine Pauschalfreigabe ("committen, PR oeffnen, bei gruen squash-mergen") erteilen; sie gilt nur fuer die genannte Aufgabe und nicht fuer die naechste.
+3. **Eine Aufgabe, ein durchgehender Ablauf:** committen, pushen, PR oeffnen, CI abwarten, per Squash mergen, Branch lokal und auf dem Server loeschen, `main` per `--ff-only` nachziehen. **Der Nutzer hat dafuer am 2026-10-02 eine dauerhafte Pauschalfreigabe fuer die PRs des Agenten erteilt.** Sie gilt fuer Aufgaben, die der Nutzer ausdruecklich beauftragt hat, und nur bei gruenem CI (alle Checks bestanden, `MERGEABLE/CLEAN`). Bei rotem CI, einem Konflikt oder unerwartetem Umfang stoppt der Agent und meldet das. Die Pauschalfreigabe ersetzt weder Plan Mode noch Research-First, und sie umfasst **nicht**: Force-Push, `just db-migrate`, Repo-Einstellungen, Cloud-Schreibzugriffe und `just e2e`. Sie ist die ausdrueckliche Ausnahme zu den ersten beiden Punkten der Git-Regeln unten.
 4. **Nie ein Force-Push durch den Agenten** (globale `deny`-Liste). Ein Rebase auf einem veroeffentlichten Branch vermeiden (Regel 1); ist er unvermeidlich, gibt der Agent dem Nutzer genau einen Befehl, den der Nutzer in der Eingabezeile der App ausfuehrt, damit die Ausgabe im Chat ankommt. Der Terminal-Tab ist dafuer nicht verlaesslich lesbar.
 5. **`just db-migrate` bleibt Handarbeit** (getipptes `push`) und laeuft nur auf `main` mit `HEAD == origin/main`. Der Rollout-Nachweis (`migration list --linked` plus Katalog-Abfragen, nur Lesen) kommt in den Report derselben Aenderung oder in genau einen Nachtrags-PR, nie in mehrere.
 6. **Nach dem Merge aufraeumen:** Branch loeschen (lokal und auf dem Server), `main` per `--ff-only` aktualisieren.
