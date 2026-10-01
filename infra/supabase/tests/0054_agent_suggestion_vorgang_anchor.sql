@@ -169,6 +169,7 @@ select throws_ok(
       '{"summary":"Cross tenant should fail."}'::jsonb
     )$$,
   '23503',
+  null,
   'cross-tenant Vorgang anchor is rejected by composite FK'
 );
 
@@ -187,6 +188,7 @@ select throws_ok(
       '{"summary":"Missing Vorgang should fail."}'::jsonb
     )$$,
   '23503',
+  null,
   'nonexistent Vorgang anchor is rejected by composite FK'
 );
 

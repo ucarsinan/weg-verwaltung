@@ -354,19 +354,20 @@ select throws_ok(
   $$insert into public.vorgang (tenant_id, title, typ)
     values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb52'::uuid, 'evil', 'allgemein')$$,
   '42501',
+  null,
   'cross-tenant INSERT is rejected by RLS'
 );
 
+-- PostgreSQL only allows a data-modifying CTE at the top level of a statement,
+-- so the UPDATE cannot sit inside is( (subselect) ).
+with updated as (
+  update public.vorgang
+     set title = 'pwned'
+   where tenant_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb52'::uuid
+   returning 1
+)
 select is(
-  (
-    with updated as (
-      update public.vorgang
-         set title = 'pwned'
-       where tenant_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb52'::uuid
-       returning 1
-    )
-    select count(*)::int from updated
-  ),
+  (select count(*)::int from updated),
   0,
   'cross-tenant UPDATE affects zero rows'
 );
@@ -411,6 +412,7 @@ select throws_ok(
        set summary = 'tampered'
      where id = 'aaaaaaaa-aaaa-4aaa-8aaa-300000000052'::uuid$$,
   'P0001',
+  null,
   'timeline UPDATE is rejected by append-only trigger'
 );
 
@@ -418,6 +420,7 @@ select throws_ok(
   $$delete from public.vorgang_timeline_event
      where id = 'aaaaaaaa-aaaa-4aaa-8aaa-300000000052'::uuid$$,
   'P0001',
+  null,
   'timeline DELETE is rejected by append-only trigger'
 );
 
@@ -442,6 +445,7 @@ select throws_ok(
   $$insert into public.vorgang (title, typ)
     values ('Agent must not create final Vorgang', 'allgemein')$$,
   '42501',
+  null,
   'agent actor cannot write final Vorgang state'
 );
 
@@ -455,6 +459,7 @@ select throws_ok(
       '99999999-9999-4999-8999-999999999952'::uuid
     )$$,
   '23503',
+  null,
   'relation target must exist in the same tenant'
 );
 

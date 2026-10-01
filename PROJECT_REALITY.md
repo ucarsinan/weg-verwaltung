@@ -92,8 +92,8 @@ dieser Datei. Details: `AGENTS.md` § „PROJECT_REALITY.md aktuell halten".
   `0069` und der `weg_zugang` aus `0075` — der ersten neuen Tabelle seit
   `0069`). Der Vertrag wurde
   gegen einen echten Verstoss geprueft — eine Probetabelle ohne RLS laesst drei
-  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 22 Vertraege mit 420
-  Zusicherungen (`0072` brachte keinen neuen Vertrag, sondern erweiterte die
+  der fuenf Zusicherungen fallen. Das CI-Gate umfasst damit 23 Vertraege mit 427
+  Zusicherungen (seit `0076` einschliesslich `0054`) (`0072` brachte keinen neuen Vertrag, sondern erweiterte die
   bestehenden `0069` von 12 auf 26 und `0071` von 13 auf 15; `0073`, `0074` und
   `0075` brachten je einen).
 - Partially implemented: Der Finanzbereich rechnet, aber er bucht nicht — kein
