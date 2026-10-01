@@ -196,6 +196,31 @@ Git-Aktionen sind Teil des kontrollierten Agentenprozesses, aber nicht autonom.
 - Vor Push muss klar sein, welcher Branch und welches Remote-Ziel verwendet werden.
 - Wenn ein PR vorbereitet wird, muss der Agent Zusammenfassung, Tests, Risiken und bewusst nicht enthaltene Aenderungen dokumentieren.
 
+## PR-Fluss (Stand 2026-10-02)
+
+Entstanden aus der Auswertung des Staus bei `0076`-`0078`: drei gestapelte PRs, ein Squash auf einem Stapel, vier Force-Pushes, die der Agent nicht ausfuehren darf, und je Schritt eine eigene Freigabe. Ziel: ein PR ist nach dem Abschluss so schnell wie moeglich geprueft, gemergt und aufgeraeumt.
+
+**Regeln**
+
+1. **Serien statt Stapel.** Abhaengige Aenderungen (etwa Migrationen, die lueckenlos nummeriert sein muessen) gehen in **einen** PR, die Commits bleiben getrennt. Alternativ strikt seriell: PR, CI gruen, Squash-Merge, erst dann der naechste Branch von `main`. Nie auf einem ungemergten Branch aufbauen. Grund: Ein Squash erzeugt neue Hashes, ein gestapelter Folge-PR traegt die alten Commits weiter und wird `CONFLICTING`; die Reparatur ist ein Rebase mit Force-Push.
+2. **Vor dem Push lokal pruefen:** `./scripts/verify.sh`, bei SQL zusaetzlich `just test-db-all` (danach `colima stop`).
+3. **Eine Aufgabe, ein durchgehender Ablauf:** committen, PR oeffnen, CI abwarten, per Squash mergen, Branch loeschen. Das bleibt an die Git-Regeln unten gebunden: Der Nutzer kann dafuer pro Aufgabe eine Pauschalfreigabe ("committen, PR oeffnen, bei gruen squash-mergen") erteilen; sie gilt nur fuer die genannte Aufgabe und nicht fuer die naechste.
+4. **Nie ein Force-Push durch den Agenten** (globale `deny`-Liste). Ein Rebase auf einem veroeffentlichten Branch vermeiden (Regel 1); ist er unvermeidlich, gibt der Agent dem Nutzer genau einen Befehl, den der Nutzer in der Eingabezeile der App ausfuehrt, damit die Ausgabe im Chat ankommt. Der Terminal-Tab ist dafuer nicht verlaesslich lesbar.
+5. **`just db-migrate` bleibt Handarbeit** (getipptes `push`) und laeuft nur auf `main` mit `HEAD == origin/main`. Der Rollout-Nachweis (`migration list --linked` plus Katalog-Abfragen, nur Lesen) kommt in den Report derselben Aenderung oder in genau einen Nachtrags-PR, nie in mehrere.
+6. **Nach dem Merge aufraeumen:** Branch loeschen (lokal und auf dem Server), `main` per `--ff-only` aktualisieren.
+7. **Nach dem Merge den CI-Stand lesen, nicht abfragen.** Die App meldet nur CI-Fehler, nie Erfolg. Der Agent liest den Stand deshalb einmal auf Zuruf und pollt nicht (`gh`-Schleifen, `ScheduleWakeup`, `/loop` sind untersagt).
+
+**Voraussetzungen im Repo, nicht erfuellt (Stand 2026-10-02, gelesen per `gh api`)**
+
+- `allow_auto_merge` ist aus. Mit Auto-Merge muss nicht mehr auf "gruen" gewartet werden.
+- Es gibt keinen Branch-Schutz und keine Pflicht-Checks. Ohne Pflicht-Checks mergt Auto-Merge sofort, also vor dem Test. Pflicht-Checks sind daher die Bedingung fuer Auto-Merge, nicht Beiwerk.
+- `delete_branch_on_merge` ist aus. Erledigte Branches bleiben liegen.
+- `.github/workflows/ci.yml` startet `web`, `agent`, `codegen-drift` und `db-regression` nur fuer PRs gegen `main` (Zeile 20-22). Gestapelte PRs bekommen deshalb nur `link-check` und `freshness-check`. Mit Regel 1 entfaellt das Problem.
+
+Das sind Repo-Einstellungen und damit Sicherheits-/Prozesseinstellungen: Sie setzt der Nutzer oder gibt sie dem Agenten ausdruecklich frei.
+
+**Offene Verbesserung (nicht umgesetzt):** Der Statusabsatz in den Zeilen 7 und 13 dieser Datei und `TEST_INFRA.md` Zeile 22 sind lange Monolithe, die fast jeder PR aendern muss. Sie sind der haeufigste Konfliktherd. Sie gehoeren nach `PROJECT_REALITY.md`, hier bleibt ein Zeiger.
+
 ## Verstaendliche Abschlussberichte
 
 Berichte muessen fuer Menschen entscheidungsfaehig sein. Ein technisches Finding allein reicht nicht.
