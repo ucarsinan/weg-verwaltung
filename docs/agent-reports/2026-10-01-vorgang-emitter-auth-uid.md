@@ -80,3 +80,19 @@ Geprüft mit `supabase migration list --linked` und Katalog-Abfragen (`supabase 
 | Zeilen in `vorgang`, `vorgang_timeline_event`; `audit_event` mit `entity_typ like 'vorgang%'` | je 0 |
 
 Der Fehler ist damit in der Cloud **live**: jeder Schreibzugriff auf die sieben Vorgangs-Tabellen scheitert dort mit `42501`. Die App hat Code dafür (`apps/web/src/app/(dashboard)/vorgaenge/actions.ts`, `lib/vorgangszentrale/queries.ts`), einen Vorgang anzulegen schlägt in der Cloud also sehr wahrscheinlich fehl. Das habe ich nicht in der Oberfläche nachgestellt, weil es in die Cloud schreiben würde. Die 0-Zeilen-Befunde passen zu "scheitert" ebenso wie zu "nie genutzt". Es gibt keinen Drift zum lokalen Stand. `0076` ist die dringlichste der drei Migrationen.
+
+## Nachtrag: Rollout und Nachweis (2026-10-02)
+
+`0076`–`0078` sind am 2026-10-02 per `just db-migrate` ausgerollt (drei Migrationen, `Finished supabase db push`). Read-only nachgeprüft (`migration list --linked` und Katalog-Abfragen, nichts geschrieben):
+
+| Prüfung | Vor dem Rollout (2026-10-01) | Nach dem Rollout |
+| --- | --- | --- |
+| `Remote`-Spalte | bis `0075` | **bis `0078`** |
+| Emitter ruft `auth.uid()` auf | `true` | **`false`**, liest die JWT-Einstellungen |
+| `audit_writer` hat `USAGE` auf `auth` | `false` | `false` (bleibt so, ist beabsichtigt) |
+| Rechte `anon` / `authenticated` auf `vorgang*` | alle 4 / alle 4 | **keine** / SELECT, INSERT, UPDATE (Timeline: SELECT, INSERT) |
+| EXECUTE auf `audit_event_feed`, `audit_reveal_event_payload` | `anon`, `authenticated`, `service_role` | **nur `authenticated`** |
+| `audit_payload_reveal` / `audit_integrity_check` (`authenticated`) | alle 4 / alle 4 | **INSERT, SELECT** / **SELECT**; `anon`: keine |
+| Trigger auf `weg_zugang` | 0 | **2** (`weg_zugang_audit_emit`, `weg_zugang_block_agent_writes`) |
+
+Nicht belegt: ob die App in der Cloud einen Vorgang anlegen kann (würde schreiben und wurde nicht ausgeführt); der Nachweis ist strukturell plus der grüne Vertrag `0054` im CI-Gate.
