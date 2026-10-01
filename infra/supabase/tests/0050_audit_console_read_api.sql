@@ -435,12 +435,14 @@ select ok(
 select throws_ok(
   $$select * from public.audit_integrity_status()$$,
   '42501',
+  null,
   'audit_integrity_status rejects callers without tenant_admin JWT role'
 );
 
 select throws_ok(
   $$select * from public.audit_verify_chain()$$,
   '42501',
+  null,
   'audit_verify_chain rejects callers without tenant_admin JWT role'
 );
 
@@ -450,6 +452,7 @@ select throws_ok(
       now()
     )$$,
   '42501',
+  null,
   'audit_reveal_event_payload rejects callers without tenant_admin JWT role before lookup'
 );
 
